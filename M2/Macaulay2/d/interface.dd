@@ -21,7 +21,8 @@ header "// TODO: break apart this file so each piece includes only one:
 #include <interface/random.h>
 #include <interface/ring.h>
 #include <interface/ringelement.h>
-#include <interface/ringmap.h>";
+#include <interface/ringmap.h>
+#include <interface/symmetric-rings.h>";
 
 header "// TODO: remove the following headers
 #include <engine.h>                         // for IM2_Computation_set_stop
@@ -109,6 +110,84 @@ export rawRandomCCi(e:Expr):Expr := (
     else toExpr(Ccode(CCi, "rawRandomCCi(", toULong(prec.v), ")"))
     else WrongArgZZ());
 setupfun("rawRandomCCi", rawRandomCCi);
+
+export rawSymmetricRing(e:Expr):Expr := (
+     when e
+     is A:RawRingCell do toExpr(Ccode(RawRingOrNull, "rawSymmetricRing(", A.p, ")"))
+     else WrongArg(1, "a raw ring"));
+setupfun("rawSymmetricRing", rawSymmetricRing);
+
+export rawSymmetricRingsBasisElement(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 5 then return WrongNumArgs(5);
+	  when s.0
+	  is R:RawRingCell do (
+	       when s.1
+	       is basisId:ZZcell do (
+		    if !isInt(basisId) then return WrongArgSmallInteger(2);
+		    when s.2
+		    is displaySymbol:stringCell do (
+			 when s.3
+			 is displayOrder:ZZcell do (
+			      if !isInt(displayOrder) then return WrongArgSmallInteger(4);
+			      when s.4
+			      is index:List do (
+				   if !isSequenceOfSmallIntegers(index.v) then return WrongArg(5, "a list of small integers");
+				   toExpr(Ccode(RawRingElementOrNull,
+					"rawSymmetricRingsBasisElement(",
+					R.p, ", ", toInt(basisId), ", ",
+					displaySymbol.v, ", ", toInt(displayOrder),
+					", ", getSequenceOfSmallIntegers(index.v), ")")))
+			      else WrongArg(5, "a list of small integers"))
+			 else WrongArgZZ(4))
+		    else WrongArgString(3))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring"))
+     else WrongNumArgs(5));
+setupfun("rawSymmetricRingsBasisElement", rawSymmetricRingsBasisElement);
+
+export rawSymmetricRingsSum(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 2 then return WrongNumArgs(2);
+	  when s.0
+	  is R:RawRingCell do (
+	       if isSequenceOfRingElements(s.1) then (
+		    toExpr(Ccode(RawRingElementOrNull,
+			 "rawSymmetricRingsSum(",
+			 R.p, ", ", getSequenceOfRingElements(s.1), ")")))
+	       else WrongArg(2, "a sequence of raw ring elements"))
+	  else WrongArg(1, "a raw ring"))
+     else WrongNumArgs(2));
+setupfun("rawSymmetricRingsSum", rawSymmetricRingsSum);
+
+export rawSymmetricRingsProduct(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 2 then return WrongNumArgs(2);
+	  when s.0
+	  is R:RawRingCell do (
+	       if isSequenceOfRingElements(s.1) then (
+		    toExpr(Ccode(RawRingElementOrNull,
+			 "rawSymmetricRingsProduct(",
+			 R.p, ", ", getSequenceOfRingElements(s.1), ")")))
+	       else WrongArg(2, "a sequence of raw ring elements"))
+	  else WrongArg(1, "a raw ring"))
+     else WrongNumArgs(2));
+setupfun("rawSymmetricRingsProduct", rawSymmetricRingsProduct);
+
+export rawSymmetricRingsElementToString(e:Expr):Expr := (
+     when e
+     is f:RawRingElementCell do toExpr(Ccode(string, "rawSymmetricRingsElementToString(", f.p, ")"))
+     else WrongArg(1, "a raw ring element"));
+setupfun("rawSymmetricRingsElementToString", rawSymmetricRingsElementToString);
+
+export rawSymmetricRingsElementWeight(e:Expr):Expr := (
+     when e
+     is f:RawRingElementCell do toExpr(Ccode(int, "rawSymmetricRingsElementWeight(", f.p, ")"))
+     else WrongArg(1, "a raw ring element"));
+setupfun("rawSymmetricRingsElementWeight", rawSymmetricRingsElementWeight);
 
 -----------------------------------------------------------------------------
 -- monomials

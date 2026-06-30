@@ -149,6 +149,8 @@ set(CPPONLYFILES
   interface/ringelement.h
   interface/ringmap.cpp
   interface/ringmap.h
+  interface/symmetric-rings.cpp
+  interface/symmetric-rings.h
   rings/ring-vecs.cpp
   )
 
