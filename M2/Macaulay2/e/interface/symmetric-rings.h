@@ -58,6 +58,16 @@ const RingElement *rawSymmetricRingsPlethysm(const RingElement *f,
                                              M2_string powerSumDisplaySymbol,
                                              int powerSumDisplayOrder,
                                              bool powerSumIsMultiplicative);
+const RingElement *rawSymmetricRingsPlethysmToBasis(const RingElement *f,
+                                                    const RingElement *g,
+                                                    int powerSumBasisId,
+                                                    M2_string powerSumDisplaySymbol,
+                                                    int powerSumDisplayOrder,
+                                                    bool powerSumIsMultiplicative,
+                                                    int targetBasisId,
+                                                    M2_string targetDisplaySymbol,
+                                                    int targetDisplayOrder,
+                                                    bool targetIsMultiplicative);
 int rawSymmetricRingsSingleBasisId(const RingElement *f);
 const RingElement *rawSymmetricRingsOmega(const RingElement *f,
                                           M2_arrayint omegaMap,
@@ -66,6 +76,9 @@ const RingElement *rawSymmetricRingsStraighten(const RingElement *f);
 const RingElement *rawSymmetricRingsHallInnerProduct(const RingElement *f,
                                                     const RingElement *g,
                                                     M2_arrayint innerProductMap);
+int rawSymmetricRingsTermCount(const RingElement *f);
+const RingElement *rawSymmetricRingsTermCoefficient(const RingElement *f, int i);
+M2_arrayint rawSymmetricRingsTermMonomial(const RingElement *f, int i);
 M2_string rawSymmetricRingsElementToString(const RingElement *f);
 int rawSymmetricRingsElementWeight(const RingElement *f);
 

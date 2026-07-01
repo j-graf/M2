@@ -9,6 +9,8 @@ TEST ///
     assert(any(builtinSymmetricBases, B0 -> B0#"Key" == "S"))
     assert(any(availableSymmetricBases, B0 -> B0#"Key" == "Q"))
     assert((bases R0)#"S" == "Schur basis")
+    assert(not ((bases R0)#?"Q"))
+    assert(try (Q_2; false) else true)
     assert(instance(first bases(R0, "verbose" => true), SymmetricBasis))
     assert(try (bases("verbose" => true); false) else true)
 ///
@@ -61,8 +63,6 @@ TEST ///
     assert(omegaInvolution(S_{1,3}) == -S_{2,2})
     assert(omegaInvolution(Somega_{1,3}) == -S_{2,2})
     assert(omegaInvolution(p_{2,1}) == -p_{2,1})
-    assert(omegaInvolution omegaInvolution(S_{2,1} + Q_2) == S_{2,1} + Q_2)
-    assert(omegaInvolution(Q_{{2,1}, {1}}) == B_{{2,1}, {1}})
     assert(straighten S_{1,3} == -S_{2,2})
 ///
 
@@ -77,6 +77,10 @@ TEST ///
     assert(h_2 @ h_1 == h_2)
     assert((2 + h_2) @ h_1 == 2 + h_2)
     assert(S_2 @ h_1 == S_2)
+    assert(S_2 @ S_2 == toBasis(plethysm(S_2, S_2), S))
+    assert(S_{1,1} @ S_2 == toBasis(plethysm(S_{1,1}, S_2), S))
+    assert(S_{2,1} @ S_2 == toBasis(plethysm(S_{2,1}, S_2), S))
+    assert(hallInnerProduct(plethysm(S_{2,1}, S_2), S_4) == hallInnerProduct(plethysm(S_{2,1}, S_2), toBasis(S_4, p)))
     cachedPlethysmResult = S_{4,3,1,1} @ S_2
     assert(S_{4,3,1,1} @ S_2 == cachedPlethysmResult)
     A = frac(QQ[t])
@@ -102,6 +106,8 @@ TEST ///
     assert(toBasis(q_{1,1}, p) == (1-A_0)^2*p_{1,1})
     assert(toBasis(b_{1,1}, p) == (1-A_0)^2*p_{1,1})
     assert(hallInnerProduct(m_2, q_2) == 1_A)
+    assert(omegaInvolution omegaInvolution(S_{2,1} + Q_2) == S_{2,1} + Q_2)
+    assert(omegaInvolution(Q_{{2,1}, {1}}) == B_{{2,1}, {1}})
     ipLeftCoeff = 1 + A_0
     ipMiddleCoeff = 2 - A_0
     ipSmallCoeff = A_0^2
@@ -172,6 +178,65 @@ TEST ///
     assert(toBasis(B_{{2}, {1}}, f) == (1-E_0)*f_1)
     assert(toBasis(P_{{2}, {1}}, p) == p_1)
     assert(toBasis(R_{{2}, {1}}, p) == p_1)
+
+    FipSpecial1 = Q_2
+    GipSpecial1 = P_2
+    FipSpecial2 = Q_2 + E_0*Q_1
+    GipSpecial2 = P_2 + (1+E_0)*P_1
+    assert(hallInnerProduct(FipSpecial1, GipSpecial1, ParameterSpecialization => {E_0 => 0}) == 1_QQ)
+    assert(hallInnerProduct(FipSpecial2, GipSpecial2, ParameterSpecialization => {E_0 => 0}) == 1_QQ)
+    assert(hallInnerProduct(FipSpecial1, GipSpecial1, ParameterSpecialization => {E_0 => 0}, PromoteSpecializedRing => false) == 1_E)
+
+    TargetAware = registerBasis("TargetAwareSpecialization", Symbol => "TargetAwareSpecialization", Specialization => {
+            hashTable {
+                "Parameter" => HallLittlewoodParameter,
+                "Value" => 0,
+                "Map" => (Rtarget, idx) -> (
+                    assert(coefficientRing Rtarget === QQ);
+                    (basis(Rtarget, "h"))_idx
+                    )
+                }
+            })
+    R4 = symmetricRing E
+    Fspecial = (1-E_0)*Q_2 + E_0*h_1
+    FqbSpecial = q_{2,1} + b_2
+    FskewSpecial = Q_{{2}, {1}} + B_{{2}, {1}}
+    FtargetAware = TargetAware_2
+    Fspecial0 = specializeParameters(Fspecial, {E_0 => 0})
+    assert(coefficientRing ring Fspecial0 === QQ)
+    assert(Fspecial0 == S_2)
+    FspecialSameRing = specializeParameters(Fspecial, {E_0 => 0}, PromoteSpecializedRing => false)
+    assert(coefficientRing ring FspecialSameRing === E)
+    assert(FspecialSameRing == (basis(ring FspecialSameRing, "S"))_2)
+    assert(specializeParameters(FqbSpecial, {E_0 => 0}) == h_{2,1} + e_2)
+    assert(specializeParameters(FskewSpecial, {E_0 => 0}) == S_{{2}, {1}} + Somega_{{2}, {1}})
+    TargetAwareValue = specializeParameters(FtargetAware, {E_0 => 0})
+    assert(TargetAwareValue == h_2)
+    assert(try (basis(ring Fspecial0, "Q"); false) else true)
+    assert(try (sub(Fspecial, {E_0 => 0}); false) else true)
+///
+
+TEST ///
+    IPLeft = registerBasis("InnerProductLeftTest", Symbol => "InnerProductLeftTest", InnerProductData => hashTable {
+            "Ordinary" => hashTable {
+                "DualBasis" => "InnerProductRightTest",
+                "Pairing" => (Rtarget, idx) -> promote(2^(sum idx), coefficientRing Rtarget)
+                }
+            })
+    IPRight = registerBasis("InnerProductRightTest", Symbol => "InnerProductRightTest", InnerProductData => hashTable {
+            "Ordinary" => hashTable {
+                "DualBasis" => "InnerProductLeftTest",
+                "Pairing" => (Rtarget, idx) -> promote(2^(sum idx), coefficientRing Rtarget)
+                }
+            })
+    HLOnly = registerBasis("HallLittlewoodOnlyTest", Symbol => "HallLittlewoodOnlyTest", AvailableWhen => "HallLittlewood")
+    Rordinary = symmetricRing QQ
+    assert(not ((bases Rordinary)#?"HallLittlewoodOnlyTest"))
+    assert(try (HallLittlewoodOnlyTest_2; false) else true)
+    assert(hallInnerProduct(InnerProductLeftTest_2 + 3*InnerProductLeftTest_1, 5*InnerProductRightTest_2 + 7*InnerProductRightTest_1) == 5*4 + 3*7*2)
+    A = QQ[t]
+    Rhl = symmetricRing A
+    assert((bases Rhl)#?"HallLittlewoodOnlyTest")
 ///
 
 TEST ///

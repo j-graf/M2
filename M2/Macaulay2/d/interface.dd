@@ -353,6 +353,58 @@ export rawSymmetricRingsPlethysm(e:Expr):Expr := (
      else WrongNumArgs(6));
 setupfun("rawSymmetricRingsPlethysm", rawSymmetricRingsPlethysm);
 
+export rawSymmetricRingsPlethysmToBasis(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 10 then return WrongNumArgs(10);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is g:RawRingElementCell do (
+		    when s.2
+		    is powerSumBasisId:ZZcell do (
+			 if !isInt(powerSumBasisId) then return WrongArgSmallInteger(3);
+			 when s.3
+			 is powerSumDisplaySymbol:stringCell do (
+			      when s.4
+			      is powerSumDisplayOrder:ZZcell do (
+				   if !isInt(powerSumDisplayOrder) then return WrongArgSmallInteger(5);
+				   when s.5
+				   is powerSumIsMultiplicative:Boolean do (
+					when s.6
+					is targetBasisId:ZZcell do (
+					     if !isInt(targetBasisId) then return WrongArgSmallInteger(7);
+					     when s.7
+					     is targetDisplaySymbol:stringCell do (
+						  when s.8
+						  is targetDisplayOrder:ZZcell do (
+						       if !isInt(targetDisplayOrder) then return WrongArgSmallInteger(9);
+						       when s.9
+						       is targetIsMultiplicative:Boolean do (
+							    toExpr(Ccode(RawRingElementOrNull,
+								 "rawSymmetricRingsPlethysmToBasis(",
+								 f.p, ", ", g.p, ", ",
+								 toInt(powerSumBasisId), ", ",
+								 powerSumDisplaySymbol.v, ", ",
+								 toInt(powerSumDisplayOrder), ", ",
+								 toBoolean(s.5), ", ",
+								 toInt(targetBasisId), ", ",
+								 targetDisplaySymbol.v, ", ",
+								 toInt(targetDisplayOrder), ", ",
+								 toBoolean(s.9), ")")))
+						       else WrongArg(10, "a Boolean"))
+						  else WrongArgZZ(9))
+					     else WrongArgString(8))
+					else WrongArgZZ(7))
+				   else WrongArg(6, "a Boolean"))
+			      else WrongArgZZ(5))
+			 else WrongArgString(4))
+		    else WrongArgZZ(3))
+	       else WrongArg(2, "a raw ring element"))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(10));
+setupfun("rawSymmetricRingsPlethysmToBasis", rawSymmetricRingsPlethysmToBasis);
+
 export rawSymmetricRingsSingleBasisId(e:Expr):Expr := (
      when e
      is f:RawRingElementCell do toExpr(Ccode(int, "rawSymmetricRingsSingleBasisId(", f.p, ")"))
@@ -406,6 +458,46 @@ export rawSymmetricRingsHallInnerProduct(e:Expr):Expr := (
 	  else WrongArg(1, "a raw ring element"))
      else WrongNumArgs(3));
 setupfun("rawSymmetricRingsHallInnerProduct", rawSymmetricRingsHallInnerProduct);
+
+export rawSymmetricRingsTermCount(e:Expr):Expr := (
+     when e
+     is f:RawRingElementCell do toExpr(Ccode(int, "rawSymmetricRingsTermCount(", f.p, ")"))
+     else WrongArg(1, "a raw ring element"));
+setupfun("rawSymmetricRingsTermCount", rawSymmetricRingsTermCount);
+
+export rawSymmetricRingsTermCoefficient(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 2 then return WrongNumArgs(2);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is i:ZZcell do (
+		    if !isInt(i) then return WrongArgSmallInteger(2);
+		    toExpr(Ccode(RawRingElementOrNull,
+			 "rawSymmetricRingsTermCoefficient(",
+			 f.p, ", ", toInt(i), ")")))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(2));
+setupfun("rawSymmetricRingsTermCoefficient", rawSymmetricRingsTermCoefficient);
+
+export rawSymmetricRingsTermMonomial(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 2 then return WrongNumArgs(2);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is i:ZZcell do (
+		    if !isInt(i) then return WrongArgSmallInteger(2);
+		    toExpr(Ccode(array(int),
+			 "rawSymmetricRingsTermMonomial(",
+			 f.p, ", ", toInt(i), ")")))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(2));
+setupfun("rawSymmetricRingsTermMonomial", rawSymmetricRingsTermMonomial);
 
 export rawSymmetricRingsElementToString(e:Expr):Expr := (
      when e

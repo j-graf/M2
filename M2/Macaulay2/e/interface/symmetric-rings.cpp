@@ -57,7 +57,13 @@ struct BasisIndexKey
 };
 
 using Partition = std::vector<int>;
-using CoeffMap = std::map<Partition, ring_elem>;
+
+template <typename K, typename V, typename Compare = std::less<K>>
+using GCMap = std::map<K, V, Compare, gc_allocator<std::pair<const K, V>>>;
+
+using CoeffMap = GCMap<Partition, ring_elem>;
+using RingElemVector = VECTOR(ring_elem);
+using RingElemMatrix = VECTOR(RingElemVector);
 
 constexpr int unknownCharacterValue = std::numeric_limits<int>::min();
 
@@ -67,6 +73,18 @@ struct CharacterTable
   std::vector<long> zValues;
   std::map<Partition, size_t> partitionRows;
   mutable std::vector<std::vector<int>> values;
+};
+
+struct SchurConversionRecipeEntry
+{
+  Partition lambda;
+  std::vector<std::pair<size_t, int>> contributions;
+};
+
+struct LRProductTerm
+{
+  Partition nu;
+  long coefficient;
 };
 
 struct OmegaTarget
@@ -612,18 +630,22 @@ class SymmetricEngineRing : public Ring
   mutable std::map<int, int> basisOrders;
   mutable std::map<int, bool> multiplicativeBases;
   mutable int powerSumBasisId = -1;
-  mutable std::map<int, ring_elem> hToPowerSumCache;
-  mutable std::map<int, ring_elem> eToPowerSumCache;
-  mutable std::map<int, ring_elem> qToPowerSumCache;
-  mutable std::map<int, ring_elem> bToPowerSumCache;
+  mutable GCMap<int, ring_elem> hToPowerSumCache;
+  mutable GCMap<int, ring_elem> eToPowerSumCache;
+  mutable GCMap<int, ring_elem> qToPowerSumCache;
+  mutable GCMap<int, ring_elem> bToPowerSumCache;
   mutable std::map<int, CharacterTable> characterTableCache;
-  mutable std::map<int, ring_elem> powerSumToCompleteCache;
-  mutable std::map<int, ring_elem> powerSumToElementaryCache;
-  mutable std::map<int, ring_elem> powerSumToQGeneratorCache;
-  mutable std::map<int, ring_elem> powerSumToBGeneratorCache;
-  mutable std::map<int, std::map<std::string, ring_elem>> monomialToPowerSumCache;
-  mutable std::map<std::string, ring_elem> hJacobiTrudiCache;
-  mutable std::map<std::string, ring_elem> eJacobiTrudiCache;
+  mutable GCMap<int, ring_elem> powerSumToCompleteCache;
+  mutable GCMap<int, ring_elem> powerSumToElementaryCache;
+  mutable GCMap<int, ring_elem> powerSumToQGeneratorCache;
+  mutable GCMap<int, ring_elem> powerSumToBGeneratorCache;
+  mutable GCMap<int, GCMap<std::string, ring_elem>> monomialToPowerSumCache;
+  mutable std::map<std::string, std::vector<SchurConversionRecipeEntry>>
+      powerSumsToSchurRecipeCache;
+  mutable std::map<std::string, std::vector<LRProductTerm>> lrProductCache;
+  mutable GCMap<std::string, ring_elem> schurCompletePlethysmCache;
+  mutable GCMap<std::string, ring_elem> hJacobiTrudiCache;
+  mutable GCMap<std::string, ring_elem> eJacobiTrudiCache;
   mutable ring_elem hallLittlewoodParameter;
 
   bool isMultiplicativeBasis(int basisId) const
@@ -842,7 +864,7 @@ class SymmetricEngineRing : public Ring
         return zero();
       }
 
-    std::vector<std::vector<ring_elem>> matrix(n, std::vector<ring_elem>(n));
+    RingElemMatrix matrix(n, RingElemVector(n));
     for (size_t i = 0; i < n; ++i)
       {
         int lambdaI = i < outer.size() ? outer[i] : 0;
@@ -859,7 +881,7 @@ class SymmetricEngineRing : public Ring
       }
 
     size_t limit = static_cast<size_t>(1) << n;
-    std::vector<ring_elem> dp;
+    RingElemVector dp;
     dp.reserve(limit);
     for (size_t i = 0; i < limit; ++i) dp.push_back(zero());
     dp[0] = one();
@@ -966,6 +988,260 @@ class SymmetricEngineRing : public Ring
   CoeffMap oneCoeffMap() const
   {
     return CoeffMap{{Partition{}, coefficientRing->one()}};
+  }
+
+  bool isPartitionIndex(const Partition& p) const
+  {
+    return trimTrailingZerosPartition(p) == normalizePartition(p);
+  }
+
+  int partitionPart(const Partition& p, size_t i) const
+  {
+    return i < p.size() ? p[i] : 0;
+  }
+
+  bool partitionContains(const Partition& outer, const Partition& inner) const
+  {
+    for (size_t i = 0; i < inner.size(); ++i)
+      if (partitionPart(outer, i) < inner[i]) return false;
+    return true;
+  }
+
+  std::string lrProductKey(const Partition& lambda, const Partition& mu) const
+  {
+    if (lexLessPartition(mu, lambda))
+      return partitionKey(mu) + "*" + partitionKey(lambda);
+    return partitionKey(lambda) + "*" + partitionKey(mu);
+  }
+
+  long lrCoefficient(const Partition& lambda,
+                     const Partition& content,
+                     const Partition& nu) const
+  {
+    if (!partitionContains(nu, lambda)) return 0;
+    if (partitionWeight(nu) != partitionWeight(lambda) + partitionWeight(content))
+      return 0;
+    if (content.empty()) return trimTrailingZerosPartition(nu) == lambda ? 1 : 0;
+
+    std::vector<std::pair<int, int>> cells;
+    for (size_t r = 0; r < nu.size(); ++r)
+      {
+        int inner = partitionPart(lambda, r);
+        for (int c = nu[r]; c > inner; --c)
+          cells.push_back({static_cast<int>(r), c});
+      }
+
+    std::vector<std::vector<int>> tableau(nu.size());
+    for (size_t r = 0; r < nu.size(); ++r)
+      tableau[r].assign(nu[r] + 2, 0);
+
+    int alphabet = static_cast<int>(content.size());
+    std::vector<int> remaining(content.begin(), content.end());
+    std::vector<int> used(alphabet, 0);
+    long count = 0;
+
+    std::function<void(size_t)> fill = [&](size_t k) {
+      if (k == cells.size())
+        {
+          ++count;
+          return;
+        }
+
+      int row = cells[k].first;
+      int col = cells[k].second;
+      int right = (col + 1 <= partitionPart(nu, row) &&
+                   col + 1 > partitionPart(lambda, row))
+          ? tableau[row][col + 1]
+          : 0;
+      int above = (row > 0 &&
+                   col <= partitionPart(nu, static_cast<size_t>(row - 1)) &&
+                   col > partitionPart(lambda, static_cast<size_t>(row - 1)))
+          ? tableau[row - 1][col]
+          : 0;
+
+      for (int value = 1; value <= alphabet; ++value)
+        {
+          int idx = value - 1;
+          if (remaining[idx] == 0) continue;
+          if (right != 0 && value > right) continue;
+          if (above != 0 && above >= value) continue;
+
+          --remaining[idx];
+          ++used[idx];
+          bool lattice = true;
+          for (int i = 0; i + 1 < alphabet; ++i)
+            if (used[i] < used[i + 1])
+              {
+                lattice = false;
+                break;
+              }
+          if (lattice)
+            {
+              tableau[row][col] = value;
+              fill(k + 1);
+              tableau[row][col] = 0;
+            }
+          --used[idx];
+          ++remaining[idx];
+        }
+    };
+
+    fill(0);
+    return count;
+  }
+
+  void partitionsContainingRec(const Partition& lambda,
+                               int addedWeight,
+                               size_t row,
+                               int previousPart,
+                               Partition& current,
+                               std::vector<Partition>& result) const
+  {
+    if (addedWeight == 0 && row >= lambda.size())
+      {
+        result.push_back(trimTrailingZerosPartition(current));
+        return;
+      }
+
+    int base = partitionPart(lambda, row);
+    if (base == 0 && addedWeight == 0)
+      {
+        result.push_back(trimTrailingZerosPartition(current));
+        return;
+      }
+    if (base == 0 && previousPart == 0 && addedWeight > 0) return;
+
+    int upper = std::min(previousPart, base + addedWeight);
+    for (int part = upper; part >= base; --part)
+      {
+        int extra = part - base;
+        if (extra > addedWeight) continue;
+        current.push_back(part);
+        partitionsContainingRec(lambda,
+                                addedWeight - extra,
+                                row + 1,
+                                part,
+                                current,
+                                result);
+        current.pop_back();
+      }
+  }
+
+  std::vector<Partition> partitionsContaining(const Partition& lambda,
+                                              int addedWeight) const
+  {
+    std::vector<Partition> result;
+    Partition current;
+    int firstBound = lambda.empty() ? addedWeight : lambda.front() + addedWeight;
+    partitionsContainingRec(lambda, addedWeight, 0, firstBound, current, result);
+    return result;
+  }
+
+  const std::vector<LRProductTerm>& lrProduct(const Partition& a,
+                                              const Partition& b) const
+  {
+    Partition lambda = normalizePartition(a);
+    Partition mu = normalizePartition(b);
+    std::string key = lrProductKey(lambda, mu);
+    auto cached = lrProductCache.find(key);
+    if (cached != lrProductCache.end()) return cached->second;
+
+    std::vector<LRProductTerm> result;
+    if (lambda.empty())
+      {
+        result.push_back({mu, 1});
+      }
+    else if (mu.empty())
+      {
+        result.push_back({lambda, 1});
+      }
+    else
+      {
+        if (partitionWeight(lambda) < partitionWeight(mu)) std::swap(lambda, mu);
+        for (const auto& nu : partitionsContaining(lambda, partitionWeight(mu)))
+          {
+            long c = lrCoefficient(lambda, mu, nu);
+            if (c != 0) result.push_back({nu, c});
+          }
+      }
+
+    auto inserted = lrProductCache.emplace(key, std::move(result));
+    return inserted.first->second;
+  }
+
+  ring_elem multiplySchurElements(ring_elem f,
+                                  ring_elem g,
+                                  int schurId,
+                                  const std::string& schurDisplay,
+                                  int schurOrder) const
+  {
+    CoeffMap left = coefficientsInBasis(f, schurId);
+    if (error()) return zero();
+    CoeffMap right = coefficientsInBasis(g, schurId);
+    if (error()) return zero();
+
+    CoeffMap result;
+    for (const auto& a : left)
+      for (const auto& b : right)
+        {
+          ring_elem baseCoeff = coefficientRing->mult(a.second, b.second);
+          if (coefficientRing->is_zero(baseCoeff)) continue;
+          for (const auto& product : lrProduct(a.first, b.first))
+            {
+              ring_elem coeff = product.coefficient == 1
+                  ? baseCoeff
+                  : coefficientRing->mult(coefficientRing->from_long(product.coefficient),
+                                          baseCoeff);
+              addCoeff(result, product.nu, coeff);
+            }
+        }
+    return coeffMapToElement(result, schurId, schurDisplay, schurOrder, false);
+  }
+
+  std::string powerSumsToSchurRecipeKey(int degree,
+                                        const std::vector<Partition>& inputPartitions,
+                                        bool omegaStyle) const
+  {
+    std::ostringstream out;
+    out << degree << "|" << (omegaStyle ? 1 : 0);
+    for (const auto& mu : inputPartitions)
+      out << ";" << partitionKey(mu);
+    return out.str();
+  }
+
+  const std::vector<SchurConversionRecipeEntry>&
+  powerSumsToSchurRecipe(int degree,
+                         const std::vector<Partition>& inputPartitions,
+                         bool omegaStyle) const
+  {
+    std::string key =
+        powerSumsToSchurRecipeKey(degree, inputPartitions, omegaStyle);
+    auto cached = powerSumsToSchurRecipeCache.find(key);
+    if (cached != powerSumsToSchurRecipeCache.end()) return cached->second;
+
+    const CharacterTable& table = characterTable(degree);
+    std::vector<SchurConversionRecipeEntry> recipe;
+    for (size_t row = 0; row < table.partitions.size(); ++row)
+      {
+        SchurConversionRecipeEntry entry;
+        entry.lambda = table.partitions[row];
+        for (size_t input = 0; input < inputPartitions.size(); ++input)
+          {
+            const Partition& mu = inputPartitions[input];
+            auto muCol = table.partitionRows.find(mu);
+            int chi = muCol == table.partitionRows.end()
+                ? characterValue(table.partitions[row], mu)
+                : characterTableValue(table, row, muCol->second);
+            if (chi == 0) continue;
+            if (omegaStyle && ((degree - partitionLength(mu)) % 2 != 0))
+              chi = -chi;
+            entry.contributions.push_back({input, chi});
+          }
+        if (!entry.contributions.empty()) recipe.push_back(std::move(entry));
+      }
+
+    auto inserted = powerSumsToSchurRecipeCache.emplace(key, std::move(recipe));
+    return inserted.first->second;
   }
 
   Partition leadingPartition(const CoeffMap& H) const
@@ -1377,7 +1653,8 @@ class SymmetricEngineRing : public Ring
                                  bool omegaStyle) const
   {
     const auto *poly = polyValue(f);
-    std::map<int, CoeffMap> powerSumCoeffsByDegree;
+
+    GCMap<int, CoeffMap> powerSumCoeffsByDegree;
     for (const auto& term : poly->terms)
       {
         Partition mu;
@@ -1386,11 +1663,7 @@ class SymmetricEngineRing : public Ring
             ERROR("expected a pure power-sum expression during basis conversion");
             return zero();
           }
-        ring_elem coeff = term.coeff;
-        if (omegaStyle &&
-            ((partitionWeight(mu) - partitionLength(mu)) % 2 != 0))
-          coeff = coefficientRing->negate(coeff);
-        addCoeff(powerSumCoeffsByDegree[partitionWeight(mu)], mu, coeff);
+        addCoeff(powerSumCoeffsByDegree[partitionWeight(mu)], mu, term.coeff);
       }
 
     CoeffMap schurCoeffs;
@@ -1398,31 +1671,39 @@ class SymmetricEngineRing : public Ring
       {
         int degree = degreeData.first;
         const CoeffMap& powerSumCoeffs = degreeData.second;
-        const CharacterTable& table = characterTable(degree);
-        for (size_t row = 0; row < table.partitions.size(); ++row)
+        std::vector<Partition> inputPartitions;
+        RingElemVector inputCoeffs;
+        inputPartitions.reserve(powerSumCoeffs.size());
+        inputCoeffs.reserve(powerSumCoeffs.size());
+        for (const auto& muCoeff : powerSumCoeffs)
+          {
+            inputPartitions.push_back(muCoeff.first);
+            inputCoeffs.push_back(muCoeff.second);
+          }
+
+        const std::vector<SchurConversionRecipeEntry>& recipe =
+            powerSumsToSchurRecipe(degree, inputPartitions, omegaStyle);
+        for (const auto& entry : recipe)
           {
             ring_elem coeff = coefficientRing->zero();
-            for (const auto& muCoeff : powerSumCoeffs)
+            for (const auto& contribution : entry.contributions)
               {
-                auto muCol = table.partitionRows.find(muCoeff.first);
-                int chi = muCol == table.partitionRows.end()
-                    ? characterValue(table.partitions[row], muCoeff.first)
-                    : characterTableValue(table, row, muCol->second);
-                if (chi == 0) continue;
+                size_t input = contribution.first;
+                int chi = contribution.second;
                 ring_elem termCoeff =
                     coefficientRing->mult(coefficientRing->from_long(chi),
-                                          muCoeff.second);
+                                          inputCoeffs[input]);
                 coeff = coefficientRing->add(coeff, termCoeff);
               }
-            addCoeff(schurCoeffs, table.partitions[row], coeff);
+            addCoeff(schurCoeffs, entry.lambda, coeff);
           }
       }
 
     return coeffMapToElement(schurCoeffs, schurId, display, schurOrder, false);
   }
 
-  std::vector<ring_elem> solveSquareSystem(std::vector<std::vector<ring_elem>> M,
-                                           std::vector<ring_elem> v) const
+  RingElemVector solveSquareSystem(RingElemMatrix M,
+                                   RingElemVector v) const
   {
     size_t n = v.size();
     for (size_t col = 0; col < n; ++col)
@@ -1500,9 +1781,8 @@ class SymmetricEngineRing : public Ring
       {
         std::vector<Partition> parts = partitionsOf(d);
         size_t n = parts.size();
-        std::vector<std::vector<ring_elem>> M(
-            n, std::vector<ring_elem>(n, coefficientRing->zero()));
-        std::vector<ring_elem> v(n, coefficientRing->zero());
+        RingElemMatrix M(n, RingElemVector(n, coefficientRing->zero()));
+        RingElemVector v(n, coefficientRing->zero());
         for (size_t row = 0; row < n; ++row)
           {
             if (parts[row] == key) v[row] = coefficientRing->one();
@@ -1510,7 +1790,7 @@ class SymmetricEngineRing : public Ring
               M[row][col] =
                   coefficientRing->from_long(pToMonomialCoefficient(parts[col], parts[row]));
           }
-        std::vector<ring_elem> coeffs = solveSquareSystem(M, v);
+        RingElemVector coeffs = solveSquareSystem(M, v);
         if (error()) return zero();
         ring_elem result = zero();
         for (size_t i = 0; i < n; ++i)
@@ -1865,6 +2145,49 @@ class SymmetricEngineRing : public Ring
     return false;
   }
 
+  bool directPowerSumSchurInnerProduct(ring_elem f,
+                                       ring_elem g,
+                                       ring_elem& result) const
+  {
+    int pId = requiredBasisIdForDisplay("p");
+    int schurId = requiredBasisIdForDisplay("S");
+    if (error()) return false;
+
+    CoeffMap pCoeffs;
+    CoeffMap schurCoeffs;
+    if (!coefficientsInBasisIfPossible(f, pId, pCoeffs) ||
+        !coefficientsInBasisIfPossible(g, schurId, schurCoeffs))
+      {
+        pCoeffs.clear();
+        schurCoeffs.clear();
+        if (!coefficientsInBasisIfPossible(g, pId, pCoeffs) ||
+            !coefficientsInBasisIfPossible(f, schurId, schurCoeffs))
+          return false;
+      }
+
+    result = coefficientRing->zero();
+    for (const auto& pTerm : pCoeffs)
+      {
+        int degree = partitionWeight(pTerm.first);
+        Partition mu = normalizePartition(pTerm.first);
+        for (const auto& schurTerm : schurCoeffs)
+          {
+            if (partitionWeight(schurTerm.first) != degree) continue;
+            if (!isPartitionIndex(schurTerm.first)) return false;
+            int chi = characterValue(schurTerm.first, mu);
+            if (chi == 0) continue;
+            ring_elem contribution = coefficientRing->mult(pTerm.second,
+                                                           schurTerm.second);
+            if (chi != 1)
+              contribution =
+                  coefficientRing->mult(coefficientRing->from_long(chi),
+                                        contribution);
+            result = coefficientRing->add(result, contribution);
+          }
+      }
+    return true;
+  }
+
   ring_elem basisElementForDisplay(const std::string& display,
                                    const Partition& index) const
   {
@@ -1885,39 +2208,40 @@ class SymmetricEngineRing : public Ring
     if (directHallInnerProductFromMetadata(f, g, metadata, direct))
       return direct;
     if (error()) return coefficientRing->zero();
+    if (directPowerSumSchurInnerProduct(f, g, direct))
+      return direct;
+    if (error()) return coefficientRing->zero();
 
     int pId = requiredBasisIdForDisplay("p");
-    int qId = requiredBasisIdForDisplay("q");
-    int mId = requiredBasisIdForDisplay("m");
     if (error()) return coefficientRing->zero();
 
-    ring_elem fQ = toBasis(f,
+    ring_elem fP = toBasis(f,
                            pId,
                            "p",
                            basisOrderForId(pId),
                            isMultiplicativeBasis(pId),
-                           qId,
-                           "q",
-                           basisOrderForId(qId),
-                           isMultiplicativeBasis(qId));
+                           pId,
+                           "p",
+                           basisOrderForId(pId),
+                           isMultiplicativeBasis(pId));
     if (error()) return coefficientRing->zero();
-    ring_elem gM = toBasis(g,
+    ring_elem gP = toBasis(g,
                            pId,
                            "p",
                            basisOrderForId(pId),
                            isMultiplicativeBasis(pId),
-                           mId,
-                           "m",
-                           basisOrderForId(mId),
-                           isMultiplicativeBasis(mId));
+                           pId,
+                           "p",
+                           basisOrderForId(pId),
+                           isMultiplicativeBasis(pId));
     if (error()) return coefficientRing->zero();
 
-    CoeffMap fCoeffs = coefficientsInBasis(fQ, qId);
+    CoeffMap fCoeffs = coefficientsInBasis(fP, pId);
     if (error()) return coefficientRing->zero();
-    CoeffMap gCoeffs = coefficientsInBasis(gM, mId);
+    CoeffMap gCoeffs = coefficientsInBasis(gP, pId);
     if (error()) return coefficientRing->zero();
 
-    return coefficientPairing(fCoeffs, gCoeffs);
+    return powerSumPairing(fCoeffs, gCoeffs);
   }
 
   ring_elem skewQOrBFunction(const Partition& lambda,
@@ -2321,7 +2645,7 @@ class SymmetricEngineRing : public Ring
   ring_elem plethysmPowerSums(ring_elem fPowerSums, ring_elem gPowerSums) const
   {
     const auto *poly = polyValue(fPowerSums);
-    std::map<int, ring_elem> adamsCache;
+    GCMap<int, ring_elem> adamsCache;
     ring_elem result = zero();
     for (const auto& term : poly->terms)
       {
@@ -2821,7 +3145,8 @@ class SymmetricEngineRing : public Ring
   {
     auto result = new SymmetricRingPoly;
     result->terms.reserve(poly->terms.size());
-    result->terms.insert(result->terms.end(), poly->terms.begin(), poly->terms.end());
+    for (const auto& term : poly->terms)
+      result->terms.push_back({coefficientRing->copy(term.coeff), term.monomial});
     return makePolyValue(result);
   }
 
@@ -2869,7 +3194,7 @@ class SymmetricEngineRing : public Ring
     return makePolyValue(result);
   }
 
-  void addToAccumulator(std::map<std::vector<int>, ring_elem>& accumulator,
+  void addToAccumulator(GCMap<std::vector<int>, ring_elem>& accumulator,
                         const SymmetricMonomial& monomial,
                         ring_elem coeff) const
   {
@@ -2889,7 +3214,7 @@ class SymmetricEngineRing : public Ring
   }
 
   ring_elem fromAccumulator(
-      const std::map<std::vector<int>, ring_elem>& accumulator) const
+      const GCMap<std::vector<int>, ring_elem>& accumulator) const
   {
     auto result = new SymmetricRingPoly;
     result->terms.reserve(accumulator.size());
@@ -3162,7 +3487,7 @@ class SymmetricEngineRing : public Ring
     if (Sf != nullptr)
       {
         rememberBasesFrom(Sf);
-        std::map<std::vector<int>, ring_elem> accumulator;
+        GCMap<std::vector<int>, ring_elem> accumulator;
         const auto *poly = polyValue(f);
         for (const auto& term : poly->terms)
           {
@@ -3192,7 +3517,7 @@ class SymmetricEngineRing : public Ring
     if (Sg != nullptr)
       {
         Sg->rememberBasesFrom(this);
-        std::map<std::vector<int>, ring_elem> accumulator;
+        GCMap<std::vector<int>, ring_elem> accumulator;
         for (const auto& term : poly->terms)
           {
             ring_elem coeff;
@@ -3434,6 +3759,187 @@ class SymmetricEngineRing : public Ring
     return result;
   }
 
+  bool singleSchurPartition(ring_elem f, int schurId, Partition& lambda) const
+  {
+    const auto *poly = polyValue(f);
+    if (poly->terms.size() != 1) return false;
+    if (!coefficientRing->is_equal(poly->terms[0].coeff, coefficientRing->one()))
+      return false;
+    if (!singleBasisIndexFromMonomial(poly->terms[0].monomial, schurId, lambda))
+      return false;
+    return isPartitionIndex(lambda);
+  }
+
+  std::string schurCompletePlethysmKey(int n,
+                                       int schurId,
+                                       const Partition& inner) const
+  {
+    return std::to_string(n) + "|" + std::to_string(schurId) + "|" +
+           partitionKey(inner);
+  }
+
+  ring_elem schurCompletePlethysm(int n,
+                                  const Partition& inner,
+                                  int powerSumBasisId0,
+                                  const std::string& powerSumDisplay,
+                                  int powerSumOrder,
+                                  bool powerSumIsMultiplicative,
+                                  int schurId,
+                                  const std::string& schurDisplay,
+                                  int schurOrder) const
+  {
+    if (n < 0) return zero();
+    if (n == 0) return one();
+
+    std::string key = schurCompletePlethysmKey(n, schurId, inner);
+    auto cached = schurCompletePlethysmCache.find(key);
+    if (cached != schurCompletePlethysmCache.end())
+      return copyPolyValue(polyValue(cached->second));
+
+    ring_elem innerSchur =
+        basisElementFromIndex(schurId, schurDisplay, schurOrder, false, inner);
+    ring_elem total = zero();
+    for (int i = 1; i <= n; ++i)
+      {
+        ring_elem pI = basisElementFromIndex(powerSumBasisId0,
+                                             powerSumDisplay,
+                                             powerSumOrder,
+                                             powerSumIsMultiplicative,
+                                             Partition{i});
+        ring_elem pIAtInner = plethysm(pI,
+                                       innerSchur,
+                                       powerSumBasisId0,
+                                       powerSumDisplay,
+                                       powerSumOrder,
+                                       powerSumIsMultiplicative);
+        if (error()) return zero();
+        ring_elem pIAtInnerSchur = toBasis(pIAtInner,
+                                           powerSumBasisId0,
+                                           powerSumDisplay,
+                                           powerSumOrder,
+                                           powerSumIsMultiplicative,
+                                           schurId,
+                                           schurDisplay,
+                                           schurOrder,
+                                           false);
+        if (error()) return zero();
+        ring_elem rest = schurCompletePlethysm(n - i,
+                                               inner,
+                                               powerSumBasisId0,
+                                               powerSumDisplay,
+                                               powerSumOrder,
+                                               powerSumIsMultiplicative,
+                                               schurId,
+                                               schurDisplay,
+                                               schurOrder);
+        if (error()) return zero();
+        ring_elem product =
+            multiplySchurElements(pIAtInnerSchur, rest, schurId, schurDisplay, schurOrder);
+        if (error()) return zero();
+        total = add(total, product);
+      }
+
+    ring_elem reciprocal = rationalCoefficient(1, n);
+    if (error()) return zero();
+    ring_elem result = scaled(reciprocal, total);
+    schurCompletePlethysmCache[key] = result;
+    return copyPolyValue(polyValue(result));
+  }
+
+  ring_elem schurPlethysmJacobiTrudi(const Partition& outer,
+                                     const Partition& inner,
+                                     int powerSumBasisId0,
+                                     const std::string& powerSumDisplay,
+                                     int powerSumOrder,
+                                     bool powerSumIsMultiplicative,
+                                     int schurId,
+                                     const std::string& schurDisplay,
+                                     int schurOrder) const
+  {
+    size_t n = outer.size();
+    if (n == 0) return one();
+    if (n >= 8 * sizeof(size_t))
+      {
+        ERROR("Jacobi-Trudi determinant is too large");
+        return zero();
+      }
+
+    RingElemMatrix matrix(n, RingElemVector(n));
+    for (size_t i = 0; i < n; ++i)
+      for (size_t j = 0; j < n; ++j)
+        {
+          int degree = outer[i] - static_cast<int>(i) + static_cast<int>(j);
+          matrix[i][j] = schurCompletePlethysm(degree,
+                                               inner,
+                                               powerSumBasisId0,
+                                               powerSumDisplay,
+                                               powerSumOrder,
+                                               powerSumIsMultiplicative,
+                                               schurId,
+                                               schurDisplay,
+                                               schurOrder);
+          if (error()) return zero();
+        }
+
+    size_t limit = static_cast<size_t>(1) << n;
+    RingElemVector dp;
+    dp.reserve(limit);
+    for (size_t i = 0; i < limit; ++i) dp.push_back(zero());
+    dp[0] = one();
+
+    for (size_t mask = 0; mask < limit; ++mask)
+      {
+        if (is_zero(dp[mask])) continue;
+        int row = popcountMask(mask);
+        if (row >= static_cast<int>(n)) continue;
+        for (size_t col = 0; col < n; ++col)
+          {
+            size_t bit = static_cast<size_t>(1) << col;
+            if ((mask & bit) != 0) continue;
+            if (is_zero(matrix[row][col])) continue;
+            ring_elem term = multiplySchurElements(dp[mask],
+                                                   matrix[row][col],
+                                                   schurId,
+                                                   schurDisplay,
+                                                   schurOrder);
+            if (error()) return zero();
+            if (selectedGreaterThan(mask, col, n) % 2 == 1) term = negate(term);
+            size_t next = mask | bit;
+            dp[next] = add(dp[next], term);
+          }
+      }
+
+    return dp[limit - 1];
+  }
+
+  bool schurPlethysmToSchur(ring_elem f,
+                            ring_elem g,
+                            int powerSumBasisId0,
+                            const std::string& powerSumDisplay,
+                            int powerSumOrder,
+                            bool powerSumIsMultiplicative,
+                            int targetBasisId,
+                            const std::string& targetDisplay,
+                            int targetOrder,
+                            ring_elem& result) const
+  {
+    if (targetDisplay != "S") return false;
+    Partition outer;
+    Partition inner;
+    if (!singleSchurPartition(f, targetBasisId, outer)) return false;
+    if (!singleSchurPartition(g, targetBasisId, inner)) return false;
+    result = schurPlethysmJacobiTrudi(outer,
+                                      inner,
+                                      powerSumBasisId0,
+                                      powerSumDisplay,
+                                      powerSumOrder,
+                                      powerSumIsMultiplicative,
+                                      targetBasisId,
+                                      targetDisplay,
+                                      targetOrder);
+    return !error();
+  }
+
   ring_elem jacobiTrudiBasis(int basisId,
                              const std::string& display,
                              int order,
@@ -3503,6 +4009,47 @@ class SymmetricEngineRing : public Ring
                                    pIsMultiplicative);
     if (error()) return zero();
     return plethysmPowerSums(fPowerSums, gPowerSums);
+  }
+
+  ring_elem plethysmToBasis(ring_elem f,
+                            ring_elem g,
+                            int pBasisId,
+                            const std::string& pDisplay,
+                            int pOrder,
+                            bool pIsMultiplicative,
+                            int targetBasisId,
+                            const std::string& targetDisplay,
+                            int targetOrder,
+                            bool targetIsMultiplicative) const
+  {
+    rememberBasis(pBasisId, pDisplay, pOrder, pIsMultiplicative);
+    rememberBasis(targetBasisId, targetDisplay, targetOrder, targetIsMultiplicative);
+
+    ring_elem specialized;
+    if (schurPlethysmToSchur(f,
+                             g,
+                             pBasisId,
+                             pDisplay,
+                             pOrder,
+                             pIsMultiplicative,
+                             targetBasisId,
+                             targetDisplay,
+                             targetOrder,
+                             specialized))
+      return specialized;
+    if (error()) return zero();
+
+    ring_elem result = plethysm(f, g, pBasisId, pDisplay, pOrder, pIsMultiplicative);
+    if (error()) return zero();
+    return toBasis(result,
+                   pBasisId,
+                   pDisplay,
+                   pOrder,
+                   pIsMultiplicative,
+                   targetBasisId,
+                   targetDisplay,
+                   targetOrder,
+                   targetIsMultiplicative);
   }
 
   int uniformBasisId(ring_elem f) const
@@ -3796,6 +4343,46 @@ const RingElement *rawSymmetricRingsPlethysm(const RingElement *f,
     }
 }
 
+const RingElement *rawSymmetricRingsPlethysmToBasis(const RingElement *f,
+                                                    const RingElement *g,
+                                                    int powerSumBasisId,
+                                                    M2_string powerSumDisplaySymbol,
+                                                    int powerSumDisplayOrder,
+                                                    bool powerSumIsMultiplicative,
+                                                    int targetBasisId,
+                                                    M2_string targetDisplaySymbol,
+                                                    int targetDisplayOrder,
+                                                    bool targetIsMultiplicative)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      if (g->get_ring() != S)
+        {
+          ERROR("expected elements in the same symmetric ring");
+          return nullptr;
+        }
+      ring_elem result = S->plethysmToBasis(f->get_value(),
+                                            g->get_value(),
+                                            powerSumBasisId,
+                                            fromM2String(powerSumDisplaySymbol),
+                                            powerSumDisplayOrder,
+                                            powerSumIsMultiplicative,
+                                            targetBasisId,
+                                            fromM2String(targetDisplaySymbol),
+                                            targetDisplayOrder,
+                                            targetIsMultiplicative);
+      if (error()) return nullptr;
+      return RingElement::make_raw(S, result);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
 int rawSymmetricRingsSingleBasisId(const RingElement *f)
 {
   try
@@ -3865,6 +4452,70 @@ const RingElement *rawSymmetricRingsHallInnerProduct(const RingElement *f,
                                              innerProductMap);
       if (error()) return nullptr;
       return RingElement::make_raw(S->getCoefficientRing(), result);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+int rawSymmetricRingsTermCount(const RingElement *f)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return 0;
+      (void) S;
+      return static_cast<int>(polyValue(f->get_value())->terms.size());
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return 0;
+    }
+}
+
+const RingElement *rawSymmetricRingsTermCoefficient(const RingElement *f, int i)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      const auto *poly = polyValue(f->get_value());
+      if (i < 0 || static_cast<size_t>(i) >= poly->terms.size())
+        {
+          ERROR("symmetric-ring term index out of range");
+          return nullptr;
+        }
+      const Ring *A = S->getCoefficientRing();
+      return RingElement::make_raw(A, A->copy(poly->terms[i].coeff));
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+M2_arrayint rawSymmetricRingsTermMonomial(const RingElement *f, int i)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      (void) S;
+      const auto *poly = polyValue(f->get_value());
+      if (i < 0 || static_cast<size_t>(i) >= poly->terms.size())
+        {
+          ERROR("symmetric-ring term index out of range");
+          return nullptr;
+        }
+      const auto& data = poly->terms[i].monomial.data;
+      M2_arrayint result = M2_makearrayint(static_cast<int>(data.size()));
+      for (size_t j = 0; j < data.size(); ++j)
+        result->array[j] = data[j];
+      return result;
     }
   catch (const exc::engine_error& e)
     {
