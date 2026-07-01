@@ -120,7 +120,7 @@ setupfun("rawSymmetricRing", rawSymmetricRing);
 export rawSymmetricRingsBasisElement(e:Expr):Expr := (
      when e
      is s:Sequence do (
-	  if length(s) != 5 then return WrongNumArgs(5);
+	  if length(s) != 7 then return WrongNumArgs(7);
 	  when s.0
 	  is R:RawRingCell do (
 	       when s.1
@@ -132,19 +132,28 @@ export rawSymmetricRingsBasisElement(e:Expr):Expr := (
 			 is displayOrder:ZZcell do (
 			      if !isInt(displayOrder) then return WrongArgSmallInteger(4);
 			      when s.4
-			      is index:List do (
-				   if !isSequenceOfSmallIntegers(index.v) then return WrongArg(5, "a list of small integers");
-				   toExpr(Ccode(RawRingElementOrNull,
-					"rawSymmetricRingsBasisElement(",
-					R.p, ", ", toInt(basisId), ", ",
-					displaySymbol.v, ", ", toInt(displayOrder),
-					", ", getSequenceOfSmallIntegers(index.v), ")")))
-			      else WrongArg(5, "a list of small integers"))
+			      is isMultiplicative:Boolean do (
+				   when s.5
+				   is innerLength:ZZcell do (
+					if !isInt(innerLength) then return WrongArgSmallInteger(6);
+					when s.6
+					is index:List do (
+					     if !isSequenceOfSmallIntegers(index.v) then return WrongArg(7, "a list of small integers");
+					     toExpr(Ccode(RawRingElementOrNull,
+						  "rawSymmetricRingsBasisElement(",
+						  R.p, ", ", toInt(basisId), ", ",
+						  displaySymbol.v, ", ", toInt(displayOrder),
+						  ", ", toBoolean(s.4), ", ",
+						  toInt(innerLength), ", ",
+						  getSequenceOfSmallIntegers(index.v), ")")))
+					else WrongArg(7, "a list of small integers"))
+				   else WrongArgZZ(6))
+			      else WrongArg(5, "a Boolean"))
 			 else WrongArgZZ(4))
 		    else WrongArgString(3))
 	       else WrongArgZZ(2))
 	  else WrongArg(1, "a raw ring"))
-     else WrongNumArgs(5));
+     else WrongNumArgs(7));
 setupfun("rawSymmetricRingsBasisElement", rawSymmetricRingsBasisElement);
 
 export rawSymmetricRingsSum(e:Expr):Expr := (
@@ -176,6 +185,55 @@ export rawSymmetricRingsProduct(e:Expr):Expr := (
 	  else WrongArg(1, "a raw ring"))
      else WrongNumArgs(2));
 setupfun("rawSymmetricRingsProduct", rawSymmetricRingsProduct);
+
+export rawSymmetricRingsToBasis(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 9 then return WrongNumArgs(9);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is powerSumBasisId:ZZcell do (
+		    if !isInt(powerSumBasisId) then return WrongArgSmallInteger(2);
+		    when s.2
+		    is powerSumDisplaySymbol:stringCell do (
+			 when s.3
+			 is powerSumDisplayOrder:ZZcell do (
+			      if !isInt(powerSumDisplayOrder) then return WrongArgSmallInteger(4);
+			      when s.4
+			      is powerSumIsMultiplicative:Boolean do (
+				   when s.5
+				   is targetBasisId:ZZcell do (
+					if !isInt(targetBasisId) then return WrongArgSmallInteger(6);
+					when s.6
+					is targetDisplaySymbol:stringCell do (
+					     when s.7
+					     is targetDisplayOrder:ZZcell do (
+						  if !isInt(targetDisplayOrder) then return WrongArgSmallInteger(8);
+						  when s.8
+						  is targetIsMultiplicative:Boolean do (
+						       toExpr(Ccode(RawRingElementOrNull,
+							    "rawSymmetricRingsToBasis(",
+							    f.p, ", ",
+							    toInt(powerSumBasisId), ", ",
+							    powerSumDisplaySymbol.v, ", ",
+							    toInt(powerSumDisplayOrder), ", ",
+							    toBoolean(s.4), ", ",
+							    toInt(targetBasisId), ", ",
+							    targetDisplaySymbol.v, ", ",
+							    toInt(targetDisplayOrder), ", ",
+							    toBoolean(s.8), ")")))
+						  else WrongArg(9, "a Boolean"))
+					     else WrongArgZZ(8))
+					else WrongArgString(7))
+				   else WrongArgZZ(6))
+			      else WrongArg(5, "a Boolean"))
+			 else WrongArgZZ(4))
+		    else WrongArgString(3))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(9));
+setupfun("rawSymmetricRingsToBasis", rawSymmetricRingsToBasis);
 
 export rawSymmetricRingsElementToString(e:Expr):Expr := (
      when e

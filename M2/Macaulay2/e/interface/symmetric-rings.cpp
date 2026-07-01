@@ -13,6 +13,7 @@
 #include "rings/ringelem.hpp"
 
 #include <algorithm>
+#include <functional>
 #include <map>
 #include <sstream>
 #include <string>
@@ -20,15 +21,14 @@
 
 namespace {
 
-struct SymmetricAtom
-{
-  // [displayOrder, basisId, indexLength, index_1, ..., index_n]
-  VECTOR(int) data;
-};
+constexpr size_t atomHeaderSize = 4;
 
 struct SymmetricMonomial
 {
-  VECTOR(SymmetricAtom) atoms;
+  // Concatenated atom blocks:
+  // [displayOrder, basisId, outerLength, innerLength, payload_1, ..., payload_n, ...]
+  // For skew atoms, payload is outer shape followed by inner shape.
+  VECTOR(int) data;
 };
 
 struct SymmetricTerm
@@ -42,6 +42,221 @@ class SymmetricRingPoly : public our_new_delete
  public:
   VECTOR(SymmetricTerm) terms;
 };
+
+struct BasisIndexKey
+{
+  int basisId;
+  std::vector<int> index;
+
+  bool operator<(const BasisIndexKey& other) const
+  {
+    if (basisId != other.basisId) return basisId < other.basisId;
+    return index < other.index;
+  }
+};
+
+using Partition = std::vector<int>;
+
+std::string partitionKey(const Partition& p)
+{
+  std::ostringstream out;
+  for (size_t i = 0; i < p.size(); ++i)
+    {
+      if (i > 0) out << ",";
+      out << p[i];
+    }
+  return out.str();
+}
+
+void partitionsRec(int n, int maxPart, Partition& current, std::vector<Partition>& result)
+{
+  if (n == 0)
+    {
+      result.push_back(current);
+      return;
+    }
+  for (int part = std::min(n, maxPart); part >= 1; --part)
+    {
+      current.push_back(part);
+      partitionsRec(n - part, part, current, result);
+      current.pop_back();
+    }
+}
+
+std::vector<Partition> partitionsOf(int n)
+{
+  std::vector<Partition> result;
+  Partition current;
+  partitionsRec(n, n, current, result);
+  return result;
+}
+
+long zValue(const Partition& lambda)
+{
+  std::map<int, int> multiplicities;
+  for (int part : lambda) multiplicities[part]++;
+  long result = 1;
+  for (const auto& item : multiplicities)
+    {
+      for (int i = 0; i < item.second; ++i) result *= item.first;
+      for (int i = 2; i <= item.second; ++i) result *= i;
+    }
+  return result;
+}
+
+bool isPartitionAfterRemoval(const Partition& lambda, const std::vector<int>& removed)
+{
+  int previous = -1;
+  for (size_t i = 0; i < lambda.size(); ++i)
+    {
+      int remaining = lambda[i] - removed[i];
+      if (remaining < 0) return false;
+      if (previous >= 0 && remaining > previous) return false;
+      previous = remaining;
+    }
+  return true;
+}
+
+Partition remainingPartition(const Partition& lambda, const std::vector<int>& removed)
+{
+  Partition result;
+  for (size_t i = 0; i < lambda.size(); ++i)
+    {
+      int remaining = lambda[i] - removed[i];
+      if (remaining > 0) result.push_back(remaining);
+    }
+  return result;
+}
+
+bool removedCell(const Partition& lambda,
+                 const std::vector<int>& removed,
+                 int row,
+                 int col)
+{
+  if (row < 0 || static_cast<size_t>(row) >= lambda.size()) return false;
+  if (col < 1 || col > lambda[row]) return false;
+  return col > lambda[row] - removed[row];
+}
+
+bool isConnectedSkew(const Partition& lambda, const std::vector<int>& removed)
+{
+  int total = 0;
+  int startRow = -1;
+  int startCol = -1;
+  for (size_t r = 0; r < lambda.size(); ++r)
+    for (int c = lambda[r] - removed[r] + 1; c <= lambda[r]; ++c)
+      {
+        ++total;
+        if (startRow < 0)
+          {
+            startRow = static_cast<int>(r);
+            startCol = c;
+          }
+      }
+  if (total == 0) return false;
+
+  std::vector<std::pair<int, int>> stack{{startRow, startCol}};
+  std::map<std::pair<int, int>, bool> seen;
+  seen[stack.back()] = true;
+  int visited = 0;
+  while (!stack.empty())
+    {
+      auto cell = stack.back();
+      stack.pop_back();
+      ++visited;
+      const int dr[4] = {1, -1, 0, 0};
+      const int dc[4] = {0, 0, 1, -1};
+      for (int i = 0; i < 4; ++i)
+        {
+          std::pair<int, int> next{cell.first + dr[i], cell.second + dc[i]};
+          if (!seen[next] && removedCell(lambda, removed, next.first, next.second))
+            {
+              seen[next] = true;
+              stack.push_back(next);
+            }
+        }
+    }
+  return visited == total;
+}
+
+bool hasNoTwoByTwo(const Partition& lambda, const std::vector<int>& removed)
+{
+  for (size_t r = 0; r + 1 < lambda.size(); ++r)
+    for (int c = 1; c <= std::max(lambda[r], lambda[r + 1]); ++c)
+      if (removedCell(lambda, removed, static_cast<int>(r), c) &&
+          removedCell(lambda, removed, static_cast<int>(r) + 1, c) &&
+          removedCell(lambda, removed, static_cast<int>(r), c + 1) &&
+          removedCell(lambda, removed, static_cast<int>(r) + 1, c + 1))
+        return false;
+  return true;
+}
+
+struct RimHookRemoval
+{
+  Partition remaining;
+  int height;
+};
+
+void rimHookRec(const Partition& lambda,
+                int row,
+                int remainingSize,
+                std::vector<int>& removed,
+                std::vector<RimHookRemoval>& result)
+{
+  if (row == static_cast<int>(lambda.size()))
+    {
+      if (remainingSize != 0) return;
+      if (!isPartitionAfterRemoval(lambda, removed)) return;
+      if (!isConnectedSkew(lambda, removed)) return;
+      if (!hasNoTwoByTwo(lambda, removed)) return;
+      int rows = 0;
+      for (int count : removed)
+        if (count > 0) ++rows;
+      result.push_back({remainingPartition(lambda, removed), rows - 1});
+      return;
+    }
+  for (int count = 0; count <= std::min(lambda[row], remainingSize); ++count)
+    {
+      removed[row] = count;
+      rimHookRec(lambda, row + 1, remainingSize - count, removed, result);
+    }
+  removed[row] = 0;
+}
+
+std::vector<RimHookRemoval> rimHookRemovals(const Partition& lambda, int size)
+{
+  std::vector<RimHookRemoval> result;
+  std::vector<int> removed(lambda.size(), 0);
+  rimHookRec(lambda, 0, size, removed, result);
+  return result;
+}
+
+int characterValueMemo(const Partition& lambda,
+                       const Partition& mu,
+                       std::map<std::string, int>& memo)
+{
+  if (mu.empty()) return lambda.empty() ? 1 : 0;
+  std::string key = partitionKey(lambda) + "|" + partitionKey(mu);
+  auto it = memo.find(key);
+  if (it != memo.end()) return it->second;
+
+  int total = 0;
+  int hookSize = mu.front();
+  Partition rest(mu.begin() + 1, mu.end());
+  for (const auto& removal : rimHookRemovals(lambda, hookSize))
+    {
+      int sign = (removal.height % 2 == 0) ? 1 : -1;
+      total += sign * characterValueMemo(removal.remaining, rest, memo);
+    }
+  memo[key] = total;
+  return total;
+}
+
+int characterValue(const Partition& lambda, const Partition& mu)
+{
+  std::map<std::string, int> memo;
+  return characterValueMemo(lambda, mu, memo);
+}
 
 std::string fromM2String(M2_string s)
 {
@@ -89,161 +304,151 @@ std::string coeffToString(const Ring *R, ring_elem c)
   return std::string(o.str());
 }
 
-SymmetricAtom makeAtom(int displayOrder, int basisId, M2_arrayint index)
+size_t atomLengthAt(const SymmetricMonomial& monomial, size_t pos)
 {
-  SymmetricAtom atom;
-  atom.data.push_back(displayOrder);
-  atom.data.push_back(basisId);
-  atom.data.push_back(index == nullptr ? 0 : index->len);
-  if (index != nullptr)
-    for (int i = 0; i < index->len; ++i) atom.data.push_back(index->array[i]);
-  return atom;
+  if (pos + 3 >= monomial.data.size()) return monomial.data.size() - pos;
+  return atomHeaderSize + monomial.data[pos + 2] + monomial.data[pos + 3];
 }
 
-bool atomLess(const SymmetricAtom& a, const SymmetricAtom& b)
+int atomOrderAt(const SymmetricMonomial& monomial, size_t pos)
+{
+  return monomial.data[pos];
+}
+
+int atomBasisIdAt(const SymmetricMonomial& monomial, size_t pos)
+{
+  return monomial.data[pos + 1];
+}
+
+bool atomIsSkewAt(const SymmetricMonomial& monomial, size_t pos)
+{
+  return monomial.data[pos + 3] > 0;
+}
+
+int atomOuterLengthAt(const SymmetricMonomial& monomial, size_t pos)
+{
+  return monomial.data[pos + 2];
+}
+
+int atomInnerLengthAt(const SymmetricMonomial& monomial, size_t pos)
+{
+  return monomial.data[pos + 3];
+}
+
+int atomIndexLengthAt(const SymmetricMonomial& monomial, size_t pos)
+{
+  return atomOuterLengthAt(monomial, pos) + atomInnerLengthAt(monomial, pos);
+}
+
+bool blockLess(const std::vector<int>& a, const std::vector<int>& b)
+{
+  return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end());
+}
+
+bool monomialLess(const SymmetricMonomial& a, const SymmetricMonomial& b)
 {
   return std::lexicographical_compare(
       a.data.begin(), a.data.end(), b.data.begin(), b.data.end());
 }
 
-SymmetricMonomial canonicalMonomial(SymmetricMonomial monomial)
+int compareMonomials(const SymmetricMonomial& a, const SymmetricMonomial& b)
 {
-  std::sort(monomial.atoms.begin(), monomial.atoms.end(), atomLess);
-  return monomial;
+  if (monomialLess(a, b)) return LT;
+  if (monomialLess(b, a)) return GT;
+  return EQ;
 }
 
-SymmetricMonomial mergeMonomials(const SymmetricMonomial& a,
-                                 const SymmetricMonomial& b)
+std::vector<int> atomBlockAt(const SymmetricMonomial& monomial, size_t pos)
 {
-  SymmetricMonomial result;
-  result.atoms.reserve(a.atoms.size() + b.atoms.size());
-  size_t i = 0;
-  size_t j = 0;
-  while (i < a.atoms.size() && j < b.atoms.size())
-    {
-      if (atomLess(b.atoms[j], a.atoms[i]))
-        result.atoms.push_back(b.atoms[j++]);
-      else
-        result.atoms.push_back(a.atoms[i++]);
-    }
-  result.atoms.insert(result.atoms.end(), a.atoms.begin() + i, a.atoms.end());
-  result.atoms.insert(result.atoms.end(), b.atoms.begin() + j, b.atoms.end());
-  return result;
+  size_t len = atomLengthAt(monomial, pos);
+  return std::vector<int>(monomial.data.begin() + pos,
+                          monomial.data.begin() + pos + len);
+}
+
+void appendAtomBlock(SymmetricMonomial& monomial, const std::vector<int>& block)
+{
+  monomial.data.insert(monomial.data.end(), block.begin(), block.end());
+}
+
+std::vector<int> makeAtomBlock(int displayOrder,
+                               int basisId,
+                               int innerLength,
+                               M2_arrayint index)
+{
+  std::vector<int> block;
+  int payloadLength = index == nullptr ? 0 : index->len;
+  block.push_back(displayOrder);
+  block.push_back(basisId);
+  block.push_back(payloadLength - innerLength);
+  block.push_back(innerLength);
+  if (index != nullptr)
+    for (int i = 0; i < index->len; ++i) block.push_back(index->array[i]);
+  return block;
+}
+
+std::vector<int> makeAtomBlock(int displayOrder,
+                               int basisId,
+                               int innerLength,
+                               const std::vector<int>& index)
+{
+  std::vector<int> block;
+  block.reserve(atomHeaderSize + index.size());
+  block.push_back(displayOrder);
+  block.push_back(basisId);
+  block.push_back(static_cast<int>(index.size()) - innerLength);
+  block.push_back(innerLength);
+  block.insert(block.end(), index.begin(), index.end());
+  return block;
 }
 
 std::vector<int> monomialKey(const SymmetricMonomial& monomial)
 {
-  std::vector<int> result;
-  for (const auto& atom : monomial.atoms)
-    {
-      result.insert(result.end(), atom.data.begin(), atom.data.end());
-    }
-  return result;
+  return std::vector<int>(monomial.data.begin(), monomial.data.end());
 }
 
 SymmetricMonomial monomialFromKey(const std::vector<int>& key)
 {
   SymmetricMonomial result;
-  size_t pos = 0;
-  while (pos < key.size())
-    {
-      if (pos + 2 >= key.size()) break;
-      int blockLen = 3 + key[pos + 2];
-      SymmetricAtom atom;
-      for (int j = 0; j < blockLen && pos < key.size(); ++j)
-        atom.data.push_back(key[pos++]);
-      result.atoms.push_back(atom);
-    }
+  result.data.insert(result.data.end(), key.begin(), key.end());
   return result;
 }
 
-SymmetricMonomial multiplyMonomials(const SymmetricMonomial& a,
-                                    const SymmetricMonomial& b)
-{
-  if (a.atoms.empty()) return b;
-  if (b.atoms.empty()) return a;
-  if (!atomLess(b.atoms.front(), a.atoms.back()))
-    {
-      SymmetricMonomial result;
-      result.atoms.reserve(a.atoms.size() + b.atoms.size());
-      result.atoms.insert(result.atoms.end(), a.atoms.begin(), a.atoms.end());
-      result.atoms.insert(result.atoms.end(), b.atoms.begin(), b.atoms.end());
-      return result;
-    }
-  if (atomLess(b.atoms.back(), a.atoms.front()))
-    {
-      SymmetricMonomial result;
-      result.atoms.reserve(a.atoms.size() + b.atoms.size());
-      result.atoms.insert(result.atoms.end(), b.atoms.begin(), b.atoms.end());
-      result.atoms.insert(result.atoms.end(), a.atoms.begin(), a.atoms.end());
-      return result;
-    }
-  return mergeMonomials(a, b);
-}
-
-int compareMonomials(const SymmetricMonomial& a, const SymmetricMonomial& b)
-{
-  size_t atomA = 0;
-  size_t atomB = 0;
-  size_t posA = 0;
-  size_t posB = 0;
-  while (atomA < a.atoms.size() && atomB < b.atoms.size())
-    {
-      const auto& dataA = a.atoms[atomA].data;
-      const auto& dataB = b.atoms[atomB].data;
-      while (posA < dataA.size() && posB < dataB.size())
-        {
-          if (dataA[posA] < dataB[posB]) return LT;
-          if (dataB[posB] < dataA[posA]) return GT;
-          ++posA;
-          ++posB;
-        }
-      if (posA == dataA.size())
-        {
-          ++atomA;
-          posA = 0;
-        }
-      if (posB == dataB.size())
-        {
-          ++atomB;
-          posB = 0;
-        }
-    }
-  if (atomA < a.atoms.size()) return GT;
-  if (atomB < b.atoms.size()) return LT;
-  return EQ;
-}
-
-int atomIndexLength(const SymmetricAtom& atom)
-{
-  return atom.data.size() >= 3 ? atom.data[2] : 0;
-}
-
-int atomBasisId(const SymmetricAtom& atom)
-{
-  return atom.data.size() >= 2 ? atom.data[1] : -1;
-}
-
-int atomIndexValue(const SymmetricAtom& atom, int i)
-{
-  return atom.data[3 + i];
-}
-
-std::string displayIndex(const SymmetricAtom& atom)
-{
-  int n = atomIndexLength(atom);
-  if (n <= 0) return "{}";
-  if (n == 1) return std::to_string(atomIndexValue(atom, 0));
-  std::vector<std::string> parts;
-  for (int i = 0; i < n; ++i) parts.push_back(std::to_string(atomIndexValue(atom, i)));
-  return "{" + join(parts, ",") + "}";
-}
-
-int atomWeight(const SymmetricAtom& atom)
+int monomialWeight(const SymmetricMonomial& monomial)
 {
   int result = 0;
-  for (int i = 0; i < atomIndexLength(atom); ++i) result += atomIndexValue(atom, i);
+  size_t pos = 0;
+  while (pos < monomial.data.size())
+    {
+      int n = atomIndexLengthAt(monomial, pos);
+      if (atomIsSkewAt(monomial, pos))
+        {
+          int outerLength = atomOuterLengthAt(monomial, pos);
+          int innerLength = atomInnerLengthAt(monomial, pos);
+          if (outerLength + innerLength == n)
+            {
+              for (int i = 0; i < outerLength; ++i)
+                result += monomial.data[pos + atomHeaderSize + i];
+              for (int i = outerLength; i < n; ++i)
+                result -= monomial.data[pos + atomHeaderSize + i];
+            }
+        }
+      else
+        {
+          for (int i = 0; i < n; ++i) result += monomial.data[pos + atomHeaderSize + i];
+        }
+      pos += atomHeaderSize + n;
+    }
   return result;
+}
+
+BasisIndexKey basisIndexKey(const SymmetricMonomial& monomial, size_t pos)
+{
+  BasisIndexKey key;
+  key.basisId = atomBasisIdAt(monomial, pos);
+  int n = atomIndexLengthAt(monomial, pos);
+  key.index.reserve(n);
+  for (int i = 0; i < n; ++i) key.index.push_back(monomial.data[pos + atomHeaderSize + i]);
+  return key;
 }
 
 class SymmetricEngineRing : public Ring
@@ -251,15 +456,41 @@ class SymmetricEngineRing : public Ring
  private:
   const Ring *coefficientRing;
   mutable std::map<int, std::string> basisDisplays;
+  mutable std::map<int, bool> multiplicativeBases;
+  mutable int powerSumBasisId = -1;
+  mutable std::map<int, ring_elem> hToPowerSumCache;
+  mutable std::map<int, ring_elem> eToPowerSumCache;
+  mutable std::map<std::string, ring_elem> schurToPowerSumCache;
+  mutable std::map<int, ring_elem> powerSumToCompleteCache;
+  mutable std::map<int, ring_elem> powerSumToElementaryCache;
+  mutable std::map<std::string, ring_elem> powerSumToSchurCache;
 
-  void rememberBasis(int basisId, const std::string& display) const
+  bool isMultiplicativeBasis(int basisId) const
+  {
+    auto it = multiplicativeBases.find(basisId);
+    return it != multiplicativeBases.end() && it->second;
+  }
+
+  bool isPowerSumBasis(int basisId) const
+  {
+    return powerSumBasisId >= 0 && basisId == powerSumBasisId;
+  }
+
+  void rememberBasis(int basisId,
+                     const std::string& display,
+                     bool isMultiplicative) const
   {
     if (!display.empty()) basisDisplays[basisId] = display;
+    multiplicativeBases[basisId] = isMultiplicative;
+    if (display == "p") powerSumBasisId = basisId;
   }
 
   void rememberBasesFrom(const SymmetricEngineRing *R) const
   {
     for (const auto& item : R->basisDisplays) basisDisplays[item.first] = item.second;
+    for (const auto& item : R->multiplicativeBases)
+      multiplicativeBases[item.first] = item.second;
+    if (powerSumBasisId < 0) powerSumBasisId = R->powerSumBasisId;
   }
 
   std::string displayForBasis(int basisId) const
@@ -267,6 +498,388 @@ class SymmetricEngineRing : public Ring
     auto it = basisDisplays.find(basisId);
     if (it != basisDisplays.end()) return it->second;
     return "basis" + std::to_string(basisId);
+  }
+
+  int basisIdForDisplay(const std::string& display) const
+  {
+    for (const auto& item : basisDisplays)
+      if (item.second == display) return item.first;
+    return -1;
+  }
+
+  int basisOrderForId(int basisId) const
+  {
+    for (const auto& item : basisDisplays)
+      {
+        (void)item;
+      }
+    if (basisId == basisIdForDisplay("p")) return 10;
+    if (basisId == basisIdForDisplay("h")) return 20;
+    if (basisId == basisIdForDisplay("e")) return 30;
+    if (basisId == basisIdForDisplay("S")) return 60;
+    return 100;
+  }
+
+  ring_elem rationalCoefficient(long numerator, long denominator) const
+  {
+    mpq_t q;
+    mpq_init(q);
+    mpq_set_si(q, numerator, denominator);
+    mpq_canonicalize(q);
+    ring_elem result;
+    if (!coefficientRing->from_rational(q, result)) result = coefficientRing->zero();
+    mpq_clear(q);
+    return result;
+  }
+
+  ring_elem basisElementFromIndex(int basisId,
+                                  const std::string& display,
+                                  int order,
+                                  bool isMultiplicative,
+                                  const Partition& index) const
+  {
+    rememberBasis(basisId, display, isMultiplicative);
+    auto result = new SymmetricRingPoly;
+    SymmetricMonomial monomial;
+    appendAtomBlock(monomial, makeAtomBlock(order, basisId, 0, index));
+    result->terms.push_back({coefficientRing->one(), canonicalMonomial(monomial)});
+    return makePolyValue(result);
+  }
+
+  ring_elem scaled(ring_elem coeff, ring_elem f) const
+  {
+    return makePolyValue(multByCoefficient(coeff, polyValue(f)));
+  }
+
+  ring_elem hPartToPowerSums(int n) const
+  {
+    auto cached = hToPowerSumCache.find(n);
+    if (cached != hToPowerSumCache.end()) return copyPolyValue(polyValue(cached->second));
+    ring_elem result = zero();
+    for (const auto& mu : partitionsOf(n))
+      {
+        ring_elem coeff = rationalCoefficient(1, zValue(mu));
+        ring_elem term = basisElementFromIndex(powerSumBasisId, "p", 10, true, mu);
+        result = add(result, scaled(coeff, term));
+      }
+    hToPowerSumCache[n] = result;
+    return copyPolyValue(polyValue(result));
+  }
+
+  ring_elem ePartToPowerSums(int n) const
+  {
+    auto cached = eToPowerSumCache.find(n);
+    if (cached != eToPowerSumCache.end()) return copyPolyValue(polyValue(cached->second));
+    ring_elem result = zero();
+    for (const auto& mu : partitionsOf(n))
+      {
+        long sign = ((n - static_cast<int>(mu.size())) % 2 == 0) ? 1 : -1;
+        ring_elem coeff = rationalCoefficient(sign, zValue(mu));
+        ring_elem term = basisElementFromIndex(powerSumBasisId, "p", 10, true, mu);
+        result = add(result, scaled(coeff, term));
+      }
+    eToPowerSumCache[n] = result;
+    return copyPolyValue(polyValue(result));
+  }
+
+  ring_elem schurToPowerSums(const Partition& lambda) const
+  {
+    std::string cacheKey = partitionKey(lambda);
+    auto cached = schurToPowerSumCache.find(cacheKey);
+    if (cached != schurToPowerSumCache.end()) return copyPolyValue(polyValue(cached->second));
+    int n = 0;
+    for (int part : lambda) n += part;
+    ring_elem result = zero();
+    for (const auto& mu : partitionsOf(n))
+      {
+        int chi = characterValue(lambda, mu);
+        if (chi == 0) continue;
+        ring_elem coeff = rationalCoefficient(chi, zValue(mu));
+        ring_elem term = basisElementFromIndex(powerSumBasisId, "p", 10, true, mu);
+        result = add(result, scaled(coeff, term));
+      }
+    schurToPowerSumCache[cacheKey] = result;
+    return copyPolyValue(polyValue(result));
+  }
+
+  ring_elem powerSumPartToComplete(int n, int hId, int hOrder) const
+  {
+    if (n == 0) return one();
+    auto cached = powerSumToCompleteCache.find(n);
+    if (cached != powerSumToCompleteCache.end()) return copyPolyValue(polyValue(cached->second));
+    ring_elem result =
+        scaled(coefficientRing->from_long(n),
+               basisElementFromIndex(hId, "h", hOrder, true, Partition{n}));
+    for (int i = 1; i < n; ++i)
+      {
+        ring_elem pI = powerSumPartToComplete(i, hId, hOrder);
+        ring_elem hRest = basisElementFromIndex(hId, "h", hOrder, true, Partition{n - i});
+        result = subtract(result, mult(pI, hRest));
+      }
+    powerSumToCompleteCache[n] = result;
+    return copyPolyValue(polyValue(result));
+  }
+
+  ring_elem powerSumPartToElementary(int n, int eId, int eOrder) const
+  {
+    if (n == 0) return one();
+    auto cached = powerSumToElementaryCache.find(n);
+    if (cached != powerSumToElementaryCache.end()) return copyPolyValue(polyValue(cached->second));
+    ring_elem result =
+        scaled(coefficientRing->from_long(n),
+               basisElementFromIndex(eId, "e", eOrder, true, Partition{n}));
+    for (int i = 1; i < n; ++i)
+      {
+        long sign = (i % 2 == 1) ? 1 : -1;
+        ring_elem pI = powerSumPartToElementary(i, eId, eOrder);
+        ring_elem eRest = basisElementFromIndex(eId, "e", eOrder, true, Partition{n - i});
+        result = subtract(result, scaled(coefficientRing->from_long(sign), mult(pI, eRest)));
+      }
+    if (n % 2 == 0) result = negate(result);
+    powerSumToElementaryCache[n] = result;
+    return copyPolyValue(polyValue(result));
+  }
+
+  ring_elem powerSumToSchur(const Partition& mu, int schurId, int schurOrder) const
+  {
+    std::string cacheKey = partitionKey(mu);
+    auto cached = powerSumToSchurCache.find(cacheKey);
+    if (cached != powerSumToSchurCache.end()) return copyPolyValue(polyValue(cached->second));
+    int n = 0;
+    for (int part : mu) n += part;
+    ring_elem result = zero();
+    for (const auto& lambda : partitionsOf(n))
+      {
+        int chi = characterValue(lambda, mu);
+        if (chi == 0) continue;
+        ring_elem term = basisElementFromIndex(schurId, "S", schurOrder, false, lambda);
+        result = add(result, scaled(coefficientRing->from_long(chi), term));
+      }
+    powerSumToSchurCache[cacheKey] = result;
+    return copyPolyValue(polyValue(result));
+  }
+
+  Partition atomIndex(const SymmetricMonomial& monomial, size_t pos) const
+  {
+    Partition result;
+    int n = atomIndexLengthAt(monomial, pos);
+    result.reserve(n);
+    for (int i = 0; i < n; ++i) result.push_back(monomial.data[pos + atomHeaderSize + i]);
+    return result;
+  }
+
+  ring_elem atomToPowerSums(const SymmetricMonomial& monomial, size_t pos) const
+  {
+    int basisId = atomBasisIdAt(monomial, pos);
+    std::string display = displayForBasis(basisId);
+    if (atomIsSkewAt(monomial, pos))
+      {
+        ERROR("basis conversion for skew ", display.c_str(), " atoms is not implemented yet");
+        return zero();
+      }
+    Partition index = atomIndex(monomial, pos);
+
+    if (display == "p")
+      return basisElementFromIndex(powerSumBasisId, "p", 10, true, index);
+
+    if (display == "h" || display == "e")
+      {
+        ring_elem result = one();
+        for (int part : index)
+          {
+            ring_elem factor = (display == "h") ? hPartToPowerSums(part)
+                                                : ePartToPowerSums(part);
+            result = mult(result, factor);
+          }
+        return result;
+      }
+
+    if (display == "S")
+      return schurToPowerSums(index);
+
+    ERROR("basis conversion to power sums is not implemented for basis ", display.c_str());
+    return zero();
+  }
+
+  ring_elem monomialToPowerSums(const SymmetricMonomial& monomial) const
+  {
+    ring_elem result = one();
+    size_t pos = 0;
+    while (pos < monomial.data.size())
+      {
+        result = mult(result, atomToPowerSums(monomial, pos));
+        if (error()) return zero();
+        pos += atomLengthAt(monomial, pos);
+      }
+    return result;
+  }
+
+  ring_elem elementToPowerSums(ring_elem f) const
+  {
+    const auto *poly = polyValue(f);
+    ring_elem result = zero();
+    for (const auto& term : poly->terms)
+      {
+        ring_elem converted = monomialToPowerSums(term.monomial);
+        if (error()) return zero();
+        result = add(result, scaled(term.coeff, converted));
+      }
+    return result;
+  }
+
+  bool powerSumIndexFromMonomial(const SymmetricMonomial& monomial,
+                                 Partition& index) const
+  {
+    index.clear();
+    if (monomial.data.empty()) return true;
+    if (!isSinglePowerSumBlock(monomial)) return false;
+    index = atomIndex(monomial, 0);
+    return true;
+  }
+
+  ring_elem powerSumMonomialToTarget(const Partition& index,
+                                     const std::string& targetDisplay,
+                                     int targetBasisId,
+                                     int targetDisplayOrder,
+                                     bool targetIsMultiplicative) const
+  {
+    if (targetDisplay == "p")
+      return basisElementFromIndex(targetBasisId,
+                                   targetDisplay,
+                                   targetDisplayOrder,
+                                   targetIsMultiplicative,
+                                   index);
+
+    if (targetDisplay == "h")
+      {
+        ring_elem result = one();
+        for (int part : index)
+          result = mult(result, powerSumPartToComplete(part, targetBasisId, targetDisplayOrder));
+        return result;
+      }
+
+    if (targetDisplay == "e")
+      {
+        ring_elem result = one();
+        for (int part : index)
+          result = mult(result, powerSumPartToElementary(part, targetBasisId, targetDisplayOrder));
+        return result;
+      }
+
+    if (targetDisplay == "S")
+      return powerSumToSchur(index, targetBasisId, targetDisplayOrder);
+
+    ERROR("basis conversion from power sums is not implemented for basis ", targetDisplay.c_str());
+    return zero();
+  }
+
+  ring_elem powerSumsToTarget(ring_elem f,
+                              int targetBasisId,
+                              const std::string& targetDisplay,
+                              int targetDisplayOrder,
+                              bool targetIsMultiplicative) const
+  {
+    const auto *poly = polyValue(f);
+    ring_elem result = zero();
+    for (const auto& term : poly->terms)
+      {
+        Partition index;
+        if (!powerSumIndexFromMonomial(term.monomial, index))
+          {
+            ERROR("expected a pure power-sum expression during basis conversion");
+            return zero();
+          }
+        ring_elem converted = powerSumMonomialToTarget(index,
+                                                       targetDisplay,
+                                                       targetBasisId,
+                                                       targetDisplayOrder,
+                                                       targetIsMultiplicative);
+        if (error()) return zero();
+        result = add(result, scaled(term.coeff, converted));
+      }
+    return result;
+  }
+
+  SymmetricMonomial canonicalMonomial(const SymmetricMonomial& monomial) const
+  {
+    std::vector<std::vector<int>> blocks;
+    std::map<std::pair<int, int>, std::vector<int>> compressed;
+
+    size_t pos = 0;
+    while (pos < monomial.data.size())
+      {
+        int order = atomOrderAt(monomial, pos);
+        int basisId = atomBasisIdAt(monomial, pos);
+        int n = atomIndexLengthAt(monomial, pos);
+        if (!atomIsSkewAt(monomial, pos) && isMultiplicativeBasis(basisId))
+          {
+            auto& index = compressed[std::make_pair(order, basisId)];
+            for (int i = 0; i < n; ++i)
+              index.push_back(monomial.data[pos + atomHeaderSize + i]);
+          }
+        else
+          {
+            blocks.push_back(atomBlockAt(monomial, pos));
+          }
+        pos += atomHeaderSize + n;
+      }
+
+    for (auto& item : compressed)
+      {
+        auto& index = item.second;
+        std::sort(index.begin(), index.end(), std::greater<int>());
+        blocks.push_back(makeAtomBlock(item.first.first, item.first.second, 0, index));
+      }
+
+    std::sort(blocks.begin(), blocks.end(), blockLess);
+    SymmetricMonomial result;
+    size_t totalLength = 0;
+    for (const auto& block : blocks) totalLength += block.size();
+    result.data.reserve(totalLength);
+    for (const auto& block : blocks) appendAtomBlock(result, block);
+    return result;
+  }
+
+  bool isSinglePowerSumBlock(const SymmetricMonomial& monomial) const
+  {
+    if (monomial.data.empty()) return false;
+    if (atomIsSkewAt(monomial, 0)) return false;
+    if (atomBasisIdAt(monomial, 0) != powerSumBasisId) return false;
+    return atomLengthAt(monomial, 0) == monomial.data.size();
+  }
+
+  SymmetricMonomial multiplyPowerSumMonomials(const SymmetricMonomial& a,
+                                             const SymmetricMonomial& b) const
+  {
+    std::vector<int> index;
+    int order = atomOrderAt(a, 0);
+    int nA = atomIndexLengthAt(a, 0);
+    int nB = atomIndexLengthAt(b, 0);
+    index.reserve(nA + nB);
+    for (int i = 0; i < nA; ++i) index.push_back(a.data[atomHeaderSize + i]);
+    for (int i = 0; i < nB; ++i) index.push_back(b.data[atomHeaderSize + i]);
+    std::sort(index.begin(), index.end(), std::greater<int>());
+
+    SymmetricMonomial result;
+    appendAtomBlock(result, makeAtomBlock(order, powerSumBasisId, 0, index));
+    return result;
+  }
+
+  SymmetricMonomial multiplyMonomials(const SymmetricMonomial& a,
+                                      const SymmetricMonomial& b) const
+  {
+    if (a.data.empty()) return b;
+    if (b.data.empty()) return a;
+    if (isPowerSumBasis(powerSumBasisId) &&
+        isSinglePowerSumBlock(a) &&
+        isSinglePowerSumBlock(b))
+      return multiplyPowerSumMonomials(a, b);
+
+    SymmetricMonomial result;
+    result.data.reserve(a.data.size() + b.data.size());
+    result.data.insert(result.data.end(), a.data.begin(), a.data.end());
+    result.data.insert(result.data.end(), b.data.begin(), b.data.end());
+    return canonicalMonomial(result);
   }
 
   ring_elem copyPolyValue(const SymmetricRingPoly *poly) const
@@ -387,12 +1000,20 @@ class SymmetricEngineRing : public Ring
   ring_elem basisElement(int basisId,
                          const std::string& display,
                          int order,
+                         bool isMultiplicative,
+                         int innerLength,
                          M2_arrayint index) const
   {
-    rememberBasis(basisId, display);
+    int payloadLength = index == nullptr ? 0 : index->len;
+    if (innerLength < 0 || innerLength > payloadLength)
+      {
+        ERROR("invalid skew inner shape length");
+        return zero();
+      }
+    rememberBasis(basisId, display, isMultiplicative);
     auto result = new SymmetricRingPoly;
     SymmetricMonomial monomial;
-    monomial.atoms.push_back(makeAtom(order, basisId, index));
+    appendAtomBlock(monomial, makeAtomBlock(order, basisId, innerLength, index));
     result->terms.push_back({coefficientRing->one(), canonicalMonomial(monomial)});
     return makePolyValue(result);
   }
@@ -405,22 +1026,60 @@ class SymmetricEngineRing : public Ring
         return true;
       }
     if (f->terms.size() != 1) return false;
-    if (!f->terms[0].monomial.atoms.empty()) return false;
+    if (!f->terms[0].monomial.data.empty()) return false;
     result = f->terms[0].coeff;
     return true;
   }
 
-  std::string displayAtom(const SymmetricAtom& atom) const
+  bool hasPowerSumConversionHook(const SymmetricMonomial& monomial, size_t pos) const
   {
-    return displayForBasis(atomBasisId(atom)) + "_" + displayIndex(atom);
+    auto key = basisIndexKey(monomial, pos);
+    return isPowerSumBasis(key.basisId);
+  }
+
+  std::string displayIndex(const SymmetricMonomial& monomial, size_t pos) const
+  {
+    int n = atomIndexLengthAt(monomial, pos);
+    if (n <= 0) return "{}";
+    if (atomIsSkewAt(monomial, pos))
+      {
+        int outerLength = atomOuterLengthAt(monomial, pos);
+        int innerLength = atomInnerLengthAt(monomial, pos);
+        if (outerLength + innerLength != n) return "{}/{}";
+        std::vector<std::string> lambdaParts;
+        std::vector<std::string> muParts;
+        lambdaParts.reserve(outerLength);
+        muParts.reserve(innerLength);
+        for (int i = 0; i < outerLength; ++i)
+          lambdaParts.push_back(std::to_string(monomial.data[pos + atomHeaderSize + i]));
+        for (int i = outerLength; i < n; ++i)
+          muParts.push_back(std::to_string(monomial.data[pos + atomHeaderSize + i]));
+        return "{{" + join(lambdaParts, ",") + "}/{" + join(muParts, ",") + "}}";
+      }
+    if (n == 1) return std::to_string(monomial.data[pos + atomHeaderSize]);
+    std::vector<std::string> parts;
+    parts.reserve(n);
+    for (int i = 0; i < n; ++i)
+      parts.push_back(std::to_string(monomial.data[pos + atomHeaderSize + i]));
+    return "{" + join(parts, ",") + "}";
+  }
+
+  std::string displayAtom(const SymmetricMonomial& monomial, size_t pos) const
+  {
+    return displayForBasis(atomBasisIdAt(monomial, pos)) + "_" +
+           displayIndex(monomial, pos);
   }
 
   std::string displayMonomial(const SymmetricMonomial& monomial) const
   {
-    if (monomial.atoms.empty()) return "1";
+    if (monomial.data.empty()) return "1";
     std::vector<std::string> factors;
-    factors.reserve(monomial.atoms.size());
-    for (const auto& atom : monomial.atoms) factors.push_back(displayAtom(atom));
+    size_t pos = 0;
+    while (pos < monomial.data.size())
+      {
+        factors.push_back(displayAtom(monomial, pos));
+        pos += atomLengthAt(monomial, pos);
+      }
     return join(factors, "*");
   }
 
@@ -432,7 +1091,7 @@ class SymmetricEngineRing : public Ring
     pieces.reserve(poly->terms.size());
     for (const auto& term : poly->terms)
       {
-        if (term.monomial.atoms.empty())
+        if (term.monomial.data.empty())
           {
             pieces.push_back(coeffToString(coefficientRing, term.coeff));
           }
@@ -460,8 +1119,7 @@ class SymmetricEngineRing : public Ring
     int result = 0;
     for (const auto& term : poly->terms)
       {
-        int wt = 0;
-        for (const auto& atom : term.monomial.atoms) wt += atomWeight(atom);
+        int wt = monomialWeight(term.monomial);
         if (!found)
           {
             result = wt;
@@ -480,7 +1138,7 @@ class SymmetricEngineRing : public Ring
     for (const auto& term : poly->terms)
       {
         hashCombine(seed, coefficientRing->computeHashValue(term.coeff));
-        for (int value : monomialKey(term.monomial)) hashCombine(seed, value);
+        for (int value : term.monomial.data) hashCombine(seed, value);
       }
     return static_cast<unsigned int>(seed);
   }
@@ -737,15 +1395,17 @@ class SymmetricEngineRing : public Ring
                                                      right->terms[0].monomial)});
         return makePolyValue(result);
       }
-    std::map<std::vector<int>, ring_elem> accumulator;
+    VECTOR(SymmetricTerm) products;
+    products.reserve(left->terms.size() * right->terms.size());
     for (const auto& lt : left->terms)
       for (const auto& rt : right->terms)
         {
           ring_elem coeff = coefficientRing->mult(lt.coeff, rt.coeff);
-          auto monomial = multiplyMonomials(lt.monomial, rt.monomial);
-          addToAccumulator(accumulator, monomial, coeff);
+          if (!coefficientRing->is_zero(coeff))
+            products.push_back(
+                {coeff, multiplyMonomials(lt.monomial, rt.monomial)});
         }
-    return fromAccumulator(accumulator);
+    return fromTermVector(products, false);
   }
 
   ring_elem batchSum(engine_RawRingElementArray elements) const
@@ -824,6 +1484,27 @@ class SymmetricEngineRing : public Ring
     return result;
   }
 
+  ring_elem toBasis(ring_elem f,
+                    int pBasisId,
+                    const std::string& pDisplay,
+                    int pOrder,
+                    bool pIsMultiplicative,
+                    int targetBasisId,
+                    const std::string& targetDisplay,
+                    int targetOrder,
+                    bool targetIsMultiplicative) const
+  {
+    rememberBasis(pBasisId, pDisplay, pIsMultiplicative);
+    rememberBasis(targetBasisId, targetDisplay, targetIsMultiplicative);
+    ring_elem inPowerSums = elementToPowerSums(f);
+    if (error()) return zero();
+    return powerSumsToTarget(inPowerSums,
+                             targetBasisId,
+                             targetDisplay,
+                             targetOrder,
+                             targetIsMultiplicative);
+  }
+
   virtual ring_elem invert(const ring_elem f) const
   {
     (void)f;
@@ -891,6 +1572,8 @@ const RingElement *rawSymmetricRingsBasisElement(const Ring *R,
                                                 int basisId,
                                                 M2_string displaySymbol,
                                                 int displayOrder,
+                                                bool isMultiplicative,
+                                                int innerLength,
                                                 M2_arrayint index)
 {
   try
@@ -900,6 +1583,8 @@ const RingElement *rawSymmetricRingsBasisElement(const Ring *R,
       ring_elem result = S->basisElement(basisId,
                                          fromM2String(displaySymbol),
                                          displayOrder,
+                                         isMultiplicative,
+                                         innerLength,
                                          index);
       return RingElement::make_raw(S, result);
     }
@@ -934,6 +1619,39 @@ const RingElement *rawSymmetricRingsProduct(const Ring *R,
       const auto *S = symmetricRingFromRing(R);
       if (error()) return nullptr;
       return RingElement::make_raw(S, S->batchProduct(elements));
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
+                                            int powerSumBasisId,
+                                            M2_string powerSumDisplaySymbol,
+                                            int powerSumDisplayOrder,
+                                            bool powerSumIsMultiplicative,
+                                            int targetBasisId,
+                                            M2_string targetDisplaySymbol,
+                                            int targetDisplayOrder,
+                                            bool targetIsMultiplicative)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      ring_elem result = S->toBasis(f->get_value(),
+                                    powerSumBasisId,
+                                    fromM2String(powerSumDisplaySymbol),
+                                    powerSumDisplayOrder,
+                                    powerSumIsMultiplicative,
+                                    targetBasisId,
+                                    fromM2String(targetDisplaySymbol),
+                                    targetDisplayOrder,
+                                    targetIsMultiplicative);
+      if (error()) return nullptr;
+      return RingElement::make_raw(S, result);
     }
   catch (const exc::engine_error& e)
     {
