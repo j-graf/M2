@@ -659,6 +659,11 @@ class SymmetricEngineRing : public Ring
     return powerSumBasisId >= 0 && basisId == powerSumBasisId;
   }
 
+  bool isForgottenDisplay(const std::string& display) const
+  {
+    return display == "f" || display == "ff";
+  }
+
   void rememberBasis(int basisId,
                      const std::string& display,
                      int order,
@@ -2255,8 +2260,8 @@ class SymmetricEngineRing : public Ring
     ring_elem muTerm = basisElementForDisplay(omega ? "R" : "P", mu);
     if (error()) return zero();
 
-    int targetId = requiredBasisIdForDisplay(omega ? "f" : "m");
-    std::string targetDisplay = omega ? "f" : "m";
+    int targetId = requiredBasisIdForDisplay(omega ? "ff" : "m");
+    std::string targetDisplay = omega ? "ff" : "m";
     if (error()) return zero();
 
     ring_elem result = zero();
@@ -2574,8 +2579,8 @@ class SymmetricEngineRing : public Ring
     if (display == "Somega")
       return omegaPowerSums(schurToPowerSums(index));
 
-    if (display == "m" || display == "f")
-      return monomialBasisToPowerSums(index, display == "f");
+    if (display == "m" || isForgottenDisplay(display))
+      return monomialBasisToPowerSums(index, isForgottenDisplay(display));
 
     if (display == "Q" || display == "B")
       return hallCapitalToPowerSums(index, display == "B");
@@ -2759,12 +2764,12 @@ class SymmetricEngineRing : public Ring
         return result;
       }
 
-    if (targetDisplay == "m" || targetDisplay == "f")
+    if (targetDisplay == "m" || isForgottenDisplay(targetDisplay))
       return powerSumIndexToMonomialTarget(index,
                                            targetBasisId,
                                            targetDisplay,
                                            targetDisplayOrder,
-                                           targetDisplay == "f");
+                                           isForgottenDisplay(targetDisplay));
 
     if (targetDisplay == "S")
       return powerSumToSchur(index, targetBasisId, targetDisplayOrder);
@@ -2884,7 +2889,7 @@ class SymmetricEngineRing : public Ring
     if (atomIsSkewAt(monomial, pos)) return false;
     if (display != "p" && display != "h" && display != "e" &&
         display != "q" && display != "b" && display != "m" &&
-        display != "f" && display != "S" && display != "Somega" &&
+        !isForgottenDisplay(display) && display != "S" && display != "Somega" &&
         display != "Q" && display != "B" && display != "P" && display != "R")
       return false;
     ring_elem inPowerSums = atomToPowerSums(monomial, pos);

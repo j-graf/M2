@@ -190,7 +190,7 @@ m = makeBuiltinBasis("m", "Symbol" => "m", "DisplayName" => "monomial basis", "D
         "Ordinary" => ordinaryDualData "h",
         "HallLittlewood" => hallLittlewoodDualData "q"
         })
-f = makeBuiltinBasis("f", "Symbol" => "f", "DisplayName" => "forgotten basis", "DisplayOrder" => 50, "Omega" => "m", "InnerProductData" => hashTable {
+f = makeBuiltinBasis("f", "Symbol" => "ff", "DisplayName" => "forgotten basis", "DisplayOrder" => 50, "Omega" => "m", "InnerProductData" => hashTable {
         "Ordinary" => ordinaryDualData "e",
         "HallLittlewood" => hallLittlewoodDualData "b"
         })
@@ -265,7 +265,8 @@ symmetricRingOptionDefaults = hashTable {
     "Parameters" => {},
     "HallLittlewoodParameter" => null,
     "MacdonaldParameters" => {},
-    "DefaultSeriesVariables" => {}
+    "DefaultSeriesVariables" => {},
+    "NormalizeSomega" => true
     }
 
 coefficientRingGeneratorNamed = (A, name) -> (
@@ -303,6 +304,8 @@ symmetricRing = args -> (
     R0#"HallLittlewoodParameter" = hlParameter;
     R0#"MacdonaldParameters" = macdonaldParameters;
     R0#"DefaultSeriesVariables" = opts#"DefaultSeriesVariables";
+    R0#"NormalizeSomega" = opts#"NormalizeSomega";
+    if class R0#"NormalizeSomega" =!= Boolean then error "expected Boolean value for option NormalizeSomega";
     R0#"Bases" = ringAvailableBases R0;
     R0.baseRings = append(A.baseRings, A);
     R0.generators = {};
@@ -322,8 +325,10 @@ basisOnRing = (B, R0) -> new SymmetricBasis from hashTable(pairs B | {"Ring" => 
 
 basis(SymmetricRing, String) := SymmetricBasis => opts -> (R0, key) -> (
     keyString := toString key;
-    if not BasisIndex#?keyString then error("unknown symmetric function basis: ", keyString);
-    B0 := BasisIndex#keyString;
+    B0 := if BasisIndex#?keyString then BasisIndex#keyString else (
+        matches := select(values BasisIndex, B -> B#"Symbol" === keyString);
+        if #matches === 1 then matches#0 else error("unknown symmetric function basis: ", keyString)
+        );
     if not ringHasBasis(R0, B0) then error("basis ", keyString, " is not available for this symmetric ring");
     basisOnRing(B0, R0)
     )
@@ -376,6 +381,11 @@ compactBasisData = B -> B#"Symbol" => B#"DisplayName"
 
 basesOutput = (B, verbose) -> if verbose then B else hashTable(B / (B0 -> compactBasisData B0))
 
+visibleBasesOnRing = R0 -> (
+    B := R0#"Bases" / (B0 -> basisOnRing(B0, R0));
+    if R0#?"NormalizeSomega" and R0#"NormalizeSomega" then select(B, B0 -> B0#"Key" =!= "Somega") else B
+    )
+
 basesVerboseOption = opt -> (
     if toString opt#0 =!= "verbose" then error("unknown option for bases: ", toString opt#0);
     if class opt#1 =!= Boolean then error "expected Boolean value for bases option \"verbose\"";
@@ -384,16 +394,16 @@ basesVerboseOption = opt -> (
 
 bases = method()
 bases SymmetricRing := R0 -> (
-    B := R0#"Bases" / (B0 -> basisOnRing(B0, R0));
+    B := visibleBasesOnRing R0;
     basesOutput(B, false)
     )
 bases(SymmetricRing, Option) := (R0, opt) -> (
-    B := R0#"Bases" / (B0 -> basisOnRing(B0, R0));
+    B := visibleBasesOnRing R0;
     basesOutput(B, basesVerboseOption opt)
     )
 
 bases(SymmetricRing, Boolean) := (R0, verbose) -> (
-    B := R0#"Bases" / (B0 -> basisOnRing(B0, R0));
+    B := visibleBasesOnRing R0;
     basesOutput(B, verbose)
     )
 
@@ -420,10 +430,50 @@ isUniformSymmetricElementList = L -> (
 
 rawSymmetricElementSequence = L -> toSequence apply(L, f -> raw f)
 
+rawBasisAtomElement = (R0, B, outer, inner) -> (
+    payload := outer | inner;
+    new R0 from rawSymmetricRingsBasisElement(raw R0, B#"BasisId", B#"Symbol", B#"DisplayOrder", B#"MultiplicativeIndex", #inner, payload)
+    )
+
+somegaAtomAsSchurElement = (R0, atom) -> (
+    Sbasis := basis(R0, "S");
+    sAtom := rawBasisAtomElement(R0, Sbasis, atom#"Outer", atom#"Inner");
+    new R0 from rawSymmetricRingsOmega(raw sAtom, omegaMapData R0, false)
+    )
+
+atomAsElement = (R0, atom) -> (
+    B := basisWithId(R0, atom#"BasisId");
+    if B#"Key" == "Somega" then somegaAtomAsSchurElement(R0, atom)
+    else rawBasisAtomElement(R0, B, atom#"Outer", atom#"Inner")
+    )
+
+monomialAsElement = (R0, atoms) -> (
+    result := 1_R0;
+    scan(atoms, atom -> result = result * atomAsElement(R0, atom));
+    result
+    )
+
+normalizeSomegaElement = f -> (
+    R0 := ring f;
+    if not (R0#?"NormalizeSomega") or not R0#"NormalizeSomega" then return f;
+    T := terms f;
+    somegaId := Somega#"BasisId";
+    if not any(T, term -> any(term#1, atom -> atom#"BasisId" == somegaId)) then return f;
+    A := coefficientRing R0;
+    result := 0_R0;
+    scan(T, term -> (
+            c := promote(term#0, A);
+            if c != 0_A then result = result + promote(c, R0) * monomialAsElement(R0, term#1)
+            ));
+    result
+    )
+
+userSymmetricElement = (R0, rawValue) -> normalizeSomegaElement(new R0 from rawValue)
+
 sum List := L -> (
     if isUniformSymmetricElementList L then (
         R0 := ring L#0;
-        new R0 from rawSymmetricRingsSum(raw R0, rawSymmetricElementSequence L)
+        userSymmetricElement(R0, rawSymmetricRingsSum(raw R0, rawSymmetricElementSequence L))
         )
     else plus toSequence L
     )
@@ -431,7 +481,7 @@ sum List := L -> (
 product List := L -> (
     if isUniformSymmetricElementList L then (
         R0 := ring L#0;
-        new R0 from rawSymmetricRingsProduct(raw R0, rawSymmetricElementSequence L)
+        userSymmetricElement(R0, rawSymmetricRingsProduct(raw R0, rawSymmetricElementSequence L))
         )
     else times toSequence L
     )
@@ -455,7 +505,7 @@ SymmetricBasis _ List := (B, L) -> (
     if B#"ZeroOnNegative" and #idx == 1 and idx#0 < 0 then return zeroSymmetricElement R0;
     if B#"ZeroIndexIsOne" and #idx == 1 and idx#0 == 0 then return oneSymmetricElement R0;
     if B#"MultiplicativeIndex" and #idx > 1 then return product(idx, i -> B_i);
-    new R0 from rawSymmetricRingsBasisElement(raw R0, B#"BasisId", B#"Symbol", B#"DisplayOrder", B#"MultiplicativeIndex", 0, idx)
+    userSymmetricElement(R0, rawSymmetricRingsBasisElement(raw R0, B#"BasisId", B#"Symbol", B#"DisplayOrder", B#"MultiplicativeIndex", 0, idx))
     )
 
 normalizeSkewShape = (B, lambda, mu) -> (
@@ -483,7 +533,7 @@ makeSkewElement = (B, lambda, mu) -> (
     if shape#0 == shape#1 then return oneSymmetricElement R0;
     if #shape#1 == 0 then return B_(shape#0);
     payload := skewPayload(shape#0, shape#1);
-    new R0 from rawSymmetricRingsBasisElement(raw R0, B#"BasisId", B#"Symbol", B#"DisplayOrder", B#"MultiplicativeIndex", #shape#1, payload)
+    userSymmetricElement(R0, rawSymmetricRingsBasisElement(raw R0, B#"BasisId", B#"Symbol", B#"DisplayOrder", B#"MultiplicativeIndex", #shape#1, payload))
     )
 
 toString SymmetricRingElement := f -> rawSymmetricRingsElementToString raw f
@@ -531,7 +581,7 @@ straighten = method()
 straighten SymmetricRingElement := f -> (
     R0 := ring f;
     rememberRingBasisData R0;
-    new R0 from rawSymmetricRingsStraighten raw f
+    userSymmetricElement(R0, rawSymmetricRingsStraighten raw f)
     )
 
 SymmetricRingElement == SymmetricRingElement := Boolean => (f, g) -> (
@@ -546,7 +596,7 @@ jacobiTrudiInBasis = (key, lambda, mu) -> (
     m := (B#"IndexNormalizer") mu;
     if not (B#"IndexValidator") l then error("invalid outer index for basis ", key);
     if not (B#"IndexValidator") m then error("invalid inner index for basis ", key);
-    new R0 from rawSymmetricRingsJacobiTrudi(raw R0, B#"BasisId", B#"Symbol", B#"DisplayOrder", B#"MultiplicativeIndex", l, m)
+    userSymmetricElement(R0, rawSymmetricRingsJacobiTrudi(raw R0, B#"BasisId", B#"Symbol", B#"DisplayOrder", B#"MultiplicativeIndex", l, m))
     )
 
 hJacobiTrudi = method()
@@ -566,11 +616,29 @@ toBasis(SymmetricRingElement, Thing) := (f, target) -> (
         target.SymmetricBasis
         ) else basis(R0, target);
     if B#"FromPowerSums" =!= null then return (B#"FromPowerSums")(f, B);
-    new R0 from rawSymmetricRingsToBasis(
+    userSymmetricElement(R0, rawSymmetricRingsToBasis(
         raw f,
         p#"BasisId", p#"Symbol", p#"DisplayOrder", p#"MultiplicativeIndex",
-        B#"BasisId", B#"Symbol", B#"DisplayOrder", B#"MultiplicativeIndex")
+        B#"BasisId", B#"Symbol", B#"DisplayOrder", B#"MultiplicativeIndex"))
     )
+
+toS = method()
+toS SymmetricRingElement := f -> toBasis(f, S)
+
+toH = method()
+toH SymmetricRingElement := f -> toBasis(f, h)
+
+toE = method()
+toE SymmetricRingElement := f -> toBasis(f, e)
+
+toP = method()
+toP SymmetricRingElement := f -> toBasis(f, p)
+
+toM = method()
+toM SymmetricRingElement := f -> toBasis(f, m)
+
+toFF = method()
+toFF SymmetricRingElement := g -> toBasis(g, f)
 
 basisDataWithId = basisId -> (
     hits := select(availableSymmetricBases, B -> B#"BasisId" == basisId);
@@ -687,7 +755,7 @@ specializeSymmetricElementInRing = (F, substitutions, Rtarget) -> (
     )
 
 specializeSymmetricElement = (F, substitutions, promoteSpecializedRing) -> (
-    specializeSymmetricElementInRing(F, substitutions, specializationTargetRing(ring F, substitutions, promoteSpecializedRing))
+    normalizeSomegaElement specializeSymmetricElementInRing(F, substitutions, specializationTargetRing(ring F, substitutions, promoteSpecializedRing))
     )
 
 specializeParametersOptionDefaults = hashTable {"PromoteSpecializedRing" => false}
@@ -709,10 +777,10 @@ plethysm(SymmetricRingElement, SymmetricRingElement) := (f, g) -> (
     if ring f =!= ring g then error "expected elements in the same symmetric ring";
     R0 := ring f;
     rememberRingBasisData R0;
-    new R0 from rawSymmetricRingsPlethysm(
+    userSymmetricElement(R0, rawSymmetricRingsPlethysm(
         raw f,
         raw g,
-        p#"BasisId", p#"Symbol", p#"DisplayOrder", p#"MultiplicativeIndex")
+        p#"BasisId", p#"Symbol", p#"DisplayOrder", p#"MultiplicativeIndex"))
     )
 
 installMethod(symbol @, SymmetricRingElement, SymmetricRingElement, (f, g) -> (
@@ -720,11 +788,11 @@ installMethod(symbol @, SymmetricRingElement, SymmetricRingElement, (f, g) -> (
         if basisId <= 0 then plethysm(f, g) else (
             R0 := ring f;
             B := basisWithId(R0, basisId);
-            new R0 from rawSymmetricRingsPlethysmToBasis(
+            userSymmetricElement(R0, rawSymmetricRingsPlethysmToBasis(
                 raw f,
                 raw g,
                 p#"BasisId", p#"Symbol", p#"DisplayOrder", p#"MultiplicativeIndex",
-                B#"BasisId", B#"Symbol", B#"DisplayOrder", B#"MultiplicativeIndex")
+                B#"BasisId", B#"Symbol", B#"DisplayOrder", B#"MultiplicativeIndex"))
             )
         ))
 
@@ -740,7 +808,7 @@ omegaInvolution = args -> (
     rememberRingBasisData R0;
     useSomega := opts#"useSomega";
     if class useSomega =!= Boolean then error "expected Boolean value for option \"useSomega\"";
-    new R0 from rawSymmetricRingsOmega(raw f, omegaMapData R0, useSomega)
+    userSymmetricElement(R0, rawSymmetricRingsOmega(raw f, omegaMapData R0, useSomega))
     )
 
 innerProductContextName = (sourceRing, Rtarget, substitutions) -> (

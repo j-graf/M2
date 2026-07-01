@@ -10,7 +10,7 @@ doc ///
     contain atoms from several named bases.  The built-in bases include the
     power sums p, complete homogeneous functions h, elementary functions e,
     Schur functions S, omega-Schur functions Somega, monomial functions m,
-    forgotten functions f, and Hall-Littlewood bases q, b, Q, B, P, and R.
+    forgotten functions ff, and Hall-Littlewood bases q, b, Q, B, P, and R.
    Text
     The ring is formal, but many standard changes of basis are implemented in
     the engine.  In particular, Schur functions are related to h by the
@@ -31,6 +31,7 @@ doc ///
    bases
    basisData
    toBasis
+   toS
    specializeParameters
    plethysm
    hJacobiTrudi
@@ -118,16 +119,20 @@ doc ///
   Description
    Text
     The expression symmetricRing A creates the @TO SymmetricRing@ of formal symmetric
-    functions over A and installs the standard basis symbols p, h, e, m, f, S,
-    Somega, q, b, Q, B, P, and R for that ring.
+    functions over A and installs the standard basis symbols p, h, e, m, ff, S,
+    Somega, q, b, Q, B, P, and R for that ring.  By default, Somega atoms are
+    immediately normalized to ordinary Schur functions, so this auxiliary basis
+    should not appear in ordinary output.
    Text
     If the coefficient ring has a generator named t, then t is used as the
     Hall-Littlewood parameter.  If the coefficient ring has generators named t
     and q, then the pair {t,q} is recorded as the Macdonald parameter pair.
-    These choices may also be supplied explicitly by options.
+    These choices may also be supplied explicitly by initialization options;
+    see @TO "symmetricRing(...,\"Parameters\"=>...)"@.
    Example
     R = symmetricRing QQ
     h_2 + S_{1,1}
+    Somega_3
    Text
     If the coefficient ring has a variable named t, it is used as the
     Hall-Littlewood parameter.  This parameter appears in conversions involving
@@ -247,6 +252,49 @@ doc ///
     R = symmetricRing QQ
     toBasis(S_{{2,1},{1}}, h)
     toBasis(Somega_{{2,1},{1}}, e)
+
+ Node
+  Key
+   toS
+   (toS,SymmetricRingElement)
+   toH
+   (toH,SymmetricRingElement)
+   toE
+   (toE,SymmetricRingElement)
+   toP
+   (toP,SymmetricRingElement)
+   toM
+   (toM,SymmetricRingElement)
+   toFF
+   (toFF,SymmetricRingElement)
+  Headline
+   shortcut conversions to standard bases
+  Usage
+   toS g
+   toH g
+   toE g
+   toP g
+   toM g
+   toFF g
+  Description
+   Text
+    These functions are wrappers around @TO toBasis@.  They convert a symmetric
+    function to the Schur, complete homogeneous, elementary, power-sum,
+    monomial, and forgotten bases, respectively.  The function toP means
+    conversion to the power-sum basis p, not the Hall-Littlewood P basis.
+   Example
+    R = symmetricRing QQ
+    toP h_2
+    toS p_2
+    toH S_{1,1}
+    toE S_2
+   Text
+    The monomial and forgotten conversions may require coefficient rings where
+    the relevant transition matrices can be inverted.
+   Example
+    R = symmetricRing QQ
+    toM p_2
+    toFF p_2
 
  Node
   Key
@@ -495,15 +543,32 @@ doc ///
    "symmetricRing(...,\"HallLittlewoodParameter\"=>...)"
    "symmetricRing(...,\"MacdonaldParameters\"=>...)"
    "symmetricRing(...,\"DefaultSeriesVariables\"=>...)"
+   "symmetricRing(...,\"NormalizeSomega\"=>...)"
   Headline
    options for constructing symmetric function rings
   Description
    Text
-    The construction options record auxiliary mathematical parameters on the
-    symmetric function ring.  HallLittlewoodParameter sets the parameter t used
-    by the Hall-Littlewood bases.  MacdonaldParameters records a pair of
-    parameters, usually {t,q}.  Parameters and DefaultSeriesVariables are
-    reserved for additional families of symmetric functions.
+    The initialization options for @TO symmetricRing@ are:
+   Text
+    "Parameters" => {} records auxiliary parameters for future families of
+    symmetric functions.
+   Text
+    "HallLittlewoodParameter" => null sets the parameter used by the
+    Hall-Littlewood bases q, b, Q, B, P, and R.  If omitted, a coefficient-ring
+    generator named t is used when present.
+   Text
+    "MacdonaldParameters" => {} records a parameter pair, usually {t,q}.  If
+    omitted, coefficient-ring generators named t and q are used when both are
+    present.
+   Text
+    "DefaultSeriesVariables" => {} reserves default variables for future
+    symmetric-function series constructions.
+   Text
+    "NormalizeSomega" => true controls whether Somega atoms are automatically
+    rewritten as ordinary Schur functions.
+   Text
+    The options are stored on the resulting ring using string keys, for example
+    R#"HallLittlewoodParameter" and R#"NormalizeSomega".
    Example
     A = QQ[t]
     R = symmetricRing(A, "HallLittlewoodParameter" => A_0)
@@ -515,6 +580,20 @@ doc ///
     K = QQ[t,q]
     R = symmetricRing(K, "MacdonaldParameters" => {K_0,K_1})
     R#"MacdonaldParameters"
+   Text
+    The general parameter lists may also be recorded explicitly.
+   Example
+    A = QQ[a,b]
+    R = symmetricRing(A, "Parameters" => {A_0,A_1}, "DefaultSeriesVariables" => {x,y})
+    R#"Parameters"
+    R#"DefaultSeriesVariables"
+   Text
+    By default, NormalizeSomega is true.  For example, Somega_3 is displayed as
+    S_{1,1,1}.  Set "NormalizeSomega" to false to keep Somega as a visible
+    formal basis.
+   Example
+    R = symmetricRing(QQ, "NormalizeSomega" => false)
+    Somega_3
 
  Node
   Key

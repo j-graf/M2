@@ -8,6 +8,7 @@ TEST ///
     assert(e_-1 == 0)
     assert((basisData "S")#"Key" == "S")
     assert((bases R0)#"S" == "Schur basis")
+    assert(not ((bases R0)#?"Somega"))
     assert(not ((bases R0)#?"Q"))
     assert(try (Q_2; false) else true)
     assert(instance(first bases(R0, "verbose" => true), SymmetricBasis))
@@ -42,6 +43,12 @@ TEST ///
     assert(toBasis(p_2, "h") == 2*h_2 - h_{1,1})
     assert(toBasis(p_2, "e") == e_{1,1} - 2*e_2)
     assert(toBasis(p_2, "S") == S_2 - S_{1,1})
+    assert(toP(h_2) == toBasis(h_2, p))
+    assert(toS(p_2) == toBasis(p_2, S))
+    assert(toH(p_2) == toBasis(p_2, h))
+    assert(toE(p_2) == toBasis(p_2, e))
+    assert(toM(p_2) == toBasis(p_2, m))
+    assert(toFF(p_2) == toBasis(p_2, ff))
     assert(hJacobiTrudi {1,1} == h_{1,1} - h_2)
     assert(eJacobiTrudi {1,1} == e_{1,1} - e_2)
     assert(hJacobiTrudi({2,1}, {1}) == h_{1,1})
@@ -55,14 +62,22 @@ TEST ///
     assert(toBasis(p_2, Somega) == Somega_{1,1} - Somega_2)
     assert(toBasis(e_2, Somega) == Somega_2)
     assert(toBasis(Somega_2, p) == (-1/2)*p_2 + (1/2)*p_{1,1})
+    assert(Somega_3 == S_{1,1,1})
+    assert(toString Somega_3 == "S_{1,1,1}")
     assert(omegaInvolution(h_2*S_1 + e_1) == e_2*S_1 + h_1)
-    assert(omegaInvolution(h_2*S_1 + e_1, "useSomega" => true) == e_2*Somega_1 + h_1)
+    assert(omegaInvolution(h_2*S_1 + e_1, "useSomega" => true) == e_2*S_1 + h_1)
+    assert(omegaInvolution(S_3, "useSomega" => true) == S_{1,1,1})
     assert(omegaInvolution(S_{2,1,1}) == S_{3,1})
     assert(omegaInvolution(S_{1,3}) == -S_{2,2})
     assert(omegaInvolution(Somega_{1,3}) == -S_{2,2})
     assert(omegaInvolution(p_{2,1}) == -p_{2,1})
     assert(S_{1,3} == -S_{2,2})
     assert(straighten S_{1,3} == -S_{2,2})
+
+    RnoNormalize = symmetricRing(QQ, "NormalizeSomega" => false)
+    assert((bases RnoNormalize)#?"Somega")
+    assert(toString Somega_3 == "Somega_3")
+    assert(omegaInvolution(S_3, "useSomega" => true) == Somega_3)
 ///
 
 TEST ///
@@ -113,8 +128,8 @@ TEST ///
     ipExpected = ipLeftCoeff*(3 - A_0) + ipMiddleCoeff*A_0 + ipSmallCoeff*5
     assert(hallInnerProduct(ipLeftCoeff*q_3 + ipMiddleCoeff*q_{2,1} + ipSmallCoeff*q_1, (3-A_0)*m_3 + A_0*m_{2,1} + 5*m_1) == ipExpected)
     assert(hallInnerProduct((3-A_0)*m_3 + A_0*m_{2,1} + 5*m_1, ipLeftCoeff*q_3 + ipMiddleCoeff*q_{2,1} + ipSmallCoeff*q_1) == ipExpected)
-    assert(hallInnerProduct(ipLeftCoeff*b_3 + ipMiddleCoeff*b_{2,1} + ipSmallCoeff*b_1, (3-A_0)*f_3 + A_0*f_{2,1} + 5*f_1) == ipExpected)
-    assert(hallInnerProduct((3-A_0)*f_3 + A_0*f_{2,1} + 5*f_1, ipLeftCoeff*b_3 + ipMiddleCoeff*b_{2,1} + ipSmallCoeff*b_1) == ipExpected)
+    assert(hallInnerProduct(ipLeftCoeff*b_3 + ipMiddleCoeff*b_{2,1} + ipSmallCoeff*b_1, (3-A_0)*ff_3 + A_0*ff_{2,1} + 5*ff_1) == ipExpected)
+    assert(hallInnerProduct((3-A_0)*ff_3 + A_0*ff_{2,1} + 5*ff_1, ipLeftCoeff*b_3 + ipMiddleCoeff*b_{2,1} + ipSmallCoeff*b_1) == ipExpected)
     assert(hallInnerProduct(Q_2, P_2) == 1_A)
     assert(hallInnerProduct(P_2, Q_2) == 1_A)
     assert(hallInnerProduct(ipLeftCoeff*Q_3 + ipMiddleCoeff*Q_{2,1} + ipSmallCoeff*Q_1, (3-A_0)*P_3 + A_0*P_{2,1} + 5*P_1) == ipExpected)
@@ -162,10 +177,10 @@ TEST ///
     assert(toBasis(toBasis(R_2, p), R) == R_2)
     assert(toBasis(p_2, m) == m_2)
     assert(toBasis(m_2, p) == p_2)
-    assert(toBasis(p_2, f) == -f_2)
-    assert(toBasis(f_2, p) == -p_2)
+    assert(toBasis(p_2, ff) == -ff_2)
+    assert(toBasis(ff_2, p) == -p_2)
     assert(toBasis(toBasis(m_{2,1}, p), m) == m_{2,1})
-    assert(toBasis(toBasis(f_{2,1}, p), f) == f_{2,1})
+    assert(toBasis(toBasis(ff_{2,1}, p), ff) == ff_{2,1})
     assert(hallInnerProduct(q_2, m_2) == 1_E)
     assert(hallInnerProduct(q_2, m_{1,1}) == 0_E)
     assert(hallInnerProduct(p_1, p_1) == 1/(1-E_0))
@@ -175,7 +190,7 @@ TEST ///
     pPairExpected = (1+E_0)*(3-E_0)*2/(1-E_0^2) + (2-E_0)*E_0*2/(1-E_0)^2 + E_0^2*5/(1-E_0)
     assert(hallInnerProduct(pPairLeft, pPairRight) == pPairExpected)
     assert(toBasis(Q_{{2}, {1}}, m) == (1-E_0)*m_1)
-    assert(toBasis(B_{{2}, {1}}, f) == (1-E_0)*f_1)
+    assert(toBasis(B_{{2}, {1}}, ff) == (1-E_0)*ff_1)
     assert(toBasis(P_{{2}, {1}}, p) == p_1)
     assert(toBasis(R_{{2}, {1}}, p) == p_1)
 
@@ -256,5 +271,5 @@ TEST ///
     assert try (h_{{2,1}, {1}}; false) else true
     assert try (e_{{2,1}, {1}}; false) else true
     assert try (m_{{2,1}, {1}}; false) else true
-    assert try (f_{{2,1}, {1}}; false) else true
+    assert try (ff_{{2,1}, {1}}; false) else true
 ///
