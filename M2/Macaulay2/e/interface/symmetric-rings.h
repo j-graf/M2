@@ -18,6 +18,13 @@ extern "C" {
 #endif
 
 const Ring *rawSymmetricRing(const Ring *A);
+bool rawSymmetricRingsSetHallLittlewoodParameter(const Ring *R,
+                                                 const RingElement *t);
+bool rawSymmetricRingsRememberBasis(const Ring *R,
+                                    int basisId,
+                                    M2_string displaySymbol,
+                                    int displayOrder,
+                                    bool isMultiplicative);
 const RingElement *rawSymmetricRingsBasisElement(const Ring *R,
                                                 int basisId,
                                                 M2_string displaySymbol,
@@ -29,6 +36,13 @@ const RingElement *rawSymmetricRingsSum(const Ring *R,
                                         engine_RawRingElementArray elements);
 const RingElement *rawSymmetricRingsProduct(const Ring *R,
                                             engine_RawRingElementArray elements);
+const RingElement *rawSymmetricRingsJacobiTrudi(const Ring *R,
+                                                int basisId,
+                                                M2_string displaySymbol,
+                                                int displayOrder,
+                                                bool isMultiplicative,
+                                                M2_arrayint outer,
+                                                M2_arrayint inner);
 const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
                                             int powerSumBasisId,
                                             M2_string powerSumDisplaySymbol,
@@ -38,6 +52,20 @@ const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
                                             M2_string targetDisplaySymbol,
                                             int targetDisplayOrder,
                                             bool targetIsMultiplicative);
+const RingElement *rawSymmetricRingsPlethysm(const RingElement *f,
+                                             const RingElement *g,
+                                             int powerSumBasisId,
+                                             M2_string powerSumDisplaySymbol,
+                                             int powerSumDisplayOrder,
+                                             bool powerSumIsMultiplicative);
+int rawSymmetricRingsSingleBasisId(const RingElement *f);
+const RingElement *rawSymmetricRingsOmega(const RingElement *f,
+                                          M2_arrayint omegaMap,
+                                          bool useSomega);
+const RingElement *rawSymmetricRingsStraighten(const RingElement *f);
+const RingElement *rawSymmetricRingsHallInnerProduct(const RingElement *f,
+                                                    const RingElement *g,
+                                                    M2_arrayint innerProductMap);
 M2_string rawSymmetricRingsElementToString(const RingElement *f);
 int rawSymmetricRingsElementWeight(const RingElement *f);
 

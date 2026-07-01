@@ -13,6 +13,9 @@ doc ///
    SymmetricBasis
    registerBasis
    bases
+   straighten
+   omegaInvolution
+   hallInnerProduct
  Node
   Key
    symmetricRing
@@ -62,4 +65,54 @@ doc ///
     basis symbols as strings and whose values are the display names; for
     example, (bases R)#"S".  With "verbose" => true, it returns the full basis
     metadata objects.
+ Node
+  Key
+   omegaInvolution
+   (omegaInvolution,SymmetricRingElement)
+  Headline
+   apply the omega involution
+  Usage
+   omegaInvolution f
+   omegaInvolution(f, "useSomega" => true)
+  Description
+   Text
+    Applies omega using basis metadata for direct basis swaps when available.
+    By default, Schur atoms are returned in the ordinary Schur basis, so
+    omegaInvolution S_lambda is S_(lambda') for partition lambda.  With
+    "useSomega" => true, Schur atoms are sent to the formal Somega basis.
+   Example
+    R = symmetricRing QQ
+    omegaInvolution(h_2*S_1 + p_2)
+    omegaInvolution(S_2, "useSomega" => true)
+ Node
+  Key
+   straighten
+   (straighten,SymmetricRingElement)
+  Headline
+   straighten composition-indexed basis atoms
+  Usage
+   straighten f
+  Description
+   Text
+    Straightens Schur-style and Hall-Littlewood capital-basis atoms using the
+    engine-level straightening rules.
+   Example
+    R = symmetricRing QQ
+    straighten S_{1,3}
+ Node
+  Key
+   hallInnerProduct
+   (hallInnerProduct,SymmetricRingElement,SymmetricRingElement)
+  Headline
+   compute the Hall inner product
+  Usage
+   hallInnerProduct(f,g)
+  Description
+   Text
+    Computes the Hall inner product by pairing the q-basis expansion of the
+    first argument with the m-basis expansion of the second.
+   Example
+    A = frac(QQ[t])
+    R = symmetricRing A
+    hallInnerProduct(q_2,m_2)
 ///

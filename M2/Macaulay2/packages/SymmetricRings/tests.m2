@@ -42,6 +42,136 @@ TEST ///
     assert(toBasis(p_2, "h") == 2*h_2 - h_{1,1})
     assert(toBasis(p_2, "e") == e_{1,1} - 2*e_2)
     assert(toBasis(p_2, "S") == S_2 - S_{1,1})
+    assert(hJacobiTrudi {1,1} == h_{1,1} - h_2)
+    assert(eJacobiTrudi {1,1} == e_{1,1} - e_2)
+    assert(hJacobiTrudi({2,1}, {1}) == h_{1,1})
+    assert(eJacobiTrudi({2,1}, {1}) == e_{1,1})
+    assert(toBasis(S_{1,1}, h) == h_{1,1} - h_2)
+    assert(toBasis(Somega_{1,1}, e) == e_{1,1} - e_2)
+    assert(toBasis(S_{{2,1}, {1}}, "h") == h_{1,1})
+    assert(toBasis(Somega_{{2,1}, {1}}, "e") == e_{1,1})
+    assert(toBasis(h_{1,1} - h_2, S) == S_{1,1})
+    assert(toBasis(e_{1,1} - e_2, Somega) == Somega_{1,1})
+    assert(toBasis(p_2, Somega) == Somega_{1,1} - Somega_2)
+    assert(toBasis(e_2, Somega) == Somega_2)
+    assert(toBasis(Somega_2, p) == (-1/2)*p_2 + (1/2)*p_{1,1})
+    assert(omegaInvolution(h_2*S_1 + e_1) == e_2*S_1 + h_1)
+    assert(omegaInvolution(h_2*S_1 + e_1, "useSomega" => true) == e_2*Somega_1 + h_1)
+    assert(omegaInvolution(S_{2,1,1}) == S_{3,1})
+    assert(omegaInvolution(S_{1,3}) == -S_{2,2})
+    assert(omegaInvolution(Somega_{1,3}) == -S_{2,2})
+    assert(omegaInvolution(p_{2,1}) == -p_{2,1})
+    assert(omegaInvolution omegaInvolution(S_{2,1} + Q_2) == S_{2,1} + Q_2)
+    assert(omegaInvolution(Q_{{2,1}, {1}}) == B_{{2,1}, {1}})
+    assert(straighten S_{1,3} == -S_{2,2})
+///
+
+TEST ///
+    R0 = symmetricRing QQ
+    assert(plethysm(1_R0, h_2) == 1_R0)
+    assert(plethysm(p_2, p_1 + p_2) == p_2 + p_4)
+    assert(plethysm(p_{2,1}, p_1 + p_2) == p_{2,1} + p_{2,2} + p_{4,1} + p_{4,2})
+    assert(plethysm(p_{2,2}, p_1 + p_2) == p_{2,2} + 2*p_{4,2} + p_{4,4})
+    assert(plethysm(p_1, h_2) == (1/2)*p_2 + (1/2)*p_{1,1})
+    assert(plethysm(h_2, h_1) == (1/2)*p_2 + (1/2)*p_{1,1})
+    assert(h_2 @ h_1 == h_2)
+    assert((2 + h_2) @ h_1 == 2 + h_2)
+    assert(S_2 @ h_1 == S_2)
+    cachedPlethysmResult = S_{4,3,1,1} @ S_2
+    assert(S_{4,3,1,1} @ S_2 == cachedPlethysmResult)
+    A = frac(QQ[t])
+    Rfrac = symmetricRing A
+    cachedFractionPlethysmResult = S_{4,3,1,1} @ S_2
+    assert(S_{4,3,1,1} @ S_2 == cachedFractionPlethysmResult)
+    assert((h_2 + e_1) @ h_1 == (1/2)*p_2 + (1/2)*p_{1,1} + p_1)
+    assert(h_1 @ (p_1 + p_2) == h_1 + 2*h_2 - h_{1,1})
+    f = h_1
+    R1 = symmetricRing ZZ
+    assert(try (plethysm(h_2, h_1); false) else true)
+    assert(try (plethysm(f, h_1); false) else true)
+///
+
+TEST ///
+    A = QQ[t]
+    R0 = symmetricRing A
+    assert(R0.HallLittlewoodParameter == A_0)
+    assert(toBasis(q_1, p) == (1-A_0)*p_1)
+    assert(toBasis(b_1, p) == (1-A_0)*p_1)
+    assert(toBasis(q_2, p) == ((1-A_0^2)/2)*p_2 + ((1-A_0)^2/2)*p_{1,1})
+    assert(toBasis(b_2, p) == (-(1-A_0^2)/2)*p_2 + ((1-A_0)^2/2)*p_{1,1})
+    assert(toBasis(q_{1,1}, p) == (1-A_0)^2*p_{1,1})
+    assert(toBasis(b_{1,1}, p) == (1-A_0)^2*p_{1,1})
+    assert(hallInnerProduct(m_2, q_2) == 1_A)
+    ipLeftCoeff = 1 + A_0
+    ipMiddleCoeff = 2 - A_0
+    ipSmallCoeff = A_0^2
+    ipExpected = ipLeftCoeff*(3 - A_0) + ipMiddleCoeff*A_0 + ipSmallCoeff*5
+    assert(hallInnerProduct(ipLeftCoeff*q_3 + ipMiddleCoeff*q_{2,1} + ipSmallCoeff*q_1, (3-A_0)*m_3 + A_0*m_{2,1} + 5*m_1) == ipExpected)
+    assert(hallInnerProduct((3-A_0)*m_3 + A_0*m_{2,1} + 5*m_1, ipLeftCoeff*q_3 + ipMiddleCoeff*q_{2,1} + ipSmallCoeff*q_1) == ipExpected)
+    assert(hallInnerProduct(ipLeftCoeff*b_3 + ipMiddleCoeff*b_{2,1} + ipSmallCoeff*b_1, (3-A_0)*f_3 + A_0*f_{2,1} + 5*f_1) == ipExpected)
+    assert(hallInnerProduct((3-A_0)*f_3 + A_0*f_{2,1} + 5*f_1, ipLeftCoeff*b_3 + ipMiddleCoeff*b_{2,1} + ipSmallCoeff*b_1) == ipExpected)
+    assert(hallInnerProduct(Q_2, P_2) == 1_A)
+    assert(hallInnerProduct(P_2, Q_2) == 1_A)
+    assert(hallInnerProduct(ipLeftCoeff*Q_3 + ipMiddleCoeff*Q_{2,1} + ipSmallCoeff*Q_1, (3-A_0)*P_3 + A_0*P_{2,1} + 5*P_1) == ipExpected)
+    assert(hallInnerProduct((3-A_0)*P_3 + A_0*P_{2,1} + 5*P_1, ipLeftCoeff*Q_3 + ipMiddleCoeff*Q_{2,1} + ipSmallCoeff*Q_1) == ipExpected)
+    assert(hallInnerProduct(B_2, R_2) == 1_A)
+    assert(hallInnerProduct(R_2, B_2) == 1_A)
+    assert(hallInnerProduct(ipLeftCoeff*B_3 + ipMiddleCoeff*B_{2,1} + ipSmallCoeff*B_1, (3-A_0)*R_3 + A_0*R_{2,1} + 5*R_1) == ipExpected)
+    assert(hallInnerProduct((3-A_0)*R_3 + A_0*R_{2,1} + 5*R_1, ipLeftCoeff*B_3 + ipMiddleCoeff*B_{2,1} + ipSmallCoeff*B_1) == ipExpected)
+    assert(toBasis(q_{2,1} + (A_0 - 1)*q_3, Q) == Q_{2,1})
+    assert(toBasis(b_{2,1} + (A_0 - 1)*b_3, B) == B_{2,1})
+    assert(straighten Q_{1,3} == A_0*Q_{3,1} + (A_0 - 1)*Q_{2,2})
+    assert(try (toBasis(p_1, q); false) else true)
+    assert(try (toBasis(p_1, Q); false) else true)
+    assert(try (toBasis(P_1, p); false) else true)
+
+    K = QQ[t,q]
+    R1 = symmetricRing K
+    assert(R1.HallLittlewoodParameter == K_0)
+    assert(R1.MacdonaldParameters == {K_0, K_1})
+    assert(toBasis(q_1, p) == (1-K_0)*p_1)
+
+    C = frac QQ[t]
+    R2 = symmetricRing C
+    assert(R2.HallLittlewoodParameter == C_0)
+    assert(toBasis(q_1, p) == (1-C_0)*p_1)
+
+    D = frac QQ[t,q]
+    R3 = symmetricRing D
+    assert(R3.HallLittlewoodParameter == D_0)
+    assert(R3.MacdonaldParameters == {D_0, D_1})
+    assert(toBasis(q_1, p) == (1-D_0)*p_1)
+
+    E = frac(QQ[t])
+    R4 = symmetricRing E
+    assert(toBasis(toBasis(p_1, q), p) == p_1)
+    assert(toBasis(toBasis(p_2, b), p) == p_2)
+    assert(toBasis(Q_{2,1}, q) == q_{2,1} + (E_0 - 1)*q_3)
+    assert(toBasis(B_{2,1}, b) == b_{2,1} + (E_0 - 1)*b_3)
+    assert(toBasis(toBasis(Q_{2,1}, p), Q) == Q_{2,1})
+    assert(toBasis(toBasis(B_{2,1}, p), B) == B_{2,1})
+    assert(toBasis(Q_2, P) == (1-E_0)*P_2)
+    assert(toBasis(B_2, R) == (1-E_0)*R_2)
+    assert(toBasis(toBasis(P_2, p), P) == P_2)
+    assert(toBasis(toBasis(R_2, p), R) == R_2)
+    assert(toBasis(p_2, m) == m_2)
+    assert(toBasis(m_2, p) == p_2)
+    assert(toBasis(p_2, f) == -f_2)
+    assert(toBasis(f_2, p) == -p_2)
+    assert(toBasis(toBasis(m_{2,1}, p), m) == m_{2,1})
+    assert(toBasis(toBasis(f_{2,1}, p), f) == f_{2,1})
+    assert(hallInnerProduct(q_2, m_2) == 1_E)
+    assert(hallInnerProduct(q_2, m_{1,1}) == 0_E)
+    assert(hallInnerProduct(p_1, p_1) == 1/(1-E_0))
+    assert(hallInnerProduct(p_2, p_2) == 2/(1-E_0^2))
+    pPairLeft = (1+E_0)*p_2 + (2-E_0)*p_{1,1} + E_0^2*p_1
+    pPairRight = (3-E_0)*p_2 + E_0*p_{1,1} + 5*p_1
+    pPairExpected = (1+E_0)*(3-E_0)*2/(1-E_0^2) + (2-E_0)*E_0*2/(1-E_0)^2 + E_0^2*5/(1-E_0)
+    assert(hallInnerProduct(pPairLeft, pPairRight) == pPairExpected)
+    assert(toBasis(Q_{{2}, {1}}, m) == (1-E_0)*m_1)
+    assert(toBasis(B_{{2}, {1}}, f) == (1-E_0)*f_1)
+    assert(toBasis(P_{{2}, {1}}, p) == p_1)
+    assert(toBasis(R_{{2}, {1}}, p) == p_1)
 ///
 
 TEST ///
