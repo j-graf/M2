@@ -604,7 +604,7 @@ specializationValuesEqual = (a, b, A) -> (
     else a == promote(b, A)
     )
 
-matchingSpecializationRule = (B, Rsource, Rtarget, substitutions) -> (
+matchingSpecializationRule = (B, sourceRing, Rtarget, substitutions) -> (
     specs := B#"Specialization";
     if specs === null then null
     else (
@@ -615,7 +615,7 @@ matchingSpecializationRule = (B, Rsource, Rtarget, substitutions) -> (
                 and rule#?"Value"
                 and rule#?"Map"
                 and specializationValuesEqual(
-                    specializedParameterValue(Rsource, rule#"Parameter", substitutions, A),
+                    specializedParameterValue(sourceRing, rule#"Parameter", substitutions, A),
                     rule#"Value",
                     A)
                 ));
@@ -636,9 +636,9 @@ defaultSpecializedAtom = (Rtarget, atom) -> (
     if #inner == 0 then B_outer else makeSkewElement(B, outer, inner)
     )
 
-specializeAtom = (Rsource, Rtarget, substitutions, atom) -> (
+specializeAtom = (sourceRing, Rtarget, substitutions, atom) -> (
     B := basisDataWithId atom#"BasisId";
-    rule := matchingSpecializationRule(B, Rsource, Rtarget, substitutions);
+    rule := matchingSpecializationRule(B, sourceRing, Rtarget, substitutions);
     if rule === null then defaultSpecializedAtom(Rtarget, atom)
     else (
         phi := rule#"Map";
@@ -646,9 +646,9 @@ specializeAtom = (Rsource, Rtarget, substitutions, atom) -> (
         )
     )
 
-specializeMonomial = (Rsource, Rtarget, substitutions, atoms) -> (
+specializeMonomial = (sourceRing, Rtarget, substitutions, atoms) -> (
     result := 1_Rtarget;
-    scan(atoms, atom -> result = result * specializeAtom(Rsource, Rtarget, substitutions, atom));
+    scan(atoms, atom -> result = result * specializeAtom(sourceRing, Rtarget, substitutions, atom));
     result
     )
 
@@ -743,11 +743,11 @@ omegaInvolution = args -> (
     new R0 from rawSymmetricRingsOmega(raw f, omegaMapData R0, useSomega)
     )
 
-innerProductContextName = (Rsource, Rtarget, substitutions) -> (
-    if Rsource#"HallLittlewoodParameter" === null then "Ordinary"
+innerProductContextName = (sourceRing, Rtarget, substitutions) -> (
+    if sourceRing#"HallLittlewoodParameter" === null then "Ordinary"
     else if #substitutions > 0 then (
         A := coefficientRing Rtarget;
-        t0 := promote(substituteIfPossible(Rsource#"HallLittlewoodParameter", substitutions), A);
+        t0 := promote(substituteIfPossible(sourceRing#"HallLittlewoodParameter", substitutions), A);
         if t0 == 0_A then "Ordinary" else "HallLittlewood"
         )
     else if Rtarget#"HallLittlewoodParameter" === null then "Ordinary"
@@ -820,11 +820,11 @@ powerSumFallbackInnerProduct = (F, G, contextName) -> (
 
 prepareInnerProductArguments = (f, g, substitutions, promoteSpecializedRing) -> (
     if ring f =!= ring g then error "expected elements in the same symmetric ring";
-    Rsource := ring f;
-    Rtarget := if #substitutions == 0 then Rsource else specializationTargetRing(Rsource, substitutions, promoteSpecializedRing);
+    sourceRing := ring f;
+    Rtarget := if #substitutions == 0 then sourceRing else specializationTargetRing(sourceRing, substitutions, promoteSpecializedRing);
     F := if #substitutions == 0 then f else specializeSymmetricElementInRing(f, substitutions, Rtarget);
     G := if #substitutions == 0 then g else specializeSymmetricElementInRing(g, substitutions, Rtarget);
-    {F, G, innerProductContextName(Rsource, Rtarget, substitutions)}
+    {F, G, innerProductContextName(sourceRing, Rtarget, substitutions)}
     )
 
 hallInnerProductOptionDefaults = hashTable {"ParameterSpecialization" => {}, "PromoteSpecializedRing" => false}
