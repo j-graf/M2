@@ -26,61 +26,75 @@ trimTrailingZeros = L -> (
 
 acceptIntegerIndex = L -> all(L, i -> class i === ZZ)
 
-basisOptionDefaults = new OptionTable from {
-    Symbol => null,
-    DisplayName => null,
-    DisplayOrder => 100,
-    CanBeSkew => false,
-    IndexNormalizer => trimTrailingZeros,
-    IndexValidator => acceptIntegerIndex,
-    Constructor => null,
-    IsMultiplicativeIndex => false,
-    MultiplicativeIndex => false,
-    Straighten => null,
-    ToPowerSums => null,
-    FromPowerSums => null,
-    TriangularData => null,
-    Omega => null,
-    AvailableWhen => "Always",
-    Specialization => null,
-    InnerProductData => null,
-    PlethysmBehavior => null,
-    Display => null,
-    Documentation => null,
-    ZeroIndexIsOne => false,
-    ZeroOnNegative => false
+basisOptionDefaults = hashTable {
+    "Symbol" => null,
+    "DisplayName" => null,
+    "DisplayOrder" => 100,
+    "CanBeSkew" => false,
+    "IndexNormalizer" => trimTrailingZeros,
+    "IndexValidator" => acceptIntegerIndex,
+    "Constructor" => null,
+    "IsMultiplicativeIndex" => false,
+    "MultiplicativeIndex" => false,
+    "Straighten" => null,
+    "ToPowerSums" => null,
+    "FromPowerSums" => null,
+    "TriangularData" => null,
+    "Omega" => null,
+    "AvailableWhen" => "Always",
+    "Specialization" => null,
+    "InnerProductData" => null,
+    "PlethysmBehavior" => null,
+    "Display" => null,
+    "Documentation" => null,
+    "ZeroIndexIsOne" => false,
+    "ZeroOnNegative" => false
     }
+
+argumentList = args -> if class args === Sequence then toList args else {args}
+
+parseStringOptions = (defaults, opts, name) -> (
+    result := new MutableHashTable from pairs defaults;
+    scan(opts, opt -> (
+            if class opt =!= Option then error("expected string options for ", name);
+            key := opt#0;
+            if class key =!= String then error("expected string option name for ", name);
+            if not defaults#?key then error("unknown option \"", key, "\" for ", name);
+            result#key = opt#1;
+            ));
+    hashTable pairs result
+    )
 
 makeBasis = (key, opts) -> (
     keyString := toString key;
     NextBasisId = NextBasisId + 1;
-    displaySymbol := if opts#Symbol === null then keyString else toString opts#Symbol;
-    displayName := if opts.DisplayName === null then keyString | "-basis" else opts.DisplayName;
-    multiplicative := opts.MultiplicativeIndex or opts.IsMultiplicativeIndex;
+    displaySymbol := if opts#"Symbol" === null then keyString else toString opts#"Symbol";
+    displayName := if opts#"DisplayName" === null then keyString | "-basis" else opts#"DisplayName";
+    multiplicative := opts#"MultiplicativeIndex" or opts#"IsMultiplicativeIndex";
     new SymmetricBasis from hashTable {
         "Key" => keyString,
         "BasisId" => NextBasisId,
         "Symbol" => displaySymbol,
         "DisplayName" => displayName,
-        "DisplayOrder" => opts.DisplayOrder,
-        "CanBeSkew" => opts.CanBeSkew,
-        "IndexNormalizer" => opts.IndexNormalizer,
-        "IndexValidator" => opts.IndexValidator,
-        "Constructor" => opts.Constructor,
+        "DisplayOrder" => opts#"DisplayOrder",
+        "CanBeSkew" => opts#"CanBeSkew",
+        "IndexNormalizer" => opts#"IndexNormalizer",
+        "IndexValidator" => opts#"IndexValidator",
+        "Constructor" => opts#"Constructor",
         "MultiplicativeIndex" => multiplicative,
-        "Straighten" => opts.Straighten,
-        "ToPowerSums" => opts.ToPowerSums,
-        "FromPowerSums" => opts.FromPowerSums,
-        "TriangularData" => opts.TriangularData,
-        "Omega" => opts.Omega,
-        "AvailableWhen" => opts.AvailableWhen,
-        "Specialization" => opts.Specialization,
-        "InnerProductData" => opts.InnerProductData,
-        "PlethysmBehavior" => opts.PlethysmBehavior,
-        "Display" => opts.Display,
-        "Documentation" => opts.Documentation,
-        "ZeroIndexIsOne" => opts.ZeroIndexIsOne,
-        "ZeroOnNegative" => opts.ZeroOnNegative,
+        "Straighten" => opts#"Straighten",
+        "ToPowerSums" => opts#"ToPowerSums",
+        "FromPowerSums" => opts#"FromPowerSums",
+        "TriangularData" => opts#"TriangularData",
+        "Omega" => opts#"Omega",
+        "AvailableWhen" => opts#"AvailableWhen",
+        "Specialization" => opts#"Specialization",
+        "InnerProductData" => opts#"InnerProductData",
+        "PlethysmBehavior" => opts#"PlethysmBehavior",
+        "Display" => opts#"Display",
+        "Documentation" => opts#"Documentation",
+        "ZeroIndexIsOne" => opts#"ZeroIndexIsOne",
+        "ZeroOnNegative" => opts#"ZeroOnNegative",
         "Ring" => null
         }
     )
@@ -99,7 +113,7 @@ installBasis = (B, builtin) -> (
     refreshAvailableBases();
     if CurrentSymmetricRing =!= null then (
         if basisAvailableForRing(CurrentSymmetricRing, B) then (
-            CurrentSymmetricRing.Bases = append(CurrentSymmetricRing.Bases, B);
+            CurrentSymmetricRing#"Bases" = append(CurrentSymmetricRing#"Bases", B);
             rememberBasisInEngine(CurrentSymmetricRing, B);
             CurrentSymmetricRing.cache#"Aliases"#(B#"Key") = installBasisAlias(CurrentSymmetricRing, B);
             )
@@ -108,11 +122,17 @@ installBasis = (B, builtin) -> (
     B
     )
 
-registerBasis = method(Options => basisOptionDefaults)
-registerBasis Thing := SymmetricBasis => opts -> key -> installBasis(makeBasis(key, opts), false)
+registerBasis = args -> (
+    L := argumentList args;
+    if #L == 0 then error "expected a basis key";
+    installBasis(makeBasis(L#0, parseStringOptions(basisOptionDefaults, drop(L, 1), "registerBasis")), false)
+    )
 
-makeBuiltinBasis = method(Options => basisOptionDefaults)
-makeBuiltinBasis Thing := SymmetricBasis => opts -> key -> installBasis(makeBasis(key, opts), true)
+makeBuiltinBasis = args -> (
+    L := argumentList args;
+    if #L == 0 then error "expected a basis key";
+    installBasis(makeBasis(L#0, parseStringOptions(basisOptionDefaults, drop(L, 1), "makeBuiltinBasis")), true)
+    )
 
 basisSpecializationMap = targetKey -> (R0, idx) -> (
     B := basis(R0, targetKey);
@@ -123,7 +143,7 @@ basisSpecializationMap = targetKey -> (R0, idx) -> (
 
 hallLittlewoodZeroSpecialization = targetKey -> {
     hashTable {
-        "Parameter" => HallLittlewoodParameter,
+        "Parameter" => "HallLittlewoodParameter",
         "Value" => 0,
         "Map" => basisSpecializationMap targetKey
         }
@@ -145,7 +165,7 @@ ordinaryPowerSumPairing = (R0, idx) -> promote(zValueIndex idx, coefficientRing 
 
 hallLittlewoodPowerSumPairing = (R0, idx) -> (
     A := coefficientRing R0;
-    t0 := R0.HallLittlewoodParameter;
+    t0 := R0#"HallLittlewoodParameter";
     if t0 === null then return ordinaryPowerSumPairing(R0, idx);
     result := promote(zValueIndex idx, A);
     scan(idx, part -> result = result / (1_A - t0^part));
@@ -160,28 +180,28 @@ ordinaryDualData = dualKey -> hashTable {
 
 hallLittlewoodDualData = ordinaryDualData
 
-p = makeBuiltinBasis("p", Symbol => "p", DisplayName => "power sum basis", DisplayOrder => 10, MultiplicativeIndex => true, ZeroIndexIsOne => true, Omega => "p", InnerProductData => hashTable {
+p = makeBuiltinBasis("p", "Symbol" => "p", "DisplayName" => "power sum basis", "DisplayOrder" => 10, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "Omega" => "p", "InnerProductData" => hashTable {
         "Ordinary" => hashTable {"DualBasis" => "p", "Pairing" => ordinaryPowerSumPairing, "EngineKind" => "PowerSum"},
         "HallLittlewood" => hashTable {"DualBasis" => "p", "Pairing" => hallLittlewoodPowerSumPairing, "EngineKind" => "PowerSum"}
         })
-h = makeBuiltinBasis("h", Symbol => "h", DisplayName => "complete homogeneous basis", DisplayOrder => 20, MultiplicativeIndex => true, ZeroIndexIsOne => true, ZeroOnNegative => true, Omega => "e", InnerProductData => hashTable {"Ordinary" => ordinaryDualData "m"})
-e = makeBuiltinBasis("e", Symbol => "e", DisplayName => "elementary basis", DisplayOrder => 30, MultiplicativeIndex => true, ZeroIndexIsOne => true, ZeroOnNegative => true, Omega => "h", InnerProductData => hashTable {"Ordinary" => ordinaryDualData "f"})
-m = makeBuiltinBasis("m", Symbol => "m", DisplayName => "monomial basis", DisplayOrder => 40, Omega => "f", InnerProductData => hashTable {
+h = makeBuiltinBasis("h", "Symbol" => "h", "DisplayName" => "complete homogeneous basis", "DisplayOrder" => 20, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true, "Omega" => "e", "InnerProductData" => hashTable {"Ordinary" => ordinaryDualData "m"})
+e = makeBuiltinBasis("e", "Symbol" => "e", "DisplayName" => "elementary basis", "DisplayOrder" => 30, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true, "Omega" => "h", "InnerProductData" => hashTable {"Ordinary" => ordinaryDualData "f"})
+m = makeBuiltinBasis("m", "Symbol" => "m", "DisplayName" => "monomial basis", "DisplayOrder" => 40, "Omega" => "f", "InnerProductData" => hashTable {
         "Ordinary" => ordinaryDualData "h",
         "HallLittlewood" => hallLittlewoodDualData "q"
         })
-f = makeBuiltinBasis("f", Symbol => "f", DisplayName => "forgotten basis", DisplayOrder => 50, Omega => "m", InnerProductData => hashTable {
+f = makeBuiltinBasis("f", "Symbol" => "f", "DisplayName" => "forgotten basis", "DisplayOrder" => 50, "Omega" => "m", "InnerProductData" => hashTable {
         "Ordinary" => ordinaryDualData "e",
         "HallLittlewood" => hallLittlewoodDualData "b"
         })
-S = makeBuiltinBasis("S", Symbol => "S", DisplayName => "Schur basis", DisplayOrder => 60, CanBeSkew => true, Omega => "Somega", InnerProductData => hashTable {"Ordinary" => ordinaryDualData "S"})
-Somega = makeBuiltinBasis("Somega", Symbol => "Somega", DisplayName => "omega Schur-style basis", DisplayOrder => 61, CanBeSkew => true, Omega => "S", InnerProductData => hashTable {"Ordinary" => ordinaryDualData "Somega"})
-q = makeBuiltinBasis("q", Symbol => "q", DisplayName => "Hall-Littlewood q basis", DisplayOrder => 70, MultiplicativeIndex => true, ZeroIndexIsOne => true, ZeroOnNegative => true, Omega => "b", AvailableWhen => "HallLittlewood", Specialization => hallLittlewoodZeroSpecialization "h", InnerProductData => hashTable {"HallLittlewood" => hallLittlewoodDualData "m"})
-b = makeBuiltinBasis("b", Symbol => "b", DisplayName => "Hall-Littlewood b basis", DisplayOrder => 71, MultiplicativeIndex => true, ZeroIndexIsOne => true, ZeroOnNegative => true, Omega => "q", AvailableWhen => "HallLittlewood", Specialization => hallLittlewoodZeroSpecialization "e", InnerProductData => hashTable {"HallLittlewood" => hallLittlewoodDualData "f"})
-Q = makeBuiltinBasis("Q", Symbol => "Q", DisplayName => "Hall-Littlewood Q basis", DisplayOrder => 72, CanBeSkew => true, Omega => "B", AvailableWhen => "HallLittlewood", Specialization => hallLittlewoodZeroSpecialization "S", InnerProductData => hashTable {"HallLittlewood" => hallLittlewoodDualData "P"})
-B = makeBuiltinBasis("B", Symbol => "B", DisplayName => "Hall-Littlewood B basis", DisplayOrder => 73, CanBeSkew => true, Omega => "Q", AvailableWhen => "HallLittlewood", Specialization => hallLittlewoodZeroSpecialization "Somega", InnerProductData => hashTable {"HallLittlewood" => hallLittlewoodDualData "R"})
-P = makeBuiltinBasis("P", Symbol => "P", DisplayName => "Hall-Littlewood P basis", DisplayOrder => 74, CanBeSkew => true, Omega => "R", AvailableWhen => "HallLittlewood", Specialization => hallLittlewoodZeroSpecialization "S", InnerProductData => hashTable {"HallLittlewood" => hallLittlewoodDualData "Q"})
-R = makeBuiltinBasis("R", Symbol => "R", DisplayName => "omega Hall-Littlewood P basis", DisplayOrder => 75, CanBeSkew => true, Omega => "P", AvailableWhen => "HallLittlewood", Specialization => hallLittlewoodZeroSpecialization "Somega", InnerProductData => hashTable {"HallLittlewood" => hallLittlewoodDualData "B"})
+S = makeBuiltinBasis("S", "Symbol" => "S", "DisplayName" => "Schur basis", "DisplayOrder" => 60, "CanBeSkew" => true, "Omega" => "Somega", "InnerProductData" => hashTable {"Ordinary" => ordinaryDualData "S"})
+Somega = makeBuiltinBasis("Somega", "Symbol" => "Somega", "DisplayName" => "omega Schur-style basis", "DisplayOrder" => 61, "CanBeSkew" => true, "Omega" => "S", "InnerProductData" => hashTable {"Ordinary" => ordinaryDualData "Somega"})
+q = makeBuiltinBasis("q", "Symbol" => "q", "DisplayName" => "Hall-Littlewood q basis", "DisplayOrder" => 70, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true, "Omega" => "b", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "h", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "m"})
+b = makeBuiltinBasis("b", "Symbol" => "b", "DisplayName" => "Hall-Littlewood b basis", "DisplayOrder" => 71, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true, "Omega" => "q", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "e", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "f"})
+Q = makeBuiltinBasis("Q", "Symbol" => "Q", "DisplayName" => "Hall-Littlewood Q basis", "DisplayOrder" => 72, "CanBeSkew" => true, "Omega" => "B", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "S", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "P"})
+B = makeBuiltinBasis("B", "Symbol" => "B", "DisplayName" => "Hall-Littlewood B basis", "DisplayOrder" => 73, "CanBeSkew" => true, "Omega" => "Q", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "Somega", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "R"})
+P = makeBuiltinBasis("P", "Symbol" => "P", "DisplayName" => "Hall-Littlewood P basis", "DisplayOrder" => 74, "CanBeSkew" => true, "Omega" => "R", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "S", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "Q"})
+R = makeBuiltinBasis("R", "Symbol" => "R", "DisplayName" => "omega Hall-Littlewood P basis", "DisplayOrder" => 75, "CanBeSkew" => true, "Omega" => "P", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "Somega", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "B"})
 
 newSymmetricEngineRing = Rraw -> (
     R0 := new SymmetricRing of SymmetricRingElement;
@@ -198,19 +218,19 @@ rememberBasisInEngine = (R0, B0) -> (
 basisAvailableForRing = (R0, B0) -> (
     condition := B0#"AvailableWhen";
     if condition === null or condition === "Always" or toString condition == "Always" then true
-    else if condition === "HallLittlewood" or toString condition == "HallLittlewood" then R0.HallLittlewoodParameter =!= null
-    else if condition === "Macdonald" or toString condition == "Macdonald" then instance(R0.MacdonaldParameters, List) and #R0.MacdonaldParameters > 0
+    else if condition === "HallLittlewood" or toString condition == "HallLittlewood" then R0#"HallLittlewoodParameter" =!= null
+    else if condition === "Macdonald" or toString condition == "Macdonald" then instance(R0#"MacdonaldParameters", List) and #R0#"MacdonaldParameters" > 0
     else if instance(condition, Function) then condition R0
     else error("unknown AvailableWhen metadata for basis ", B0#"Key")
     )
 
 ringAvailableBases = R0 -> select(availableSymmetricBases, B0 -> basisAvailableForRing(R0, B0))
 
-ringHasBasis = (R0, B0) -> any(R0.Bases, C -> C#"BasisId" == B0#"BasisId")
+ringHasBasis = (R0, B0) -> any(R0#"Bases", C -> C#"BasisId" == B0#"BasisId")
 
-rememberRingBasisData = R0 -> scan(R0.Bases, B0 -> rememberBasisInEngine(R0, B0))
+rememberRingBasisData = R0 -> scan(R0#"Bases", B0 -> rememberBasisInEngine(R0, B0))
 
-omegaMapData = R0 -> flatten apply(select(R0.Bases, B0 -> B0#"Omega" =!= null), B0 -> (
+omegaMapData = R0 -> flatten apply(select(R0#"Bases", B0 -> B0#"Omega" =!= null), B0 -> (
         target := basis(R0, B0#"Omega");
         {B0#"BasisId", target#"BasisId", target#"DisplayOrder", if target#"MultiplicativeIndex" then 1 else 0}
         ))
@@ -229,7 +249,7 @@ innerProductRule = (B0, contextName) -> (
     else null
     )
 
-innerProductMapData = (R0, contextName) -> flatten apply(select(R0.Bases, B0 -> (
+innerProductMapData = (R0, contextName) -> flatten apply(select(R0#"Bases", B0 -> (
             rule := innerProductRule(B0, contextName);
             rule =!= null and rule#?"DualBasis" and rule#?"EngineKind"
             )), B0 -> (
@@ -241,12 +261,12 @@ innerProductMapData = (R0, contextName) -> flatten apply(select(R0.Bases, B0 -> 
 coefficientRing SymmetricRing := R0 -> R0.CoefficientRing
 coefficientRing SymmetricRingElement := f -> coefficientRing ring f
 
-symmetricRing = method(Options => {
-    Parameters => {},
-    HallLittlewoodParameter => null,
-    MacdonaldParameters => {},
-    DefaultSeriesVariables => {}
-    })
+symmetricRingOptionDefaults = hashTable {
+    "Parameters" => {},
+    "HallLittlewoodParameter" => null,
+    "MacdonaldParameters" => {},
+    "DefaultSeriesVariables" => {}
+    }
 
 coefficientRingGeneratorNamed = (A, name) -> (
     G := try gens A else {};
@@ -262,23 +282,28 @@ inferMacdonaldParameters = A -> (
     if t0 =!= null and q0 =!= null then {t0, q0} else {}
     )
 
-symmetricRing Ring := SymmetricRing => opts -> A -> (
+symmetricRing = args -> (
+    L := argumentList args;
+    if #L == 0 then error "expected a coefficient ring";
+    A := L#0;
+    if not instance(A, Ring) then error "expected a coefficient ring";
+    opts := parseStringOptions(symmetricRingOptionDefaults, drop(L, 1), "symmetricRing");
     if not (A.?Engine and A.Engine) then error "expected coefficient ring handled by the engine";
     R0 := newSymmetricEngineRing rawSymmetricRing raw A;
-    hlParameter := opts.HallLittlewoodParameter;
+    hlParameter := opts#"HallLittlewoodParameter";
     if hlParameter === null then hlParameter = inferHallLittlewoodParameter A;
     if hlParameter =!= null then (
         hlParameter = try promote(hlParameter, A) else error("expected HallLittlewoodParameter promotable to ", toString A);
         if not rawSymmetricRingsSetHallLittlewoodParameter(raw R0, raw hlParameter) then error "could not set HallLittlewoodParameter"
         );
-    macdonaldParameters := opts.MacdonaldParameters;
+    macdonaldParameters := opts#"MacdonaldParameters";
     if macdonaldParameters === {} then macdonaldParameters = inferMacdonaldParameters A;
     R0.CoefficientRing = A;
-    R0.Parameters = opts.Parameters;
-    R0.HallLittlewoodParameter = hlParameter;
-    R0.MacdonaldParameters = macdonaldParameters;
-    R0.DefaultSeriesVariables = opts.DefaultSeriesVariables;
-    R0.Bases = ringAvailableBases R0;
+    R0#"Parameters" = opts#"Parameters";
+    R0#"HallLittlewoodParameter" = hlParameter;
+    R0#"MacdonaldParameters" = macdonaldParameters;
+    R0#"DefaultSeriesVariables" = opts#"DefaultSeriesVariables";
+    R0#"Bases" = ringAvailableBases R0;
     R0.baseRings = append(A.baseRings, A);
     R0.generators = {};
     R0.degreeLength = 0;
@@ -359,16 +384,16 @@ basesVerboseOption = opt -> (
 
 bases = method()
 bases SymmetricRing := R0 -> (
-    B := R0.Bases / (B0 -> basisOnRing(B0, R0));
+    B := R0#"Bases" / (B0 -> basisOnRing(B0, R0));
     basesOutput(B, false)
     )
 bases(SymmetricRing, Option) := (R0, opt) -> (
-    B := R0.Bases / (B0 -> basisOnRing(B0, R0));
+    B := R0#"Bases" / (B0 -> basisOnRing(B0, R0));
     basesOutput(B, basesVerboseOption opt)
     )
 
 bases(SymmetricRing, Boolean) := (R0, verbose) -> (
-    B := R0.Bases / (B0 -> basisOnRing(B0, R0));
+    B := R0#"Bases" / (B0 -> basisOnRing(B0, R0));
     basesOutput(B, verbose)
     )
 
@@ -461,9 +486,6 @@ makeSkewElement = (B, lambda, mu) -> (
     new R0 from rawSymmetricRingsBasisElement(raw R0, B#"BasisId", B#"Symbol", B#"DisplayOrder", B#"MultiplicativeIndex", #shape#1, payload)
     )
 
-symmetricEquals = method()
-symmetricEquals(SymmetricRingElement, SymmetricRingElement) := (f, g) -> f == g
-
 toString SymmetricRingElement := f -> rawSymmetricRingsElementToString raw f
 net SymmetricRingElement := f -> net toString f
 toExternalString SymmetricRingElement := toString
@@ -510,6 +532,10 @@ straighten SymmetricRingElement := f -> (
     R0 := ring f;
     rememberRingBasisData R0;
     new R0 from rawSymmetricRingsStraighten raw f
+    )
+
+SymmetricRingElement == SymmetricRingElement := Boolean => (f, g) -> (
+    if ring f =!= ring g then false else raw straighten f === raw straighten g
     )
 
 jacobiTrudiInBasis = (key, lambda, mu) -> (
@@ -560,8 +586,8 @@ substituteIfPossible = (x, substitutions) -> try sub(x, substitutions) else x
 
 specializedParameterValue = (R0, parameter, substitutions, A) -> (
     parameterString := toString parameter;
-    rawValue := if parameter === HallLittlewoodParameter or parameterString == "HallLittlewoodParameter" then R0.HallLittlewoodParameter
-        else if parameter === MacdonaldParameters or parameterString == "MacdonaldParameters" then R0.MacdonaldParameters
+    rawValue := if parameterString == "HallLittlewoodParameter" then R0#"HallLittlewoodParameter"
+        else if parameterString == "MacdonaldParameters" then R0#"MacdonaldParameters"
         else parameter;
     if rawValue === null then null
     else if instance(rawValue, List) then apply(rawValue, x -> promote(substituteIfPossible(x, substitutions), A))
@@ -627,16 +653,16 @@ specializeMonomial = (Rsource, Rtarget, substitutions, atoms) -> (
     )
 
 specializedHallLittlewoodParameter = (R0, substitutions, A) -> (
-    if R0.HallLittlewoodParameter === null then null
+    if R0#"HallLittlewoodParameter" === null then null
     else (
-        t0 := promote(substituteIfPossible(R0.HallLittlewoodParameter, substitutions), A);
+        t0 := promote(substituteIfPossible(R0#"HallLittlewoodParameter", substitutions), A);
         if t0 == 0_A then null else t0
         )
     )
 
 specializedMacdonaldParameters = (R0, substitutions, A) -> (
-    if not instance(R0.MacdonaldParameters, List) then {}
-    else apply(R0.MacdonaldParameters, x -> promote(substituteIfPossible(x, substitutions), A))
+    if not instance(R0#"MacdonaldParameters", List) then {}
+    else apply(R0#"MacdonaldParameters", x -> promote(substituteIfPossible(x, substitutions), A))
     )
 
 specializationTargetRing = (R0, substitutions, promoteSpecializedRing) -> (
@@ -645,7 +671,7 @@ specializationTargetRing = (R0, substitutions, promoteSpecializedRing) -> (
         A := ring substituteIfPossible(1_(coefficientRing R0), substitutions);
         hl := specializedHallLittlewoodParameter(R0, substitutions, A);
         mac := specializedMacdonaldParameters(R0, substitutions, A);
-        symmetricRing(A, HallLittlewoodParameter => hl, MacdonaldParameters => mac)
+        symmetricRing(A, "HallLittlewoodParameter" => hl, "MacdonaldParameters" => mac)
         )
     )
 
@@ -664,10 +690,18 @@ specializeSymmetricElement = (F, substitutions, promoteSpecializedRing) -> (
     specializeSymmetricElementInRing(F, substitutions, specializationTargetRing(ring F, substitutions, promoteSpecializedRing))
     )
 
-specializeParameters = method(Options => {PromoteSpecializedRing => true})
-specializeParameters(SymmetricRingElement, List) := opts -> (F, substitutions) -> (
-    if class opts.PromoteSpecializedRing =!= Boolean then error "expected Boolean value for option PromoteSpecializedRing";
-    specializeSymmetricElement(F, substitutions, opts.PromoteSpecializedRing)
+specializeParametersOptionDefaults = hashTable {"PromoteSpecializedRing" => false}
+
+specializeParameters = args -> (
+    L := argumentList args;
+    if #L < 2 then error "expected a symmetric function and a list of substitutions";
+    F := L#0;
+    substitutions := L#1;
+    if not instance(F, SymmetricRingElement) then error "expected a symmetric function";
+    if not instance(substitutions, List) then error "expected a list of substitutions";
+    opts := parseStringOptions(specializeParametersOptionDefaults, drop(L, 2), "specializeParameters");
+    if class opts#"PromoteSpecializedRing" =!= Boolean then error "expected Boolean value for option PromoteSpecializedRing";
+    specializeSymmetricElement(F, substitutions, opts#"PromoteSpecializedRing")
     )
 
 plethysm = method()
@@ -694,8 +728,14 @@ installMethod(symbol @, SymmetricRingElement, SymmetricRingElement, (f, g) -> (
             )
         ))
 
-omegaInvolution = method(Options => {"useSomega" => false})
-omegaInvolution SymmetricRingElement := opts -> f -> (
+omegaInvolutionOptionDefaults = hashTable {"useSomega" => false}
+
+omegaInvolution = args -> (
+    L := argumentList args;
+    if #L == 0 then error "expected a symmetric function";
+    f := L#0;
+    if not instance(f, SymmetricRingElement) then error "expected a symmetric function";
+    opts := parseStringOptions(omegaInvolutionOptionDefaults, drop(L, 1), "omegaInvolution");
     R0 := ring f;
     rememberRingBasisData R0;
     useSomega := opts#"useSomega";
@@ -704,13 +744,13 @@ omegaInvolution SymmetricRingElement := opts -> f -> (
     )
 
 innerProductContextName = (Rsource, Rtarget, substitutions) -> (
-    if Rsource.HallLittlewoodParameter === null then "Ordinary"
+    if Rsource#"HallLittlewoodParameter" === null then "Ordinary"
     else if #substitutions > 0 then (
         A := coefficientRing Rtarget;
-        t0 := promote(substituteIfPossible(Rsource.HallLittlewoodParameter, substitutions), A);
+        t0 := promote(substituteIfPossible(Rsource#"HallLittlewoodParameter", substitutions), A);
         if t0 == 0_A then "Ordinary" else "HallLittlewood"
         )
-    else if Rtarget.HallLittlewoodParameter === null then "Ordinary"
+    else if Rtarget#"HallLittlewoodParameter" === null then "Ordinary"
     else "HallLittlewood"
     )
 
@@ -764,7 +804,7 @@ directInnerProductForBasis = (F, G, contextName, B0) -> (
 directInnerProductFromMetadata = (F, G, contextName) -> (
     R0 := ring F;
     result := null;
-    scan(R0.Bases, B0 -> if result === null then result = directInnerProductForBasis(F, G, contextName, B0));
+    scan(R0#"Bases", B0 -> if result === null then result = directInnerProductForBasis(F, G, contextName, B0));
     result
     )
 
@@ -787,13 +827,20 @@ prepareInnerProductArguments = (f, g, substitutions, promoteSpecializedRing) -> 
     {F, G, innerProductContextName(Rsource, Rtarget, substitutions)}
     )
 
-hallInnerProduct = method(Options => {ParameterSpecialization => {}, PromoteSpecializedRing => true})
-hallInnerProduct(SymmetricRingElement, SymmetricRingElement) := opts -> (f, g) -> (
+hallInnerProductOptionDefaults = hashTable {"ParameterSpecialization" => {}, "PromoteSpecializedRing" => false}
+
+hallInnerProduct = args -> (
+    L := argumentList args;
+    if #L < 2 then error "expected two symmetric functions";
+    f := L#0;
+    g := L#1;
+    if not instance(f, SymmetricRingElement) or not instance(g, SymmetricRingElement) then error "expected two symmetric functions";
+    opts := parseStringOptions(hallInnerProductOptionDefaults, drop(L, 2), "hallInnerProduct");
     if ring f =!= ring g then error "expected elements in the same symmetric ring";
-    substitutions := opts.ParameterSpecialization;
+    substitutions := opts#"ParameterSpecialization";
     if not instance(substitutions, List) then error "expected a list for option ParameterSpecialization";
-    if class opts.PromoteSpecializedRing =!= Boolean then error "expected Boolean value for option PromoteSpecializedRing";
-    prepared := prepareInnerProductArguments(f, g, substitutions, opts.PromoteSpecializedRing);
+    if class opts#"PromoteSpecializedRing" =!= Boolean then error "expected Boolean value for option PromoteSpecializedRing";
+    prepared := prepareInnerProductArguments(f, g, substitutions, opts#"PromoteSpecializedRing");
     F := prepared#0;
     G := prepared#1;
     contextName := prepared#2;

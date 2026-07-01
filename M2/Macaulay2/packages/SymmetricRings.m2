@@ -20,7 +20,6 @@ export {
     "registerBasis",
     "basisData",
     "bases",
-    "symmetricEquals",
     "straighten",
     "toBasis",
     "plethysm",
@@ -31,41 +30,7 @@ export {
     "eJacobiTrudi",
     "weight",
     "partitionWeight",
-    "partitionLength",
-    "Bases",
-    "Parameters",
-    "HallLittlewoodParameter",
-    "MacdonaldParameters",
-    "ParameterSpecialization",
-    "DefaultSeriesVariables",
-    "AvailableWhen",
-    "DisplayName",
-    "DisplayOrder",
-    "CanBeSkew",
-    "IndexNormalizer",
-    "IndexValidator",
-    "Constructor",
-    "IsMultiplicativeIndex",
-    "MultiplicativeIndex",
-    "Straighten",
-    "ToPowerSums",
-    "FromPowerSums",
-    "TriangularData",
-    "Omega",
-    "Specialization",
-    "PromoteSpecializedRing",
-    "InnerProductData",
-    "PlethysmBehavior",
-    "Display",
-    "Documentation",
-    "ZeroIndexIsOne",
-    "ZeroOnNegative"
-    }
-
-exportMutable {
-    "builtinSymmetricBases",
-    "userDefinedSymmetricBases",
-    "availableSymmetricBases"
+    "partitionLength"
     }
 
 importFrom(Core, {

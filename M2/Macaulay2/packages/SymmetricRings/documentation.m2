@@ -37,12 +37,14 @@ doc ///
    omegaInvolution
    hallInnerProduct
    straighten
-   symmetricEquals
    weight
 
  Node
   Key
    SymmetricRing
+   (coefficientRing,SymmetricRing)
+   (net,SymmetricRing)
+   (toString,SymmetricRing)
   Headline
    type of a symmetric function ring
   Description
@@ -60,6 +62,12 @@ doc ///
  Node
   Key
    SymmetricRingElement
+   (coefficientRing,SymmetricRingElement)
+   (net,SymmetricRingElement)
+   (terms,SymmetricRingElement)
+   (toExternalString,SymmetricRingElement)
+   (toString,SymmetricRingElement)
+   (symbol ==,SymmetricRingElement,SymmetricRingElement)
   Headline
    type of a symmetric function
   Description
@@ -77,6 +85,9 @@ doc ///
  Node
   Key
    SymmetricBasis
+   (symbol _,SymmetricBasis,ZZ)
+   (symbol _,SymmetricBasis,Sequence)
+   (symbol _,SymmetricBasis,List)
   Headline
    metadata object for a symmetric function basis
   Description
@@ -95,12 +106,6 @@ doc ///
  Node
   Key
    symmetricRing
-   (symmetricRing,Ring)
-   Parameters
-   HallLittlewoodParameter
-   MacdonaldParameters
-   DefaultSeriesVariables
-   Bases
   Headline
    create a formal symmetric function ring
   Usage
@@ -130,7 +135,7 @@ doc ///
    Example
     A = QQ[t]
     R = symmetricRing A
-    R.HallLittlewoodParameter
+    R#"HallLittlewoodParameter"
     toBasis(q_1, p)
    Text
     A coefficient ring with variables named t and q records the Macdonald
@@ -139,13 +144,12 @@ doc ///
    Example
     K = frac(QQ[t,q])
     R = symmetricRing K
-    R.HallLittlewoodParameter
-    R.MacdonaldParameters
+    R#"HallLittlewoodParameter"
+    R#"MacdonaldParameters"
 
  Node
   Key
    registerBasis
-   (registerBasis,Thing)
   Headline
    register a user-defined formal basis
   Usage
@@ -158,7 +162,7 @@ doc ///
     new basis is treated as formal.
    Example
     R = symmetricRing QQ
-    DocA = registerBasis("DocA", Symbol => "DocA", DisplayOrder => 90)
+    DocA = registerBasis("DocA", "Symbol" => "DocA", "DisplayOrder" => 90)
     DocA_{3,1} + h_2
 
  Node
@@ -186,9 +190,8 @@ doc ///
   Key
    bases
    (bases,SymmetricRing)
-   symbol builtinSymmetricBases
-   symbol userDefinedSymmetricBases
-   symbol availableSymmetricBases
+   (bases,SymmetricRing,Option)
+   (bases,SymmetricRing,Boolean)
   Headline
    list available symmetric function bases
   Usage
@@ -206,82 +209,6 @@ doc ///
     (bases R)#"S"
     first bases(R, "verbose" => true)
     any(builtinSymmetricBases, B -> B#"Key" == "p")
-
- Node
-  Key
-   "Basis metadata options"
-   DisplayName
-   DisplayOrder
-   CanBeSkew
-   IndexNormalizer
-   IndexValidator
-   Constructor
-   IsMultiplicativeIndex
-   MultiplicativeIndex
-   Straighten
-   ToPowerSums
-   FromPowerSums
-   TriangularData
-   Omega
-   AvailableWhen
-   Specialization
-   InnerProductData
-   PlethysmBehavior
-   Display
-   Documentation
-   ZeroIndexIsOne
-   ZeroOnNegative
-  Headline
-   mathematical metadata for symmetric function bases
-  Description
-   Text
-    Basis metadata describes how a @TO SymmetricBasis@ behaves.  DisplayName and DisplayOrder
-    control printing.  CanBeSkew records whether atoms such as S_{lambda,mu}
-    are allowed.  MultiplicativeIndex records bases such as p, h, e, q, and b,
-    where an index lambda represents a product over the parts of lambda.
-   Text
-    AvailableWhen controls whether a basis is installed for a particular
-    symmetric ring.  The Hall-Littlewood bases q, b, Q, B, P, and R are only
-    available when the ring has a Hall-Littlewood parameter.
-   Text
-    Omega, InnerProductData, ToPowerSums, FromPowerSums, and TriangularData
-    record mathematical structures used by @TO toBasis@, @TO omegaInvolution@,
-    and @TO hallInnerProduct@.  Specialization records parameter values where
-    a basis degenerates to another basis; its maps are called with the target
-    symmetric ring and the atom index.  ZeroIndexIsOne and ZeroOnNegative
-    encode conventions such as h_0=1 and e_n=0 for negative n.
-   Example
-    R = symmetricRing QQ
-    H = basisData "h"
-    H#"MultiplicativeIndex"
-    H#"ZeroIndexIsOne"
-    H#"Omega"
-   Text
-    Schur functions allow skew shapes and are paired with the Somega basis by
-    the omega metadata.
-   Example
-    Sdata = basisData "S"
-    Sdata#"CanBeSkew"
-    Sdata#"Omega"
-
- Node
-  Key
-   symmetricEquals
-   (symmetricEquals,SymmetricRingElement,SymmetricRingElement)
-  Headline
-   test equality of symmetric functions
-  Usage
-   symmetricEquals(f,g)
-  Description
-   Text
-    This tests equality in the current formal representation.  When comparing
-    expressions that are mathematically equal only after a change of basis or
-    straightening, first apply the relevant conversion, such as @TO toBasis@ or
-    @TO straighten@.
-   Example
-    R = symmetricRing QQ
-    symmetricEquals(h_2 + h_1, h_1 + h_2)
-    symmetricEquals(toBasis(S_{1,1}, h), h_{1,1} - h_2)
 
  Node
   Key
@@ -324,14 +251,12 @@ doc ///
  Node
   Key
    specializeParameters
-   (specializeParameters,SymmetricRingElement,List)
-   "specializeParameters(...,PromoteSpecializedRing=>...)"
-   PromoteSpecializedRing
+   "specializeParameters(...,\"PromoteSpecializedRing\"=>...)"
   Headline
    specialize coefficient parameters and basis metadata
   Usage
    specializeParameters(f,{t=>0})
-   specializeParameters(f,{t=>0},PromoteSpecializedRing=>false)
+   specializeParameters(f,{t=>0},"PromoteSpecializedRing"=>true)
   Description
    Text
     The function specializeParameters applies a parameter substitution to the
@@ -340,14 +265,17 @@ doc ///
     specialize to Schur functions, B and R specialize to Somega functions, q
     specializes to h, and b specializes to e.
    Text
-    By default the result lies in a new symmetric ring over the specialized
-    coefficient ring.  Set PromoteSpecializedRing to false to keep the result
-    in the original symmetric ring while still applying the coefficient
-    substitution and basis specialization rules.
+    By default the result stays in the original symmetric ring.  Coefficients
+    are substituted and promoted back to the original coefficient ring, and
+    basis specialization rules are still applied.  Set "PromoteSpecializedRing"
+    to true to move the result to a new symmetric ring over the specialized
+    coefficient ring.
    Example
     A = frac(QQ[t])
     R0 = symmetricRing A
     specializeParameters((1-A_0)*Q_2 + A_0*h_1, {A_0 => 0})
+    coefficientRing ring oo
+    specializeParameters((1-A_0)*Q_2 + A_0*h_1, {A_0 => 0}, "PromoteSpecializedRing" => true)
     coefficientRing ring oo
    Text
     Specialization metadata is a list of hash tables.  Each rule gives a
@@ -355,9 +283,9 @@ doc ///
     target symmetric ring and the index of the atom being specialized, so a
     user-defined basis can return an element in the correct ring.
    Example
-    TargetDoc = registerBasis("TargetDoc", Symbol => "TargetDoc", Specialization => {
+    TargetDoc = registerBasis("TargetDoc", "Symbol" => "TargetDoc", "Specialization" => {
         hashTable {
-            "Parameter" => HallLittlewoodParameter,
+            "Parameter" => "HallLittlewoodParameter",
             "Value" => 0,
             "Map" => (Rtarget, idx) -> (basis(Rtarget, "h"))_idx
             }
@@ -368,6 +296,7 @@ doc ///
   Key
    plethysm
    (plethysm,SymmetricRingElement,SymmetricRingElement)
+   (symbol @,SymmetricRingElement,SymmetricRingElement)
   Headline
    compute plethysm of symmetric functions
   Usage
@@ -433,7 +362,6 @@ doc ///
  Node
   Key
    omegaInvolution
-   (omegaInvolution,SymmetricRingElement)
   Headline
    apply the omega involution
   Usage
@@ -464,15 +392,13 @@ doc ///
  Node
   Key
    hallInnerProduct
-   (hallInnerProduct,SymmetricRingElement,SymmetricRingElement)
-   "hallInnerProduct(...,ParameterSpecialization=>...)"
-   "hallInnerProduct(...,PromoteSpecializedRing=>...)"
-   ParameterSpecialization
+   "hallInnerProduct(...,\"ParameterSpecialization\"=>...)"
+   "hallInnerProduct(...,\"PromoteSpecializedRing\"=>...)"
   Headline
    compute the Hall inner product
   Usage
    hallInnerProduct(f,g)
-   hallInnerProduct(f,g,ParameterSpecialization=>{t=>0})
+   hallInnerProduct(f,g,"ParameterSpecialization"=>{t=>0})
   Description
    Text
     The @TO hallInnerProduct@ is computed using basis metadata when possible,
@@ -486,19 +412,19 @@ doc ///
     hallInnerProduct(q_2,m_2)
     hallInnerProduct(Q_2,P_2)
    Text
-    Use ParameterSpecialization to compute in a specialized parameter context.
+    Use "ParameterSpecialization" to compute in a specialized parameter context.
     For example, setting the Hall-Littlewood parameter to zero specializes
     Q and P to Schur functions and uses the ordinary inner product.  By
-    default this also promotes to the specialized coefficient ring; set
-    PromoteSpecializedRing to false to keep the scalar in the original
+    default the scalar remains in the original coefficient ring.  Set
+    "PromoteSpecializedRing" to true to return the scalar in the specialized
     coefficient ring.
    Example
     A = frac(QQ[t])
     R = symmetricRing A
     F = Q_2
     G = P_2
-    hallInnerProduct(F,G,ParameterSpecialization=>{A_0=>0})
-    hallInnerProduct(F,G,ParameterSpecialization=>{A_0=>0},PromoteSpecializedRing=>false)
+    hallInnerProduct(F,G,"ParameterSpecialization"=>{A_0=>0})
+    hallInnerProduct(F,G,"ParameterSpecialization"=>{A_0=>0},"PromoteSpecializedRing"=>true)
    Text
     The power-sum formula involves denominators depending on the
     Hall-Littlewood parameter, so a fraction field is often the natural
@@ -565,10 +491,10 @@ doc ///
 
  Node
   Key
-   "symmetricRing(...,Parameters=>...)"
-   "symmetricRing(...,HallLittlewoodParameter=>...)"
-   "symmetricRing(...,MacdonaldParameters=>...)"
-   "symmetricRing(...,DefaultSeriesVariables=>...)"
+   "symmetricRing(...,\"Parameters\"=>...)"
+   "symmetricRing(...,\"HallLittlewoodParameter\"=>...)"
+   "symmetricRing(...,\"MacdonaldParameters\"=>...)"
+   "symmetricRing(...,\"DefaultSeriesVariables\"=>...)"
   Headline
    options for constructing symmetric function rings
   Description
@@ -580,39 +506,19 @@ doc ///
     reserved for additional families of symmetric functions.
    Example
     A = QQ[t]
-    R = symmetricRing(A, HallLittlewoodParameter => A_0)
-    R.HallLittlewoodParameter
+    R = symmetricRing(A, "HallLittlewoodParameter" => A_0)
+    R#"HallLittlewoodParameter"
    Text
     The Macdonald parameter pair may be recorded explicitly when the coefficient
     ring has two distinguished parameters.
    Example
     K = QQ[t,q]
-    R = symmetricRing(K, MacdonaldParameters => {K_0,K_1})
-    R.MacdonaldParameters
+    R = symmetricRing(K, "MacdonaldParameters" => {K_0,K_1})
+    R#"MacdonaldParameters"
 
  Node
   Key
-   "registerBasis(...,DisplayName=>...)"
-   "registerBasis(...,DisplayOrder=>...)"
-   "registerBasis(...,CanBeSkew=>...)"
-   "registerBasis(...,IndexNormalizer=>...)"
-   "registerBasis(...,IndexValidator=>...)"
-   "registerBasis(...,Constructor=>...)"
-   "registerBasis(...,IsMultiplicativeIndex=>...)"
-   "registerBasis(...,MultiplicativeIndex=>...)"
-   "registerBasis(...,Straighten=>...)"
-   "registerBasis(...,ToPowerSums=>...)"
-   "registerBasis(...,FromPowerSums=>...)"
-   "registerBasis(...,TriangularData=>...)"
-   "registerBasis(...,Omega=>...)"
-   "registerBasis(...,AvailableWhen=>...)"
-   "registerBasis(...,Specialization=>...)"
-   "registerBasis(...,InnerProductData=>...)"
-   "registerBasis(...,PlethysmBehavior=>...)"
-   "registerBasis(...,Display=>...)"
-   "registerBasis(...,Documentation=>...)"
-   "registerBasis(...,ZeroIndexIsOne=>...)"
-   "registerBasis(...,ZeroOnNegative=>...)"
+   "registerBasis options"
   Headline
    options for registering symmetric function bases
   Description
@@ -626,34 +532,39 @@ doc ///
     conversion, specialization, availability, and Hall inner product pairings.
    Example
     R = symmetricRing QQ
-    DocB = registerBasis("DocB", Symbol => "DocB", DisplayName => "documented basis", DisplayOrder => 95)
+    DocB = registerBasis("DocB", "Symbol" => "DocB", "DisplayName" => "documented basis", "DisplayOrder" => 95)
     (basisData "DocB")#"DisplayName"
    Text
     Multiplicative bases treat a partition index as a product over its parts.
    Example
-    DocC = registerBasis("DocC", Symbol => "DocC", MultiplicativeIndex => true, ZeroIndexIsOne => true)
+    DocC = registerBasis("DocC", "Symbol" => "DocC", "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true)
     DocC_{2,1}
    Text
-    AvailableWhen may be "Always" or "HallLittlewood".  InnerProductData is a
+    "AvailableWhen" may be "Always" or "HallLittlewood".  "InnerProductData" is a
     hash table keyed by context names such as "Ordinary" and "HallLittlewood".
     Each context entry gives a DualBasis and a Pairing callback
     (Rtarget,idx)->c, meaning that the basis indexed by idx pairs diagonally
     with the dual basis indexed by idx with coefficient c.
    Example
-    LeftDoc = registerBasis("LeftDoc", Symbol => "LeftDoc", InnerProductData => hashTable {
+    LeftDoc = registerBasis("LeftDoc", "Symbol" => "LeftDoc", "InnerProductData" => hashTable {
         "Ordinary" => hashTable {
             "DualBasis" => "RightDoc",
             "Pairing" => (Rtarget, idx) -> promote(2^(sum idx), coefficientRing Rtarget)
             }
         })
-    RightDoc = registerBasis("RightDoc", Symbol => "RightDoc")
+    RightDoc = registerBasis("RightDoc", "Symbol" => "RightDoc")
     R = symmetricRing QQ
     hallInnerProduct(LeftDoc_2, RightDoc_2)
 
  Node
   Key
-   "basis(String)"
-   "basis(Symbol)"
+   basis
+   (basis,String)
+   (basis,Symbol)
+   (basis,SymmetricBasis)
+   (basis,SymmetricRing,String)
+   (basis,SymmetricRing,Symbol)
+   (basis,SymmetricRing,SymmetricBasis)
   Headline
    retrieve a basis by key
   Description
