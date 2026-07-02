@@ -66,6 +66,7 @@ doc ///
    (coefficientRing,SymmetricRingElement)
    (net,SymmetricRingElement)
    (terms,SymmetricRingElement)
+   (rawTerms,SymmetricRingElement)
    (toExternalString,SymmetricRingElement)
    (toString,SymmetricRingElement)
    (symbol ==,SymmetricRingElement,SymmetricRingElement)
@@ -82,6 +83,11 @@ doc ///
     f = S_{2,1} + h_2*p_1
     instance(f, SymmetricRingElement)
     ring f
+    terms(S_{2,1}*e_2 - 3*p_5)
+   Text
+    The function @TO terms@ returns a list of actual symmetric function terms.
+    The lower-level function @TO rawTerms@ returns the internal atom metadata
+    used by package internals.
 
  Node
   Key
@@ -278,10 +284,12 @@ doc ///
    toFF g
   Description
    Text
-    These functions are wrappers around @TO toBasis@.  They convert a symmetric
-    function to the Schur, complete homogeneous, elementary, power-sum,
-    monomial, and forgotten bases, respectively.  The function toP means
-    conversion to the power-sum basis p, not the Hall-Littlewood P basis.
+    These functions convert a symmetric function to the Schur, complete
+    homogeneous, elementary, power-sum, monomial, and forgotten bases,
+    respectively.  The function toS uses a recursive complete-homogeneous to
+    Schur transition modeled on the conversion strategy in SchurRings.  The
+    function toP means conversion to the power-sum basis p, not the
+    Hall-Littlewood P basis.
    Example
     R = symmetricRing QQ
     toP h_2

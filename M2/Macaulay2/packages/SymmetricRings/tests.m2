@@ -3,6 +3,8 @@ TEST ///
     f0 = S_{3,1,2}*h_5 + e_2
     assert(instance(f0, SymmetricRingElement))
     assert(f0 == h_5*S_{3,1,2} + e_2)
+    assert(sort apply(terms(S_{2,1}*e_2 - 3*p_5), toString) == sort apply({e_2*S_{2,1}, -3*p_5}, toString))
+    assert(instance((((rawTerms(S_{2,1}*e_2 - 3*p_5))#0)#1)#0, HashTable))
     assert(h_{2,1} == h_2*h_1)
     assert(h_0 == 1)
     assert(e_-1 == 0)
@@ -58,6 +60,7 @@ TEST ///
     assert(toBasis(S_{{2,1}, {1}}, "h") == h_{1,1})
     assert(toBasis(Somega_{{2,1}, {1}}, "e") == e_{1,1})
     assert(toBasis(h_{1,1} - h_2, S) == S_{1,1})
+    assert(toS(h_{1,1} - h_2) == S_{1,1})
     assert(toBasis(e_{1,1} - e_2, Somega) == Somega_{1,1})
     assert(toBasis(p_2, Somega) == Somega_{1,1} - Somega_2)
     assert(toBasis(e_2, Somega) == Somega_2)
@@ -193,6 +196,8 @@ TEST ///
     assert(toBasis(B_{{2}, {1}}, ff) == (1-E_0)*ff_1)
     assert(toBasis(P_{{2}, {1}}, p) == p_1)
     assert(toBasis(R_{{2}, {1}}, p) == p_1)
+    assert(Q_{{8,2}, {6}} == Q_2*Q_2)
+    assert(Q_{{8,2}, {6}} - Q_2*Q_2 == 0_R4)
 
     FipSpecial1 = Q_2
     GipSpecial1 = P_2

@@ -52,6 +52,14 @@ const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
                                             M2_string targetDisplaySymbol,
                                             int targetDisplayOrder,
                                             bool targetIsMultiplicative);
+const RingElement *rawSymmetricRingsToSchurViaHRecursive(const RingElement *f,
+                                                         int hBasisId,
+                                                         M2_string hDisplaySymbol,
+                                                         int hDisplayOrder,
+                                                         bool hIsMultiplicative,
+                                                         int schurBasisId,
+                                                         M2_string schurDisplaySymbol,
+                                                         int schurDisplayOrder);
 const RingElement *rawSymmetricRingsPlethysm(const RingElement *f,
                                              const RingElement *g,
                                              int powerSumBasisId,
@@ -80,6 +88,8 @@ int rawSymmetricRingsTermCount(const RingElement *f);
 const RingElement *rawSymmetricRingsTermCoefficient(const RingElement *f, int i);
 M2_arrayint rawSymmetricRingsTermMonomial(const RingElement *f, int i);
 M2_string rawSymmetricRingsElementToString(const RingElement *f);
+M2_string rawSymmetricRingsElementToStringLimited(const RingElement *f,
+                                                  int maxTerms);
 int rawSymmetricRingsElementWeight(const RingElement *f);
 
 #if defined(__cplusplus)

@@ -3370,14 +3370,18 @@ class SymmetricEngineRing : public Ring
     return join(factors, "*");
   }
 
-  std::string elementString(ring_elem f) const
+  std::string elementString(ring_elem f, int maxTerms = -1) const
   {
     const auto *poly = polyValue(f);
     if (poly->terms.empty()) return "0";
+    size_t displayCount = poly->terms.size();
+    if (maxTerms >= 0)
+      displayCount = std::min(displayCount, static_cast<size_t>(maxTerms));
     std::vector<std::string> pieces;
-    pieces.reserve(poly->terms.size());
-    for (const auto& term : poly->terms)
+    pieces.reserve(displayCount + 1);
+    for (size_t i = 0; i < displayCount; ++i)
       {
+        const auto& term = poly->terms[i];
         if (term.monomial.data.empty())
           {
             pieces.push_back(coeffToString(coefficientRing, term.coeff));
@@ -3396,6 +3400,8 @@ class SymmetricEngineRing : public Ring
                              ")*" + displayMonomial(term.monomial));
           }
       }
+    if (displayCount < poly->terms.size())
+      pieces.push_back(std::to_string(poly->terms.size() - displayCount) + " terms");
     return join(pieces, " + ");
   }
 
@@ -3945,6 +3951,98 @@ class SymmetricEngineRing : public Ring
     return !error();
   }
 
+  CoeffMap multiplySchurCoeffMapByRow(const CoeffMap& source, int row) const
+  {
+    CoeffMap result;
+    if (row == 0) return source;
+    if (row < 0)
+      {
+        ERROR("expected nonnegative h index during recursive h-to-Schur conversion");
+        return result;
+      }
+    Partition rowPartition{row};
+    for (const auto& term : source)
+      for (const auto& product : lrProduct(term.first, rowPartition))
+        {
+          ring_elem coeff = product.coefficient == 1
+              ? term.second
+              : coefficientRing->mult(coefficientRing->from_long(product.coefficient),
+                                      term.second);
+          addCoeff(result, product.nu, coeff);
+        }
+    return result;
+  }
+
+  CoeffMap hToSchurRecTransCoeffs(const CoeffMap& hCoeffs) const
+  {
+    int lead = 0;
+    for (const auto& item : hCoeffs)
+      if (!item.first.empty())
+        lead = std::max(lead, item.first.front());
+
+    if (lead == 0)
+      {
+        CoeffMap result;
+        for (const auto& item : hCoeffs)
+          if (trimTrailingZerosPartition(item.first).empty())
+            addCoeff(result, Partition{}, item.second);
+          else
+            {
+              ERROR("invalid h-basis monomial during recursive h-to-Schur conversion");
+              return CoeffMap{};
+            }
+        return result;
+      }
+
+    std::map<int, CoeffMap, std::greater<int>> grouped;
+    int maxExponent = 0;
+    for (const auto& item : hCoeffs)
+      {
+        Partition rest;
+        int exponent = 0;
+        for (int part : item.first)
+          {
+            if (part == lead)
+              ++exponent;
+            else
+              rest.push_back(part);
+          }
+        maxExponent = std::max(maxExponent, exponent);
+        addCoeff(grouped[exponent], rest, item.second);
+      }
+
+    CoeffMap result;
+    for (int exponent = maxExponent; exponent >= 0; --exponent)
+      {
+        result = multiplySchurCoeffMapByRow(result, lead);
+        if (error()) return CoeffMap{};
+        auto found = grouped.find(exponent);
+        if (found != grouped.end())
+          result = addCoeffMaps(result, hToSchurRecTransCoeffs(found->second));
+        if (error()) return CoeffMap{};
+      }
+    return result;
+  }
+
+  ring_elem hToSchurViaRecTrans(ring_elem f,
+                                int hBasisId,
+                                const std::string& hDisplay,
+                                int hOrder,
+                                bool hIsMultiplicative,
+                                int schurId,
+                                const std::string& schurDisplay,
+                                int schurOrder) const
+  {
+    rememberBasis(hBasisId, hDisplay, hOrder, hIsMultiplicative);
+    rememberBasis(schurId, schurDisplay, schurOrder, false);
+
+    CoeffMap hCoeffs = coefficientsInBasis(f, hBasisId);
+    if (error()) return zero();
+    CoeffMap result = hToSchurRecTransCoeffs(hCoeffs);
+    if (error()) return zero();
+    return coeffMapToElement(result, schurId, schurDisplay, schurOrder, false);
+  }
+
   ring_elem jacobiTrudiBasis(int basisId,
                              const std::string& display,
                              int order,
@@ -4316,6 +4414,38 @@ const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
     }
 }
 
+const RingElement *rawSymmetricRingsToSchurViaHRecursive(
+    const RingElement *f,
+    int hBasisId,
+    M2_string hDisplaySymbol,
+    int hDisplayOrder,
+    bool hIsMultiplicative,
+    int schurBasisId,
+    M2_string schurDisplaySymbol,
+    int schurDisplayOrder)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      ring_elem result = S->hToSchurViaRecTrans(f->get_value(),
+                                                hBasisId,
+                                                fromM2String(hDisplaySymbol),
+                                                hDisplayOrder,
+                                                hIsMultiplicative,
+                                                schurBasisId,
+                                                fromM2String(schurDisplaySymbol),
+                                                schurDisplayOrder);
+      if (error()) return nullptr;
+      return RingElement::make_raw(S, result);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
 const RingElement *rawSymmetricRingsPlethysm(const RingElement *f,
                                              const RingElement *g,
                                              int powerSumBasisId,
@@ -4536,6 +4666,22 @@ M2_string rawSymmetricRingsElementToString(const RingElement *f)
       const auto *S = symmetricRingFromElement(f);
       if (error()) return nullptr;
       return toM2String(S->elementString(f->get_value()));
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+M2_string rawSymmetricRingsElementToStringLimited(const RingElement *f,
+                                                  int maxTerms)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      return toM2String(S->elementString(f->get_value(), maxTerms));
     }
   catch (const exc::engine_error& e)
     {

@@ -35,6 +35,7 @@ export {
     "hJacobiTrudi",
     "eJacobiTrudi",
     "weight",
+    "rawTerms",
     "partitionWeight",
     "partitionLength"
     }
@@ -48,6 +49,7 @@ importFrom(Core, {
     "rawSymmetricRingsProduct",
     "rawSymmetricRingsJacobiTrudi",
     "rawSymmetricRingsToBasis",
+    "rawSymmetricRingsToSchurViaHRecursive",
     "rawSymmetricRingsPlethysm",
     "rawSymmetricRingsPlethysmToBasis",
     "rawSymmetricRingsSingleBasisId",
@@ -58,6 +60,7 @@ importFrom(Core, {
     "rawSymmetricRingsTermCoefficient",
     "rawSymmetricRingsTermMonomial",
     "rawSymmetricRingsElementToString",
+    "rawSymmetricRingsElementToStringLimited",
     "rawSymmetricRingsElementWeight",
     "raw",
     "RawRing",

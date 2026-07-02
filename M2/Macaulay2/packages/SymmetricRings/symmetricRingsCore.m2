@@ -456,7 +456,7 @@ monomialAsElement = (R0, atoms) -> (
 normalizeSomegaElement = f -> (
     R0 := ring f;
     if not (R0#?"NormalizeSomega") or not R0#"NormalizeSomega" then return f;
-    T := terms f;
+    T := rawTerms f;
     somegaId := Somega#"BasisId";
     if not any(T, term -> any(term#1, atom -> atom#"BasisId" == somegaId)) then return f;
     A := coefficientRing R0;
@@ -466,6 +466,12 @@ normalizeSomegaElement = f -> (
             if c != 0_A then result = result + promote(c, R0) * monomialAsElement(R0, term#1)
             ));
     result
+    )
+
+terms SymmetricRingElement := f -> (
+    R0 := ring f;
+    A := coefficientRing R0;
+    apply(rawTerms f, term -> promote(promote(term#0, A), R0) * monomialAsElement(R0, term#1))
     )
 
 userSymmetricElement = (R0, rawValue) -> normalizeSomegaElement(new R0 from rawValue)
@@ -536,8 +542,10 @@ makeSkewElement = (B, lambda, mu) -> (
     userSymmetricElement(R0, rawSymmetricRingsBasisElement(raw R0, B#"BasisId", B#"Symbol", B#"DisplayOrder", B#"MultiplicativeIndex", #shape#1, payload))
     )
 
+displayTermLimit = 100
+
 toString SymmetricRingElement := f -> rawSymmetricRingsElementToString raw f
-net SymmetricRingElement := f -> net toString f
+net SymmetricRingElement := f -> net rawSymmetricRingsElementToStringLimited(raw f, displayTermLimit)
 toExternalString SymmetricRingElement := toString
 
 decodeSymmetricMonomialData = data0 -> (
@@ -562,7 +570,8 @@ decodeSymmetricMonomialData = data0 -> (
     atoms
     )
 
-terms SymmetricRingElement := f -> (
+rawTerms = method()
+rawTerms SymmetricRingElement := f -> (
     A := coefficientRing ring f;
     n := rawSymmetricRingsTermCount raw f;
     if n == 0 then {} else apply(toList(0..n-1), i -> {
@@ -584,8 +593,18 @@ straighten SymmetricRingElement := f -> (
     userSymmetricElement(R0, rawSymmetricRingsStraighten raw f)
     )
 
+powerSumEqualityFallback = (f, g) -> (
+    R0 := ring f;
+    diffP := try toBasis(f - g, p) else null;
+    if diffP === null then false else raw diffP === raw zeroSymmetricElement R0
+    )
+
 SymmetricRingElement == SymmetricRingElement := Boolean => (f, g) -> (
-    if ring f =!= ring g then false else raw straighten f === raw straighten g
+    if ring f =!= ring g then false else (
+        sf := straighten f;
+        sg := straighten g;
+        raw sf === raw sg or powerSumEqualityFallback(sf, sg)
+        )
     )
 
 jacobiTrudiInBasis = (key, lambda, mu) -> (
@@ -615,6 +634,7 @@ toBasis(SymmetricRingElement, Thing) := (f, target) -> (
         if target.SymmetricBasis === null then error("basis ", toString target, " is not available for this symmetric ring");
         target.SymmetricBasis
         ) else basis(R0, target);
+    if B#"BasisId" == S#"BasisId" and rawSymmetricRingsSingleBasisId raw f =!= S#"BasisId" then return toSViaHRecursive f;
     if B#"FromPowerSums" =!= null then return (B#"FromPowerSums")(f, B);
     userSymmetricElement(R0, rawSymmetricRingsToBasis(
         raw f,
@@ -624,6 +644,17 @@ toBasis(SymmetricRingElement, Thing) := (f, target) -> (
 
 toS = method()
 toS SymmetricRingElement := f -> toBasis(f, S)
+
+toSViaHRecursive = method()
+toSViaHRecursive SymmetricRingElement := f -> (
+    R0 := ring f;
+    rememberRingBasisData R0;
+    H := if rawSymmetricRingsSingleBasisId raw f == h#"BasisId" then f else toH f;
+    userSymmetricElement(R0, rawSymmetricRingsToSchurViaHRecursive(
+        raw H,
+        h#"BasisId", h#"Symbol", h#"DisplayOrder", h#"MultiplicativeIndex",
+        S#"BasisId", S#"Symbol", S#"DisplayOrder"))
+    )
 
 toH = method()
 toH SymmetricRingElement := f -> toBasis(f, h)
@@ -747,7 +778,7 @@ specializeSymmetricElementInRing = (F, substitutions, Rtarget) -> (
     R0 := ring F;
     Atarget := coefficientRing Rtarget;
     result := 0_Rtarget;
-    scan(terms F, term -> (
+    scan(rawTerms F, term -> (
             c := promote(substituteIfPossible(term#0, substitutions), Atarget);
             if c != 0_Atarget then result = result + promote(c, Rtarget) * specializeMonomial(R0, Rtarget, substitutions, term#1)
             ));
@@ -831,7 +862,7 @@ coefficientsInBasisIfPossibleM2 = (F, B) -> (
     result := new MutableHashTable;
     basisId := B#"BasisId";
     ok := true;
-    scan(terms F, term -> (
+    scan(rawTerms F, term -> (
             if not ok then () else (
                 atoms := term#1;
                 idx := null;

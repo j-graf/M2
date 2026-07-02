@@ -319,6 +319,51 @@ export rawSymmetricRingsToBasis(e:Expr):Expr := (
      else WrongNumArgs(9));
 setupfun("rawSymmetricRingsToBasis", rawSymmetricRingsToBasis);
 
+export rawSymmetricRingsToSchurViaHRecursive(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 8 then return WrongNumArgs(8);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is hBasisId:ZZcell do (
+		    if !isInt(hBasisId) then return WrongArgSmallInteger(2);
+		    when s.2
+		    is hDisplaySymbol:stringCell do (
+			 when s.3
+			 is hDisplayOrder:ZZcell do (
+			      if !isInt(hDisplayOrder) then return WrongArgSmallInteger(4);
+			      when s.4
+			      is hIsMultiplicative:Boolean do (
+				   when s.5
+				   is schurBasisId:ZZcell do (
+					if !isInt(schurBasisId) then return WrongArgSmallInteger(6);
+					when s.6
+					is schurDisplaySymbol:stringCell do (
+					     when s.7
+					     is schurDisplayOrder:ZZcell do (
+						  if !isInt(schurDisplayOrder) then return WrongArgSmallInteger(8);
+						  toExpr(Ccode(RawRingElementOrNull,
+						       "rawSymmetricRingsToSchurViaHRecursive(",
+						       f.p, ", ",
+						       toInt(hBasisId), ", ",
+						       hDisplaySymbol.v, ", ",
+						       toInt(hDisplayOrder), ", ",
+						       toBoolean(s.4), ", ",
+						       toInt(schurBasisId), ", ",
+						       schurDisplaySymbol.v, ", ",
+						       toInt(schurDisplayOrder), ")")))
+					     else WrongArgZZ(8))
+					else WrongArgString(7))
+				   else WrongArgZZ(6))
+			      else WrongArg(5, "a Boolean"))
+			 else WrongArgZZ(4))
+		    else WrongArgString(3))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(8));
+setupfun("rawSymmetricRingsToSchurViaHRecursive", rawSymmetricRingsToSchurViaHRecursive);
+
 export rawSymmetricRingsPlethysm(e:Expr):Expr := (
      when e
      is s:Sequence do (
@@ -504,6 +549,23 @@ export rawSymmetricRingsElementToString(e:Expr):Expr := (
      is f:RawRingElementCell do toExpr(Ccode(string, "rawSymmetricRingsElementToString(", f.p, ")"))
      else WrongArg(1, "a raw ring element"));
 setupfun("rawSymmetricRingsElementToString", rawSymmetricRingsElementToString);
+
+export rawSymmetricRingsElementToStringLimited(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 2 then return WrongNumArgs(2);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is maxTerms:ZZcell do (
+		    if !isInt(maxTerms) then return WrongArgSmallInteger(2);
+		    toExpr(Ccode(string,
+			 "rawSymmetricRingsElementToStringLimited(",
+			 f.p, ", ", toInt(maxTerms), ")")))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(2));
+setupfun("rawSymmetricRingsElementToStringLimited", rawSymmetricRingsElementToStringLimited);
 
 export rawSymmetricRingsElementWeight(e:Expr):Expr := (
      when e
