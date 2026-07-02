@@ -28,6 +28,158 @@ TEST ///
 
 TEST ///
     R0 = symmetricRing QQ
+    registerTransformedBasis("HScaledSolo", "SourceBasis" => "h", "Symbol" => "HScaledSolo",
+        "DisplayName" => "scaled h test basis without companions",
+        "Scale" => (R1, lambda) -> 2^(#lambda))
+    assert(HScaledSolo_{2,1} == HScaledSolo_2*HScaledSolo_1)
+    assert(toBasis(HScaledSolo_2, p) == 2*toBasis(h_2, p))
+    assert(toBasis(p_2, "HScaledSolo") == HScaledSolo_2 - (1/4)*HScaledSolo_{1,1})
+    assert(hallInnerProduct(HScaledSolo_{2,1}, m_{2,1}) == 4_QQ)
+
+    registerTransformedBasis("HScaled", "SourceBasis" => "h", "Symbol" => "HScaled",
+        "DisplayName" => "scaled h test basis",
+        "Scale" => (R1, lambda) -> 2^(#lambda),
+        "Companions" => hashTable {
+            "Omega" => "EScaled",
+            "InnerProductPartner" => "MScaled",
+            "OmegaInnerProductPartner" => "FFScaled"
+            })
+    assert(toBasis(HScaled_2, p) == 2*toBasis(h_2, p))
+    assert(toBasis(p_2, "HScaled") == HScaled_2 - (1/4)*HScaled_{1,1})
+    assert(toBasis(MScaled_2, p) == (1/2)*toBasis(m_2, p))
+    assert(toBasis(FFScaled_2, p) == (1/2)*toBasis(ff_2, p))
+    assert(omegaInvolution HScaled_2 == EScaled_2)
+    assert(omegaInvolution MScaled_2 == FFScaled_2)
+    assert(hallInnerProduct(HScaled_{2,1}, MScaled_{2,1}) == 1_QQ)
+    assert(hallInnerProduct(MScaled_{2,1}, HScaled_{2,1}) == 1_QQ)
+    assert(hallInnerProduct(EScaled_{2,1}, FFScaled_{2,1}) == 1_QQ)
+    assert(toBasis(toBasis(HScaled_{3,1} + 2*HScaled_2, p), "HScaled") == HScaled_{3,1} + 2*HScaled_2)
+///
+
+TEST ///
+    A = frac(QQ[t])
+    R0 = symmetricRing A
+    oldX = value getSymbol "X"
+    registerTransformedBasis("AlphaH", "SourceBasis" => "h", "Symbol" => "AlphaH",
+        "Alphabet" => "(1-t)*X")
+    assert(value getSymbol "X" === oldX)
+    assert(toBasis(AlphaH_2, p) == ((1-A_0^2)/2)*p_2 + (((1-A_0)^2)/2)*p_{1,1})
+    assert(toBasis(toBasis(AlphaH_2, p), "AlphaH") == AlphaH_2)
+
+    K = frac(QQ[t,q])
+    R1 = symmetricRing K
+    registerTransformedBasis("MacAlphaH", "SourceBasis" => "h", "Symbol" => "MacAlphaH",
+        "Alphabet" => "((1-t)/(1-q))*X")
+    assert(toBasis(MacAlphaH_1, p) == ((1-K_0)/(1-K_1))*p_1)
+    assert(toBasis(MacAlphaH_2, p) == ((1-K_0^2)/(2*(1-K_1^2)))*p_2 + (((1-K_0)^2)/(2*(1-K_1)^2))*p_{1,1})
+    assert(try (registerTransformedBasis("BadAlphabet", "SourceBasis" => "h", "Symbol" => "BadAlphabet", "Alphabet" => "X+1"); false) else true)
+///
+
+TEST ///
+    R0 = symmetricRing QQ
+    testFactorial = n -> if n <= 1 then 1 else product toList(1..n)
+    testMultiplicity = (lambda, part) -> #select(lambda, i -> i == part)
+    testZValue = lambda -> (
+        parts := unique lambda;
+        if #parts == 0 then 1 else product(parts, part -> part^(testMultiplicity(lambda, part)) * testFactorial(testMultiplicity(lambda, part)))
+        )
+    testMultiplicityDenominator = lambda -> product(unique lambda, part -> testFactorial testMultiplicity(lambda, part))
+    completeAtomToP = (R1, n) -> (
+        if n == 0 then return 1_R1;
+        Pbasis := basis(R1, "p");
+        sum apply(partitions n, lam0 -> (
+                lam := toList lam0;
+                promote(1 / testZValue lam, R1) * Pbasis_lam
+                ))
+        )
+    elementaryAtomToP = (R1, n) -> (
+        if n == 0 then return 1_R1;
+        Pbasis := basis(R1, "p");
+        sum apply(partitions n, lam0 -> (
+                lam := toList lam0;
+                promote((-1)^(n - #lam) / testZValue lam, R1) * Pbasis_lam
+                ))
+        )
+    powerSumAtomToComplete = (R1, B, n) -> (
+        if n == 0 then return 1_R1;
+        sum apply(partitions n, lam0 -> (
+                lam := toList lam0;
+                c := (-1)^(#lam - 1) * n * testFactorial(#lam - 1) / testMultiplicityDenominator lam;
+                promote(c, R1) * B_lam
+                ))
+        )
+    powerSumAtomToElementary = (R1, B, n) -> (
+        if n == 0 then return 1_R1;
+        sum apply(partitions n, lam0 -> (
+                lam := toList lam0;
+                c := (-1)^(n - #lam) * n * testFactorial(#lam - 1) / testMultiplicityDenominator lam;
+                promote(c, R1) * B_lam
+                ))
+        )
+    testBasisToP = (F, B, atomFormula) -> (
+        R1 := ring F;
+        A1 := coefficientRing R1;
+        sourceMeta := basis(R1, B);
+        result := 0_R1;
+        scan(rawTerms F, term -> (
+                c := promote(term#0, A1);
+                monomial := 1_R1;
+                scan(term#1, atom -> (
+                        if atom#"BasisId" =!= sourceMeta#"BasisId" then error "unexpected basis in relabelBasis";
+                        if #atom#"Inner" != 0 then error "unexpected skew atom in testBasisToP";
+                        monomial = monomial * product(atom#"Outer", n -> atomFormula(R1, n));
+                        ));
+                result = result + promote(c, R1) * monomial;
+                ));
+        result
+        )
+    testBasisFromP = (FP, B, atomFormula) -> (
+        R1 := ring FP;
+        A1 := coefficientRing R1;
+        Pbasis := basis(R1, "p");
+        targetMeta := basis(R1, B);
+        result := 0_R1;
+        scan(rawTerms FP, term -> (
+                c := promote(term#0, A1);
+                monomial := 1_R1;
+                scan(term#1, atom -> (
+                        if atom#"BasisId" =!= Pbasis#"BasisId" then error "expected a power-sum expression";
+                        if #atom#"Inner" != 0 then error "unexpected skew atom in testBasisFromP";
+                        monomial = monomial * product(atom#"Outer", n -> atomFormula(R1, targetMeta, n));
+                        ));
+                result = result + promote(c, R1) * monomial;
+                ));
+        result
+        )
+    hTestToP = (F, B) -> testBasisToP(F, B, completeAtomToP)
+    hTestFromP = (FP, B) -> testBasisFromP(FP, B, powerSumAtomToComplete)
+    eTestToP = (F, B) -> testBasisToP(F, B, elementaryAtomToP)
+    eTestFromP = (FP, B) -> testBasisFromP(FP, B, powerSumAtomToElementary)
+    testUnitPairing = (R1, idx) -> 1_(coefficientRing R1)
+    hTest = registerBasis("hTest", "Symbol" => "hTest", "DisplayName" => "test complete homogeneous basis",
+        "DisplayOrder" => 120, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true,
+        "Omega" => "eTest", "ToPowerSums" => hTestToP, "FromPowerSums" => hTestFromP,
+        "InnerProductData" => hashTable {"Ordinary" => hashTable {"DualBasis" => "m", "Pairing" => testUnitPairing, "EngineKind" => "Dual"}})
+    eTest = registerBasis("eTest", "Symbol" => "eTest", "DisplayName" => "test elementary basis",
+        "DisplayOrder" => 121, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true,
+        "Omega" => "hTest", "ToPowerSums" => eTestToP, "FromPowerSums" => eTestFromP,
+        "InnerProductData" => hashTable {"Ordinary" => hashTable {"DualBasis" => "f", "Pairing" => testUnitPairing, "EngineKind" => "Dual"}})
+    assert(toBasis(hTest_2, p) == (1/2)*p_2 + (1/2)*p_{1,1})
+    assert(toBasis(eTest_2, p) == (-1/2)*p_2 + (1/2)*p_{1,1})
+    assert(toBasis(p_2, hTest) == 2*hTest_2 - hTest_{1,1})
+    assert(toBasis(p_2, eTest) == eTest_{1,1} - 2*eTest_2)
+    assert(toBasis(hTest_2, h) == h_2)
+    assert(toBasis(eTest_2, e) == e_2)
+    assert(toBasis(h_2, hTest) == hTest_2)
+    assert(toBasis(e_2, eTest) == eTest_2)
+    assert(toBasis(hTest_2*eTest_1, p) == toBasis(h_2*e_1, p))
+    assert(toBasis(toBasis(hTest_{2,1} + eTest_2, p), hTest) == toBasis(h_{2,1} + e_2, hTest))
+    assert(omegaInvolution hTest_2 == eTest_2)
+    assert(hallInnerProduct(hTest_2, m_2) == 1_QQ)
+///
+
+TEST ///
+    R0 = symmetricRing QQ
     assert(sum {h_1, h_2, h_1} == 2*h_1 + h_2)
     assert(product {h_2, h_1, h_3} == h_1*h_2*h_3)
     assert((h_1 + h_2)*(h_1 + h_2) == h_1^2 + 2*h_1*h_2 + h_2^2)

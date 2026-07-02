@@ -18,6 +18,7 @@ export {
     "SymmetricBasis",
     "symmetricRing",
     "registerBasis",
+    "registerTransformedBasis",
     "basisData",
     "bases",
     "straighten",
