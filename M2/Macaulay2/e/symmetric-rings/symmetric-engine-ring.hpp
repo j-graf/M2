@@ -294,6 +294,21 @@ class SymmetricEngineRing : public Ring
                                 int targetDisplayOrder,
                                 bool targetIsMultiplicative,
                                 ring_elem& result) const;
+  bool atomToSchurFactors(const SymmetricMonomial& monomial,
+                            size_t pos,
+                            int targetBasisId,
+                            std::vector<Partition>& factors) const;
+  bool schurProductMonomialToSchur(const SymmetricMonomial& monomial,
+                                     int targetBasisId,
+                                     const std::string& targetDisplay,
+                                     int targetDisplayOrder,
+                                     ring_elem& result) const;
+  bool termToDirectTarget(const SymmetricTerm& term,
+                            int targetBasisId,
+                            const std::string& targetDisplay,
+                            int targetDisplayOrder,
+                            bool targetIsMultiplicative,
+                            ring_elem& result) const;
   bool elementToDirectTarget(ring_elem f,
                                int targetBasisId,
                                const std::string& targetDisplay,

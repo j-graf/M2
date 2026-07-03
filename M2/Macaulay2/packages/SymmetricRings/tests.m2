@@ -251,6 +251,8 @@ TEST ///
     assert(S_2 @ S_2 == toBasis(plethysm(S_2, S_2), S))
     assert(S_{1,1} @ S_2 == toBasis(plethysm(S_{1,1}, S_2), S))
     assert(S_{2,1} @ S_2 == toBasis(plethysm(S_{2,1}, S_2), S))
+    assert(S_{3,1} @ S_{2,1} == toS plethysm(S_{3,1}, S_{2,1}))
+    assert((S_2 + h_2) @ S_1 == plethysm(S_2 + h_2, S_1))
     assert(hallInnerProduct(plethysm(S_{2,1}, S_2), S_4) == hallInnerProduct(plethysm(S_{2,1}, S_2), toBasis(S_4, p)))
     cachedPlethysmResult = S_{4,3,1,1} @ S_2
     assert(S_{4,3,1,1} @ S_2 == cachedPlethysmResult)
@@ -411,6 +413,16 @@ TEST ///
     A = QQ[t]
     Rhl = symmetricRing A
     assert((bases Rhl)#?"HallLittlewoodOnlyTest")
+///
+
+TEST ///
+    R0 = symmetricRing QQ
+    assert(toBasis(S_{5,3,2}*S_{4,3,1}, S) == toBasis(toBasis(S_{5,3,2}*S_{4,3,1}, p), S))
+    assert(toBasis(S_{5,3,2}*S_{4,3,1}*h_1, S) == toBasis(toBasis(S_{5,3,2}*S_{4,3,1}*h_1, p), S))
+    assert(toBasis(S_{3,2}*h_{3,2}, S) == toBasis(toBasis(S_{3,2}*h_{3,2}, p), S))
+    assert(toBasis(S_{3,2}*e_{2,1}, S) == toBasis(toBasis(S_{3,2}*e_{2,1}, p), S))
+    assert(toS(S_{3,2}*S_{2,1} + e_4 + p_{3,1}) == toBasis(S_{3,2}*S_{2,1} + e_4 + p_{3,1}, S))
+    assert(toBasis(h_4*h_3*h_2 + S_{3,1}, h) == h_4*h_3*h_2 + toBasis(S_{3,1}, h))
 ///
 
 TEST ///

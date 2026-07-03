@@ -315,11 +315,11 @@ export rawSymmetricRingsToBasis(e:Expr):Expr := (
 			 else WrongArgZZ(4))
 		    else WrongArgString(3))
 	       else WrongArgZZ(2))
-	  else WrongArg(1, "a raw ring element"))
-     else WrongNumArgs(9));
-setupfun("rawSymmetricRingsToBasis", rawSymmetricRingsToBasis);
+		  else WrongArg(1, "a raw ring element"))
+	     else WrongNumArgs(9));
+	setupfun("rawSymmetricRingsToBasis", rawSymmetricRingsToBasis);
 
-export rawSymmetricRingsToSchurViaHRecursive(e:Expr):Expr := (
+	export rawSymmetricRingsToSchurViaHRecursive(e:Expr):Expr := (
      when e
      is s:Sequence do (
 	  if length(s) != 8 then return WrongNumArgs(8);

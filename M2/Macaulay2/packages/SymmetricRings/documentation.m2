@@ -665,9 +665,10 @@ doc ///
    Text
     These functions convert a symmetric function to the Schur, complete
     homogeneous, elementary, power-sum, monomial, and forgotten bases,
-    respectively.  The function toS uses a recursive complete-homogeneous to
-    Schur transition modeled on the conversion strategy in SchurRings.  The
-    function toP means conversion to the power-sum basis p, not the
+    respectively.  The function toS uses the same conversion path as toBasis
+    with target S, including direct Littlewood-Richardson multiplication for
+    Schur-compatible product terms.  The function toP means conversion to the
+    power-sum basis p, not the
     Hall-Littlewood P basis.
    Example
     A = QQ

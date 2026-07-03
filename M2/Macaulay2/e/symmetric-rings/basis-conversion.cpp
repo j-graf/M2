@@ -1404,7 +1404,7 @@ CoeffMap SymmetricEngineRing::hToSchurRecTransCoeffs(const CoeffMap& hCoeffs) co
         return result;
       }
 
-    std::map<int, CoeffMap, std::greater<int>> grouped;
+    GCMap<int, CoeffMap, std::greater<int>> grouped;
     int maxExponent = 0;
     for (const auto& item : hCoeffs)
       {
@@ -1463,6 +1463,116 @@ ring_elem SymmetricEngineRing::jacobiTrudiBasis(int basisId,
     return jacobiTrudi(outer, inner, basisId, display, order, isMultiplicative);
   }
 
+bool SymmetricEngineRing::atomToSchurFactors(
+    const SymmetricMonomial& monomial,
+    size_t pos,
+    int targetBasisId,
+    std::vector<Partition>& factors) const
+{
+    if (atomIsSkewAt(monomial, pos)) return false;
+
+    int basisId = atomBasisIdAt(monomial, pos);
+    Partition index = atomIndex(monomial, pos);
+    if (basisId == targetBasisId)
+      {
+        factors.push_back(index);
+        return true;
+      }
+
+    std::string display = displayForBasis(basisId);
+    if (display != "h" && display != "e") return false;
+
+    for (int part : index)
+      {
+        if (part < 0) return false;
+        if (part == 0) continue;
+        if (display == "h")
+          factors.push_back(Partition{part});
+        else
+          factors.push_back(Partition(static_cast<size_t>(part), 1));
+      }
+    return true;
+  }
+
+bool SymmetricEngineRing::schurProductMonomialToSchur(
+    const SymmetricMonomial& monomial,
+    int targetBasisId,
+    const std::string& targetDisplay,
+    int targetDisplayOrder,
+    ring_elem& result) const
+{
+    if (targetDisplay != "S") return false;
+    if (monomial.data.empty())
+      {
+        result = one();
+        return true;
+      }
+
+    CoeffMap current = oneCoeffMap();
+    size_t pos = 0;
+    while (pos < monomial.data.size())
+      {
+        std::vector<Partition> factors;
+        if (!atomToSchurFactors(monomial, pos, targetBasisId, factors))
+          return false;
+
+        for (const auto& index : factors)
+          {
+            CoeffMap next;
+            for (const auto& term : current)
+              for (const auto& product : lrProduct(term.first, index))
+                {
+                  ring_elem coeff = product.coefficient == 1
+                      ? term.second
+                      : coefficientRing->mult(coefficientRing->from_long(product.coefficient),
+                                              term.second);
+                  addCoeff(next, product.nu, coeff);
+                }
+            current = next;
+          }
+        pos += atomLengthAt(monomial, pos);
+      }
+
+    result = coeffMapToElement(current,
+                               targetBasisId,
+                               targetDisplay,
+                               targetDisplayOrder,
+                               false);
+    return true;
+  }
+
+bool SymmetricEngineRing::termToDirectTarget(const SymmetricTerm& term,
+                          int targetBasisId,
+                          const std::string& targetDisplay,
+                          int targetDisplayOrder,
+                          bool targetIsMultiplicative,
+                          ring_elem& result) const
+{
+    if (schurProductMonomialToSchur(term.monomial,
+                                    targetBasisId,
+                                    targetDisplay,
+                                    targetDisplayOrder,
+                                    result))
+      {
+        result = scaled(term.coeff, result);
+        return true;
+      }
+
+    if (targetDisplay != "h" && targetDisplay != "e" && !targetIsMultiplicative)
+      return false;
+
+    ring_elem converted;
+    if (!monomialToDirectTarget(term.monomial,
+                                targetBasisId,
+                                targetDisplay,
+                                targetDisplayOrder,
+                                targetIsMultiplicative,
+                                converted))
+      return false;
+    result = scaled(term.coeff, converted);
+    return true;
+  }
+
 ring_elem SymmetricEngineRing::toBasis(ring_elem f,
                     int pBasisId,
                     const std::string& pDisplay,
@@ -1475,6 +1585,87 @@ ring_elem SymmetricEngineRing::toBasis(ring_elem f,
 {
     rememberBasis(pBasisId, pDisplay, pOrder, pIsMultiplicative);
     rememberBasis(targetBasisId, targetDisplay, targetOrder, targetIsMultiplicative);
+
+    if (targetDisplay == "S")
+      {
+        int hId = requiredBasisIdForDisplay("h");
+        if (error()) return zero();
+        int hOrder = basisOrderForId(hId);
+        bool hIsMultiplicative = isMultiplicativeBasis(hId);
+
+        if (singleBasisId(f) == hId)
+          return hToSchurViaRecTrans(f,
+                                     hId,
+                                     "h",
+                                     hOrder,
+                                     hIsMultiplicative,
+                                     targetBasisId,
+                                     targetDisplay,
+                                     targetOrder);
+
+        const auto *poly = polyValue(f);
+        ring_elem result = zero();
+        VECTOR(SymmetricTerm) remainderTerms;
+        remainderTerms.reserve(poly->terms.size());
+        bool convertedAny = false;
+
+        for (const auto& term : poly->terms)
+          {
+            ring_elem converted;
+            if (termToDirectTarget(term,
+                                   targetBasisId,
+                                   targetDisplay,
+                                   targetOrder,
+                                   targetIsMultiplicative,
+                                   converted))
+              {
+                result = add(result, converted);
+                convertedAny = true;
+              }
+            else
+              {
+                if (error()) return zero();
+                remainderTerms.push_back(term);
+              }
+          }
+
+        if (remainderTerms.empty()) return result;
+        if (convertedAny)
+          {
+            ring_elem remainder = fromTermVector(remainderTerms, false);
+            ring_elem convertedRemainder = toBasis(remainder,
+                                                   pBasisId,
+                                                   pDisplay,
+                                                   pOrder,
+                                                   pIsMultiplicative,
+                                                   targetBasisId,
+                                                   targetDisplay,
+                                                   targetOrder,
+                                                   targetIsMultiplicative);
+            if (error()) return zero();
+            return add(result, convertedRemainder);
+          }
+
+        ring_elem inComplete = toBasis(f,
+                                       pBasisId,
+                                       pDisplay,
+                                       pOrder,
+                                       pIsMultiplicative,
+                                       hId,
+                                       "h",
+                                       hOrder,
+                                       hIsMultiplicative);
+        if (error()) return zero();
+        return hToSchurViaRecTrans(inComplete,
+                                   hId,
+                                   "h",
+                                   hOrder,
+                                   hIsMultiplicative,
+                                   targetBasisId,
+                                   targetDisplay,
+                                   targetOrder);
+      }
+
     ring_elem direct;
     if (elementToDirectTarget(f,
                               targetBasisId,
@@ -1484,13 +1675,57 @@ ring_elem SymmetricEngineRing::toBasis(ring_elem f,
                               direct))
       return direct;
     if (error()) return zero();
-    ring_elem inPowerSums = elementToPowerSums(f);
+
+    const auto *poly = polyValue(f);
+    ring_elem result = zero();
+    VECTOR(SymmetricTerm) remainderTerms;
+    remainderTerms.reserve(poly->terms.size());
+    bool convertedAny = false;
+
+    for (const auto& term : poly->terms)
+      {
+        ring_elem converted;
+        if (termToDirectTarget(term,
+                               targetBasisId,
+                               targetDisplay,
+                               targetOrder,
+                               targetIsMultiplicative,
+                               converted))
+          {
+            result = add(result, converted);
+            convertedAny = true;
+          }
+        else
+          {
+            if (error()) return zero();
+            remainderTerms.push_back(term);
+          }
+      }
+
+    if (remainderTerms.empty()) return result;
+    if (!convertedAny)
+      {
+        ring_elem inPowerSums = elementToPowerSums(f);
+        if (error()) return zero();
+        return powerSumsToTarget(inPowerSums,
+                                 targetBasisId,
+                                 targetDisplay,
+                                 targetOrder,
+                                 targetIsMultiplicative);
+      }
+
+    ring_elem remainder = fromTermVector(remainderTerms, false);
+    ring_elem convertedRemainder = toBasis(remainder,
+                                           pBasisId,
+                                           pDisplay,
+                                           pOrder,
+                                           pIsMultiplicative,
+                                           targetBasisId,
+                                           targetDisplay,
+                                           targetOrder,
+                                           targetIsMultiplicative);
     if (error()) return zero();
-    return powerSumsToTarget(inPowerSums,
-                             targetBasisId,
-                             targetDisplay,
-                             targetOrder,
-                             targetIsMultiplicative);
+    return add(result, convertedRemainder);
   }
 
 } // namespace symmetric_rings

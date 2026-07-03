@@ -123,7 +123,6 @@ toBasis(SymmetricRingElement, Thing) := (f, target) -> (
         if target.SymmetricBasis === null then error("basis ", toString target, " is not available for this symmetric ring");
         target.SymmetricBasis
         ) else basis(R0, target);
-    if B#"BasisId" == S#"BasisId" and rawSymmetricRingsSingleBasisId raw f =!= S#"BasisId" then return toSViaHRecursive f;
     if needsM2PowerSumConversion f then (
         FP := elementToPowerSumsM2 f;
         if B#"BasisId" == p#"BasisId" then return FP;
@@ -355,18 +354,21 @@ plethysm(SymmetricRingElement, SymmetricRingElement) := (f, g) -> (
         p#"BasisId", p#"BasisSymbol", p#"DisplayOrder", p#"MultiplicativeIndex"))
     )
 
+-- Chooses the output basis for @.  Return null to leave the p-basis plethysm
+-- unchanged.
+chooseOutputBasisPlethysm = (f, g) -> (
+    if ring f =!= ring g then error "expected elements in the same symmetric ring";
+    R0 := ring f;
+    rememberRingBasisData R0;
+    basisId := rawSymmetricRingsSingleBasisId raw f;
+    if basisId <= 0 then null else basisWithId(R0, basisId)
+    )
+
 -- Installs the @ operator for plethysm followed by a basis return when possible.
 installMethod(symbol @, SymmetricRingElement, SymmetricRingElement, (f, g) -> (
-        basisId := rawSymmetricRingsSingleBasisId raw f;
-        if basisId <= 0 then plethysm(f, g) else (
-            R0 := ring f;
-            B := basisWithId(R0, basisId);
-            userSymmetricElement(R0, rawSymmetricRingsPlethysmToBasis(
-                raw f,
-                raw g,
-                p#"BasisId", p#"BasisSymbol", p#"DisplayOrder", p#"MultiplicativeIndex",
-                B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex"))
-            )
+        B := chooseOutputBasisPlethysm(f, g);
+        result := plethysm(f, g);
+        if B === null then result else toBasis(result, B)
         ))
 
 -- Defaults for the omega involution.

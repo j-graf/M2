@@ -414,15 +414,11 @@ ring_elem SymmetricEngineRing::schurCompletePlethysm(int n,
                                        powerSumOrder,
                                        powerSumIsMultiplicative);
         if (error()) return zero();
-        ring_elem pIAtInnerSchur = toBasis(pIAtInner,
-                                           powerSumBasisId0,
-                                           powerSumDisplay,
-                                           powerSumOrder,
-                                           powerSumIsMultiplicative,
-                                           schurId,
-                                           schurDisplay,
-                                           schurOrder,
-                                           false);
+        ring_elem pIAtInnerSchur = powerSumsToTarget(pIAtInner,
+                                                      schurId,
+                                                      schurDisplay,
+                                                      schurOrder,
+                                                      false);
         if (error()) return zero();
         ring_elem rest = schurCompletePlethysm(n - i,
                                                inner,
