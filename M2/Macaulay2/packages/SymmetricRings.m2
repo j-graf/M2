@@ -4,7 +4,7 @@ newPackage(
     Version => "0.1",
     Date => "June 30, 2026",
     Authors => {
-        {Name => "John Graf"}
+        {Name => "John Graf", Email => "jrgraf@udel.edu", HomePage => "https://j-graf.github.io/"}
         },
     Headline => "formal mixed-basis symmetric function rings",
     Keywords => {"Representation Theory"},
@@ -68,7 +68,9 @@ importFrom(Core, {
     "commonEngineRingInitializations"
     })
 
-load "SymmetricRings/symmetricRingsCore.m2"
+load "SymmetricRings/registeringBases.m2"
+load "SymmetricRings/symmetricRingsAndElements.m2"
+load "SymmetricRings/operations.m2"
 
 beginDocumentation()
 

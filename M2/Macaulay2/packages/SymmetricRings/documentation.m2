@@ -252,7 +252,7 @@ doc ///
    Example
     A = QQ
     R = symmetricRing A
-    registerTransformedBasis("AdvH", "SourceBasis" => "h", "Symbol" => "AdvH",
+    registerTransformedBasis("AdvH", "SourceBasis" => "h",
         "Scale" => (R, lambda) -> 2^(#lambda),
         "Companions" => hashTable {
             "Omega" => "AdvE",
@@ -269,7 +269,7 @@ doc ///
    Example
     A = frac(QQ[t])
     R = symmetricRing A
-    registerTransformedBasis("AdvQ", "SourceBasis" => "h", "Symbol" => "AdvQ",
+    registerTransformedBasis("AdvQ", "SourceBasis" => "h",
         "Alphabet" => "(1-t)*X")
     toBasis(AdvQ_2, p) == toBasis(q_2, p)
    Text
@@ -283,7 +283,7 @@ doc ///
    Example
     A = QQ
     R = symmetricRing A
-    AdvFormal = registerBasis("AdvFormal", "Symbol" => "AdvFormal", "DisplayOrder" => 99)
+    AdvFormal = registerBasis("AdvFormal", "DisplayOrder" => 99)
     AdvFormal_{3,1} + h_2
     basisData "AdvFormal"
    Text
@@ -292,7 +292,7 @@ doc ///
    Example
     (bases R)#"S"
     (basisData "S")#"CanBeSkew"
-    select(bases(R, "verbose" => true), B -> B#"Key" == "S")
+    select(bases(R, "verbose" => true), B -> B#"BasisSymbol" == "S")
   SeeAlso
    "SymmetricRings Guide"
    "symmetricRing(...,\"Parameters\"=>...)"
@@ -442,7 +442,7 @@ doc ///
   Headline
    register a user-defined basis
   Usage
-   registerBasis key
+   registerBasis basisSymbol
   Description
    Text
     The command registerBasis adds a new @TO SymmetricBasis@ to the list of
@@ -457,7 +457,7 @@ doc ///
    Example
     A = QQ
     R = symmetricRing A
-    DocA = registerBasis("DocA", "Symbol" => "DocA", "DisplayOrder" => 90)
+    DocA = registerBasis("DocA", "DisplayOrder" => 90)
     DocA_{3,1} + h_2
     basisData "DocA"
 
@@ -467,7 +467,7 @@ doc ///
   Headline
    register a basis transformed from an existing basis
   Usage
-   registerTransformedBasis key
+   registerTransformedBasis basisSymbol
   Description
    Text
     The command registerTransformedBasis is the preferred user-facing way to
@@ -492,12 +492,12 @@ doc ///
     from the source basis, registration throws an error.
    Text
     After registration, use symbols such as DocH_2 and DocM_2 to form
-    symmetric functions, and use basis names such as "DocH" when a method asks
+    symmetric functions, and use basis symbols such as "DocH" when a method asks
     for a target basis.
    Example
     A = QQ
     R = symmetricRing A
-    registerTransformedBasis("DocH", "SourceBasis" => "h", "Symbol" => "DocH",
+    registerTransformedBasis("DocH", "SourceBasis" => "h",
         "Scale" => (R, lambda) -> 2^(#lambda),
         "Companions" => hashTable {
             "Omega" => "DocE",
@@ -519,7 +519,7 @@ doc ///
    Example
     A = frac(QQ[t])
     R = symmetricRing A
-    registerTransformedBasis("DocAlphaH", "SourceBasis" => "h", "Symbol" => "DocAlphaH",
+    registerTransformedBasis("DocAlphaH", "SourceBasis" => "h",
         "Alphabet" => "(1-t)*X")
     toBasis(DocAlphaH_2, p)
     toBasis(toBasis(DocAlphaH_2, p), "DocAlphaH")
@@ -529,7 +529,7 @@ doc ///
    Example
     A = frac(QQ[t])
     R = symmetricRing A
-    registerTransformedBasis("DocQ", "SourceBasis" => "h", "Symbol" => "DocQ",
+    registerTransformedBasis("DocQ", "SourceBasis" => "h",
         "Alphabet" => "(1-t)*X",
         "Companions" => hashTable {
             "Omega" => "DocB",
@@ -544,7 +544,7 @@ doc ///
    Example
     A = frac(QQ[t,q])
     R = symmetricRing A
-    registerTransformedBasis("DocMacAlphaH", "SourceBasis" => "h", "Symbol" => "DocMacAlphaH",
+    registerTransformedBasis("DocMacAlphaH", "SourceBasis" => "h",
         "Alphabet" => "((1-t)/(1-q))*X")
     toBasis(DocMacAlphaH_1, p)
 
@@ -584,7 +584,7 @@ doc ///
    bases(R, "verbose" => true)
   Description
    Text
-    By default, bases R lists the available bases by displayed symbol and
+    By default, bases R lists the available bases by basis symbol and
     display name.  With the verbose option, it returns the full
     @TO SymmetricBasis@ objects.  The available bases consist of the built-in
     bases together with the user-defined bases.
@@ -592,8 +592,8 @@ doc ///
     A = QQ
     R = symmetricRing A
     (bases R)#"S"
-    select(bases(R, "verbose" => true), B -> B#"Key" == "S")
-    any(bases(R, "verbose" => true), B -> B#"Key" == "p")
+    select(bases(R, "verbose" => true), B -> B#"BasisSymbol" == "S")
+    any(bases(R, "verbose" => true), B -> B#"BasisSymbol" == "p")
 
  Node
   Key
@@ -721,7 +721,7 @@ doc ///
     gives a parameter, the specialized value to match, and a map from an index
     to the corresponding symmetric function in the target ring.
    Example
-    TargetDoc = registerBasis("TargetDoc", "Symbol" => "TargetDoc", "Specialization" => {
+    TargetDoc = registerBasis("TargetDoc", "Specialization" => {
         hashTable {
             "Parameter" => "HallLittlewoodParameter",
             "Value" => 0,
@@ -1025,22 +1025,24 @@ doc ///
    Text
     These options describe the mathematical behavior of a user-defined
     @TO SymmetricBasis@; they are supplied to @TO registerBasis@.
-    Display options control notation.  Index options control how indices are
-    normalized and validated.  MultiplicativeIndex means that an index lambda
-    denotes the product over the parts of lambda.  The remaining options give
-    known maps such as omega, power-sum conversion, triangular conversion,
-    specialization, availability, and Hall inner product pairings.
+    The first argument to @TO registerBasis@ is the basis symbol used in
+    notation and basis lookup.  DisplayName gives a prose description.  Index
+    options control how indices are normalized and validated.
+    MultiplicativeIndex means that an index lambda denotes the product over the
+    parts of lambda.  The remaining options give known maps such as omega,
+    power-sum conversion, triangular conversion, specialization, availability,
+    and Hall inner product pairings.
    Example
     A = QQ
     R = symmetricRing A
-    DocB = registerBasis("DocB", "Symbol" => "DocB", "DisplayName" => "documented basis", "DisplayOrder" => 95)
+    DocB = registerBasis("DocB", "DisplayName" => "documented basis", "DisplayOrder" => 95)
     (basisData "DocB")#"DisplayName"
    Text
     Multiplicative bases treat a partition index as a product over its parts.
    Example
     A = QQ
     R = symmetricRing A
-    DocC = registerBasis("DocC", "Symbol" => "DocC", "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true)
+    DocC = registerBasis("DocC", "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true)
     DocC_{2,1}
    Text
     "AvailableWhen" may be "Always" or "HallLittlewood".  Inner products are
@@ -1057,13 +1059,13 @@ doc ///
     the registered basis B.  When these are present, @TO toBasis@ uses them as
     the source and target changes of basis.
    Example
-    LeftDoc = registerBasis("LeftDoc", "Symbol" => "LeftDoc", "InnerProductData" => hashTable {
+    LeftDoc = registerBasis("LeftDoc", "InnerProductData" => hashTable {
         "Ordinary" => hashTable {
             "DualBasis" => "RightDoc",
             "Pairing" => (R, idx) -> promote(2^(sum idx), coefficientRing R)
             }
         })
-    RightDoc = registerBasis("RightDoc", "Symbol" => "RightDoc")
+    RightDoc = registerBasis("RightDoc")
     A = QQ
     R = symmetricRing A
     hallInnerProduct(LeftDoc_2, RightDoc_2)
@@ -1078,7 +1080,7 @@ doc ///
    (basis,SymmetricRing,Symbol)
    (basis,SymmetricRing,SymmetricBasis)
   Headline
-   retrieve a basis by key
+   retrieve a basis by basis symbol
   Description
    Text
     This returns the @TO SymmetricBasis@ corresponding to a named basis in the

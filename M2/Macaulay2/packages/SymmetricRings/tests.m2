@@ -8,7 +8,7 @@ TEST ///
     assert(h_{2,1} == h_2*h_1)
     assert(h_0 == 1)
     assert(e_-1 == 0)
-    assert((basisData "S")#"Key" == "S")
+    assert((basisData "S")#"BasisSymbol" == "S")
     assert((bases R0)#"S" == "Schur basis")
     assert(not ((bases R0)#?"Somega"))
     assert(not ((bases R0)#?"Q"))
@@ -19,16 +19,16 @@ TEST ///
 
 TEST ///
     R0 = symmetricRing QQ
-    A = registerBasis("A", "Symbol" => "A", "DisplayOrder" => 90)
+    A = registerBasis("A", "DisplayOrder" => 90)
     assert(instance(A, SymmetricBasis))
-    assert(any(bases(R0, "verbose" => true), B0 -> B0#"Key" == "A"))
+    assert(any(bases(R0, "verbose" => true), B0 -> B0#"BasisSymbol" == "A"))
     g = A_{3,1} + 2*h_2
     assert(g - A_{3,1} == 2*h_2)
 ///
 
 TEST ///
     R0 = symmetricRing QQ
-    registerTransformedBasis("HScaledSolo", "SourceBasis" => "h", "Symbol" => "HScaledSolo",
+    registerTransformedBasis("HScaledSolo", "SourceBasis" => "h",
         "DisplayName" => "scaled h test basis without companions",
         "Scale" => (R1, lambda) -> 2^(#lambda))
     assert(HScaledSolo_{2,1} == HScaledSolo_2*HScaledSolo_1)
@@ -36,7 +36,7 @@ TEST ///
     assert(toBasis(p_2, "HScaledSolo") == HScaledSolo_2 - (1/4)*HScaledSolo_{1,1})
     assert(hallInnerProduct(HScaledSolo_{2,1}, m_{2,1}) == 4_QQ)
 
-    registerTransformedBasis("HScaled", "SourceBasis" => "h", "Symbol" => "HScaled",
+    registerTransformedBasis("HScaled", "SourceBasis" => "h",
         "DisplayName" => "scaled h test basis",
         "Scale" => (R1, lambda) -> 2^(#lambda),
         "Companions" => hashTable {
@@ -60,7 +60,7 @@ TEST ///
     A = frac(QQ[t])
     R0 = symmetricRing A
     oldX = value getSymbol "X"
-    registerTransformedBasis("AlphaH", "SourceBasis" => "h", "Symbol" => "AlphaH",
+    registerTransformedBasis("AlphaH", "SourceBasis" => "h",
         "Alphabet" => "(1-t)*X")
     assert(value getSymbol "X" === oldX)
     assert(toBasis(AlphaH_2, p) == ((1-A_0^2)/2)*p_2 + (((1-A_0)^2)/2)*p_{1,1})
@@ -68,11 +68,11 @@ TEST ///
 
     K = frac(QQ[t,q])
     R1 = symmetricRing K
-    registerTransformedBasis("MacAlphaH", "SourceBasis" => "h", "Symbol" => "MacAlphaH",
+    registerTransformedBasis("MacAlphaH", "SourceBasis" => "h",
         "Alphabet" => "((1-t)/(1-q))*X")
     assert(toBasis(MacAlphaH_1, p) == ((1-K_0)/(1-K_1))*p_1)
     assert(toBasis(MacAlphaH_2, p) == ((1-K_0^2)/(2*(1-K_1^2)))*p_2 + (((1-K_0)^2)/(2*(1-K_1)^2))*p_{1,1})
-    assert(try (registerTransformedBasis("BadAlphabet", "SourceBasis" => "h", "Symbol" => "BadAlphabet", "Alphabet" => "X+1"); false) else true)
+    assert(try (registerTransformedBasis("BadAlphabet", "SourceBasis" => "h", "Alphabet" => "X+1"); false) else true)
 ///
 
 TEST ///
@@ -156,14 +156,14 @@ TEST ///
     eTestToP = (F, B) -> testBasisToP(F, B, elementaryAtomToP)
     eTestFromP = (FP, B) -> testBasisFromP(FP, B, powerSumAtomToElementary)
     testUnitPairing = (R1, idx) -> 1_(coefficientRing R1)
-    hTest = registerBasis("hTest", "Symbol" => "hTest", "DisplayName" => "test complete homogeneous basis",
+    hTest = registerBasis("hTest", "DisplayName" => "test complete homogeneous basis",
         "DisplayOrder" => 120, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true,
         "Omega" => "eTest", "ToPowerSums" => hTestToP, "FromPowerSums" => hTestFromP,
         "InnerProductData" => hashTable {"Ordinary" => hashTable {"DualBasis" => "m", "Pairing" => testUnitPairing, "EngineKind" => "Dual"}})
-    eTest = registerBasis("eTest", "Symbol" => "eTest", "DisplayName" => "test elementary basis",
+    eTest = registerBasis("eTest", "DisplayName" => "test elementary basis",
         "DisplayOrder" => 121, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true,
         "Omega" => "hTest", "ToPowerSums" => eTestToP, "FromPowerSums" => eTestFromP,
-        "InnerProductData" => hashTable {"Ordinary" => hashTable {"DualBasis" => "f", "Pairing" => testUnitPairing, "EngineKind" => "Dual"}})
+        "InnerProductData" => hashTable {"Ordinary" => hashTable {"DualBasis" => "ff", "Pairing" => testUnitPairing, "EngineKind" => "Dual"}})
     assert(toBasis(hTest_2, p) == (1/2)*p_2 + (1/2)*p_{1,1})
     assert(toBasis(eTest_2, p) == (-1/2)*p_2 + (1/2)*p_{1,1})
     assert(toBasis(p_2, hTest) == 2*hTest_2 - hTest_{1,1})
@@ -203,6 +203,8 @@ TEST ///
     assert(toE(p_2) == toBasis(p_2, e))
     assert(toM(p_2) == toBasis(p_2, m))
     assert(toFF(p_2) == toBasis(p_2, ff))
+    assert((basis "ff")#"BasisSymbol" == "ff")
+    assert(try (basis "f"; false) else true)
     assert(hJacobiTrudi {1,1} == h_{1,1} - h_2)
     assert(eJacobiTrudi {1,1} == e_{1,1} - e_2)
     assert(hJacobiTrudi({2,1}, {1}) == h_{1,1})
@@ -359,7 +361,7 @@ TEST ///
     assert(hallInnerProduct(FipSpecial2, GipSpecial2, "ParameterSpecialization" => {E_0 => 0}) == 1_E)
     assert(hallInnerProduct(FipSpecial1, GipSpecial1, "ParameterSpecialization" => {E_0 => 0}, "PromoteSpecializedRing" => true) == 1_QQ)
 
-    TargetAware = registerBasis("TargetAwareSpecialization", "Symbol" => "TargetAwareSpecialization", "Specialization" => {
+    TargetAware = registerBasis("TargetAwareSpecialization", "Specialization" => {
             hashTable {
                 "Parameter" => "HallLittlewoodParameter",
                 "Value" => 0,
@@ -389,19 +391,19 @@ TEST ///
 ///
 
 TEST ///
-    IPLeft = registerBasis("InnerProductLeftTest", "Symbol" => "InnerProductLeftTest", "InnerProductData" => hashTable {
+    IPLeft = registerBasis("InnerProductLeftTest", "InnerProductData" => hashTable {
             "Ordinary" => hashTable {
                 "DualBasis" => "InnerProductRightTest",
                 "Pairing" => (Rtarget, idx) -> promote(2^(sum idx), coefficientRing Rtarget)
                 }
             })
-    IPRight = registerBasis("InnerProductRightTest", "Symbol" => "InnerProductRightTest", "InnerProductData" => hashTable {
+    IPRight = registerBasis("InnerProductRightTest", "InnerProductData" => hashTable {
             "Ordinary" => hashTable {
                 "DualBasis" => "InnerProductLeftTest",
                 "Pairing" => (Rtarget, idx) -> promote(2^(sum idx), coefficientRing Rtarget)
                 }
             })
-    HLOnly = registerBasis("HallLittlewoodOnlyTest", "Symbol" => "HallLittlewoodOnlyTest", "AvailableWhen" => "HallLittlewood")
+    HLOnly = registerBasis("HallLittlewoodOnlyTest", "AvailableWhen" => "HallLittlewood")
     Rordinary = symmetricRing QQ
     assert(not ((bases Rordinary)#?"HallLittlewoodOnlyTest"))
     assert(try (HallLittlewoodOnlyTest_2; false) else true)

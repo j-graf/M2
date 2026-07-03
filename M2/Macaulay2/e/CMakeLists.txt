@@ -168,6 +168,15 @@ set(SRCLIST
   matrices/matrix-ncbasis
   M2FreeAlgebraQuotient
   M2FreeAlgebra
+  symmetric-rings/partitions
+  symmetric-rings/storage
+  symmetric-rings/symmetric-engine-ring
+  symmetric-rings/arithmetic
+  symmetric-rings/basis-conversion
+  symmetric-rings/inner-product
+  symmetric-rings/plethysm
+  symmetric-rings/straightening-omega
+  symmetric-rings/raw-interface
   NCAlgebras/Word
   NCAlgebras/NCReduction
   NCAlgebras/FreeAlgebraQuotient

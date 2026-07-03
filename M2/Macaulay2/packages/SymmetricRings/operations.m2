@@ -1,0 +1,507 @@
+-- ============================================================================
+-- Straightening And Equality
+-- ============================================================================
+
+-- Public method for straightening composition-indexed expressions.
+straighten = method()
+
+-- Applies engine straightening rules to a symmetric function.
+straighten SymmetricRingElement := f -> (
+    R0 := ring f;
+    rememberRingBasisData R0;
+    userSymmetricElement(R0, rawSymmetricRingsStraighten raw f)
+    )
+
+-- Falls back to power-sum comparison when raw straightened forms differ.
+powerSumEqualityFallback = (f, g) -> (
+    R0 := ring f;
+    diffP := try toBasis(f - g, p) else null;
+    if diffP === null then false else raw diffP === raw zeroSymmetricElement R0
+    )
+
+-- Equality straightens first and then compares raw or power-sum forms.
+SymmetricRingElement == SymmetricRingElement := Boolean => (f, g) -> (
+    if ring f =!= ring g then false else (
+        sf := straighten f;
+        sg := straighten g;
+        raw sf === raw sg or powerSumEqualityFallback(sf, sg)
+        )
+    )
+
+-- ============================================================================
+-- Jacobi-Trudi And Basis Conversion
+-- ============================================================================
+
+-- Common implementation for h- and e-Jacobi-Trudi determinants.
+jacobiTrudiInBasis = (basisSymbol, lambda, mu) -> (
+    if CurrentSymmetricRing === null then error "no current symmetric ring; call symmetricRing first";
+    R0 := CurrentSymmetricRing;
+    B := basis(R0, basisSymbol);
+    l := (B#"IndexNormalizer") lambda;
+    m := (B#"IndexNormalizer") mu;
+    if not (B#"IndexValidator") l then error("invalid outer index for basis ", basisSymbol);
+    if not (B#"IndexValidator") m then error("invalid inner index for basis ", basisSymbol);
+    userSymmetricElement(R0, rawSymmetricRingsJacobiTrudi(raw R0, B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex", l, m))
+    )
+
+-- Public method for Schur/skew Schur Jacobi-Trudi in the h basis.
+hJacobiTrudi = method()
+
+-- Computes ordinary h-Jacobi-Trudi.
+hJacobiTrudi List := lambda -> hJacobiTrudi(lambda, {})
+
+-- Computes skew h-Jacobi-Trudi.
+hJacobiTrudi(List, List) := (lambda, mu) -> jacobiTrudiInBasis("h", lambda, mu)
+
+-- Public method for omega-Schur Jacobi-Trudi in the e basis.
+eJacobiTrudi = method()
+
+-- Computes ordinary e-Jacobi-Trudi.
+eJacobiTrudi List := lambda -> eJacobiTrudi(lambda, {})
+
+-- Computes skew e-Jacobi-Trudi.
+eJacobiTrudi(List, List) := (lambda, mu) -> jacobiTrudiInBasis("e", lambda, mu)
+
+-- Asks the C++ engine to convert between built-in bases.
+engineToBasis = (F, B) -> (
+    R0 := ring F;
+    userSymmetricElement(R0, rawSymmetricRingsToBasis(
+        raw F,
+        p#"BasisId", p#"BasisSymbol", p#"DisplayOrder", p#"MultiplicativeIndex",
+        B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex"))
+    )
+
+-- Tests whether an atom needs an M2-level ToPowerSums hook.
+atomNeedsM2PowerSumConversion = (R0, atom) -> (
+    B := basisWithId(R0, atom#"BasisId");
+    B#"ToPowerSums" =!= null
+    )
+
+-- Tests whether any atom in an element needs M2-level conversion to p.
+needsM2PowerSumConversion = F -> (
+    R0 := ring F;
+    any(rawTerms F, term -> any(term#1, atom -> atomNeedsM2PowerSumConversion(R0, atom)))
+    )
+
+-- Converts one atom to power sums using metadata or the engine.
+atomToPowerSums = (R0, atom) -> (
+    B := basisWithId(R0, atom#"BasisId");
+    atomElement := atomAsElement(R0, atom);
+    if B#"ToPowerSums" =!= null then (B#"ToPowerSums")(atomElement, B)
+    else engineToBasis(atomElement, p)
+    )
+
+-- Converts an element to power sums by expanding atoms at the M2 level.
+elementToPowerSumsM2 = F -> (
+    R0 := ring F;
+    A := coefficientRing R0;
+    result := 0_R0;
+    scan(rawTerms F, term -> (
+            c := promote(term#0, A);
+            if c != 0_A then (
+                monomialP := product apply(term#1, atom -> atomToPowerSums(R0, atom));
+                result = result + promote(c, R0) * monomialP;
+                )
+            ));
+    result
+    )
+
+-- Chooses the M2 or engine route for conversion to power sums.
+toPowerSumsForConversion = F -> (
+    if needsM2PowerSumConversion F then elementToPowerSumsM2 F
+    else engineToBasis(F, p)
+    )
+
+-- Public method for basis conversion.
+toBasis = method()
+
+-- Converts a symmetric function to the requested basis.
+toBasis(SymmetricRingElement, Thing) := (f, target) -> (
+    R0 := ring f;
+    rememberRingBasisData R0;
+    B := if class target === SymmetricRingIndexedVariableTable then (
+        if target.SymmetricBasis === null then error("basis ", toString target, " is not available for this symmetric ring");
+        target.SymmetricBasis
+        ) else basis(R0, target);
+    if B#"BasisId" == S#"BasisId" and rawSymmetricRingsSingleBasisId raw f =!= S#"BasisId" then return toSViaHRecursive f;
+    if needsM2PowerSumConversion f then (
+        FP := elementToPowerSumsM2 f;
+        if B#"BasisId" == p#"BasisId" then return FP;
+        if B#"FromPowerSums" =!= null then return (B#"FromPowerSums")(FP, B);
+        return engineToBasis(FP, B);
+        );
+    if B#"FromPowerSums" =!= null then return (B#"FromPowerSums")(toPowerSumsForConversion f, B);
+    engineToBasis(f, B)
+    )
+
+-- Shortcut method for conversion to the Schur basis.
+toS = method()
+
+-- Converts a symmetric function to Schur functions.
+toS SymmetricRingElement := f -> toBasis(f, S)
+
+-- Internal recursive h-to-Schur conversion used by toS.
+toSViaHRecursive = method()
+
+-- Converts through h and then recursively to Schur.
+toSViaHRecursive SymmetricRingElement := f -> (
+    R0 := ring f;
+    rememberRingBasisData R0;
+    H := if rawSymmetricRingsSingleBasisId raw f == h#"BasisId" then f else toH f;
+    userSymmetricElement(R0, rawSymmetricRingsToSchurViaHRecursive(
+        raw H,
+        h#"BasisId", h#"BasisSymbol", h#"DisplayOrder", h#"MultiplicativeIndex",
+        S#"BasisId", S#"BasisSymbol", S#"DisplayOrder"))
+    )
+
+-- Shortcut method for conversion to the h basis.
+toH = method()
+
+-- Converts a symmetric function to complete homogeneous functions.
+toH SymmetricRingElement := f -> toBasis(f, h)
+
+-- Shortcut method for conversion to the e basis.
+toE = method()
+
+-- Converts a symmetric function to elementary functions.
+toE SymmetricRingElement := f -> toBasis(f, e)
+
+-- Shortcut method for conversion to the p basis.
+toP = method()
+
+-- Converts a symmetric function to power sums.
+toP SymmetricRingElement := f -> toBasis(f, p)
+
+-- Shortcut method for conversion to the m basis.
+toM = method()
+
+-- Converts a symmetric function to monomial functions.
+toM SymmetricRingElement := f -> toBasis(f, m)
+
+-- Shortcut method for conversion to the ff basis.
+toFF = method()
+
+-- Converts a symmetric function to forgotten functions.
+toFF SymmetricRingElement := g -> toBasis(g, ff)
+
+-- Finds global basis data by numeric engine id.
+basisDataWithId = basisId -> (
+    hits := select(availableSymmetricBases, B -> B#"BasisId" == basisId);
+    if #hits == 0 then error("unknown symmetric function basis id: ", toString basisId);
+    hits#0
+    )
+
+-- Looks up a ring-attached basis by numeric engine id.
+basisWithId = (R0, basisId) -> (
+    basis(R0, basisDataWithId basisId)
+    )
+
+-- ============================================================================
+-- Parameter Specialization
+-- ============================================================================
+
+-- Applies a coefficient substitution when possible.
+substituteIfPossible = (x, substitutions) -> try sub(x, substitutions) else x
+
+-- Computes a specialized value of a named parameter.
+specializedParameterValue = (R0, parameter, substitutions, A) -> (
+    parameterString := toString parameter;
+    rawValue := if parameterString == "HallLittlewoodParameter" then R0#"HallLittlewoodParameter"
+        else if parameterString == "MacdonaldParameters" then R0#"MacdonaldParameters"
+        else parameter;
+    if rawValue === null then null
+    else if instance(rawValue, List) then apply(rawValue, x -> promote(substituteIfPossible(x, substitutions), A))
+    else promote(substituteIfPossible(rawValue, substitutions), A)
+    )
+
+-- Compares specialized parameter values in a coefficient ring.
+specializationValuesEqual = (a, b, A) -> (
+    if a === null then false
+    else if instance(a, List) or instance(b, List) then (
+        if not instance(a, List) or not instance(b, List) or #a != #b then false
+        else if #a == 0 then true
+        else all(toList(0..#a-1), i -> a#i == promote(b#i, A))
+        )
+    else a == promote(b, A)
+    )
+
+-- Finds a specialization rule whose parameter value matches.
+matchingSpecializationRule = (B, sourceRing, Rtarget, substitutions) -> (
+    specs := B#"Specialization";
+    if specs === null then null
+    else (
+        A := coefficientRing Rtarget;
+        hits := select(specs, rule -> (
+                instance(rule, HashTable)
+                and rule#?"Parameter"
+                and rule#?"Value"
+                and rule#?"Map"
+                and specializationValuesEqual(
+                    specializedParameterValue(sourceRing, rule#"Parameter", substitutions, A),
+                    rule#"Value",
+                    A)
+                ));
+        if #hits == 0 then null else hits#0
+        )
+    )
+
+-- Converts decoded atom data into the index passed to specialization maps.
+atomIndexForSpecialization = atom -> (
+    outer := atom#"Outer";
+    inner := atom#"Inner";
+    if #inner == 0 then outer else {outer, inner}
+    )
+
+-- Rebuilds an atom in the target ring when no specialization rule applies.
+defaultSpecializedAtom = (Rtarget, atom) -> (
+    B := basisWithId(Rtarget, atom#"BasisId");
+    outer := atom#"Outer";
+    inner := atom#"Inner";
+    if #inner == 0 then B_outer else makeSkewElement(B, outer, inner)
+    )
+
+-- Applies basis-specific specialization to one atom.
+specializeAtom = (sourceRing, Rtarget, substitutions, atom) -> (
+    B := basisDataWithId atom#"BasisId";
+    rule := matchingSpecializationRule(B, sourceRing, Rtarget, substitutions);
+    if rule === null then defaultSpecializedAtom(Rtarget, atom)
+    else (
+        phi := rule#"Map";
+        phi(Rtarget, atomIndexForSpecialization atom)
+        )
+    )
+
+-- Specializes a product of basis atoms.
+specializeMonomial = (sourceRing, Rtarget, substitutions, atoms) -> (
+    result := 1_Rtarget;
+    scan(atoms, atom -> result = result * specializeAtom(sourceRing, Rtarget, substitutions, atom));
+    result
+    )
+
+-- Computes the Hall-Littlewood parameter after specialization.
+specializedHallLittlewoodParameter = (R0, substitutions, A) -> (
+    if R0#"HallLittlewoodParameter" === null then null
+    else (
+        t0 := promote(substituteIfPossible(R0#"HallLittlewoodParameter", substitutions), A);
+        if t0 == 0_A then null else t0
+        )
+    )
+
+-- Computes Macdonald parameters after specialization.
+specializedMacdonaldParameters = (R0, substitutions, A) -> (
+    if not instance(R0#"MacdonaldParameters", List) then {}
+    else apply(R0#"MacdonaldParameters", x -> promote(substituteIfPossible(x, substitutions), A))
+    )
+
+-- Chooses the target ring for a parameter specialization.
+specializationTargetRing = (R0, substitutions, promoteSpecializedRing) -> (
+    if not promoteSpecializedRing then R0
+    else (
+        A := ring substituteIfPossible(1_(coefficientRing R0), substitutions);
+        hl := specializedHallLittlewoodParameter(R0, substitutions, A);
+        mac := specializedMacdonaldParameters(R0, substitutions, A);
+        symmetricRing(A, "HallLittlewoodParameter" => hl, "MacdonaldParameters" => mac)
+        )
+    )
+
+-- Specializes coefficients and basis atoms into a chosen target ring.
+specializeSymmetricElementInRing = (F, substitutions, Rtarget) -> (
+    R0 := ring F;
+    Atarget := coefficientRing Rtarget;
+    result := 0_Rtarget;
+    scan(rawTerms F, term -> (
+            c := promote(substituteIfPossible(term#0, substitutions), Atarget);
+            if c != 0_Atarget then result = result + promote(c, Rtarget) * specializeMonomial(R0, Rtarget, substitutions, term#1)
+            ));
+    result
+    )
+
+-- Specializes a symmetric function and applies target-ring normalizations.
+specializeSymmetricElement = (F, substitutions, promoteSpecializedRing) -> (
+    normalizeSomegaElement specializeSymmetricElementInRing(F, substitutions, specializationTargetRing(ring F, substitutions, promoteSpecializedRing))
+    )
+
+-- Defaults for the public specializeParameters method.
+specializeParametersOptionDefaults = hashTable {"PromoteSpecializedRing" => false}
+
+-- Public wrapper for parameter specialization.
+specializeParameters = args -> (
+    L := argumentList args;
+    if #L < 2 then error "expected a symmetric function and a list of substitutions";
+    F := L#0;
+    substitutions := L#1;
+    if not instance(F, SymmetricRingElement) then error "expected a symmetric function";
+    if not instance(substitutions, List) then error "expected a list of substitutions";
+    opts := parseStringOptions(specializeParametersOptionDefaults, drop(L, 2), "specializeParameters");
+    if class opts#"PromoteSpecializedRing" =!= Boolean then error "expected Boolean value for option PromoteSpecializedRing";
+    specializeSymmetricElement(F, substitutions, opts#"PromoteSpecializedRing")
+    )
+
+-- ============================================================================
+-- Plethysm And Omega
+-- ============================================================================
+
+-- Public method for plethysm.
+plethysm = method()
+
+-- Computes plethysm and leaves the result in the power-sum basis.
+plethysm(SymmetricRingElement, SymmetricRingElement) := (f, g) -> (
+    if ring f =!= ring g then error "expected elements in the same symmetric ring";
+    R0 := ring f;
+    rememberRingBasisData R0;
+    userSymmetricElement(R0, rawSymmetricRingsPlethysm(
+        raw f,
+        raw g,
+        p#"BasisId", p#"BasisSymbol", p#"DisplayOrder", p#"MultiplicativeIndex"))
+    )
+
+-- Installs the @ operator for plethysm followed by a basis return when possible.
+installMethod(symbol @, SymmetricRingElement, SymmetricRingElement, (f, g) -> (
+        basisId := rawSymmetricRingsSingleBasisId raw f;
+        if basisId <= 0 then plethysm(f, g) else (
+            R0 := ring f;
+            B := basisWithId(R0, basisId);
+            userSymmetricElement(R0, rawSymmetricRingsPlethysmToBasis(
+                raw f,
+                raw g,
+                p#"BasisId", p#"BasisSymbol", p#"DisplayOrder", p#"MultiplicativeIndex",
+                B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex"))
+            )
+        ))
+
+-- Defaults for the omega involution.
+omegaInvolutionOptionDefaults = hashTable {"useSomega" => false}
+
+-- Public wrapper for the omega involution.
+omegaInvolution = args -> (
+    L := argumentList args;
+    if #L == 0 then error "expected a symmetric function";
+    f := L#0;
+    if not instance(f, SymmetricRingElement) then error "expected a symmetric function";
+    opts := parseStringOptions(omegaInvolutionOptionDefaults, drop(L, 1), "omegaInvolution");
+    R0 := ring f;
+    rememberRingBasisData R0;
+    useSomega := opts#"useSomega";
+    if class useSomega =!= Boolean then error "expected Boolean value for option \"useSomega\"";
+    userSymmetricElement(R0, rawSymmetricRingsOmega(raw f, omegaMapData R0, useSomega))
+    )
+
+-- ============================================================================
+-- Hall Inner Product
+-- ============================================================================
+
+-- Chooses ordinary or Hall-Littlewood inner product context.
+innerProductContextName = (sourceRing, Rtarget, substitutions) -> (
+    if sourceRing#"HallLittlewoodParameter" === null then "Ordinary"
+    else if #substitutions > 0 then (
+        A := coefficientRing Rtarget;
+        t0 := promote(substituteIfPossible(sourceRing#"HallLittlewoodParameter", substitutions), A);
+        if t0 == 0_A then "Ordinary" else "HallLittlewood"
+        )
+    else if Rtarget#"HallLittlewoodParameter" === null then "Ordinary"
+    else "HallLittlewood"
+    )
+
+-- Adds a coefficient to an accumulator hash table.
+addCoefficientToMutableHash = (H, idx, c, A) -> (
+    H#idx = (if H#?idx then H#idx else 0_A) + c;
+    )
+
+-- Extracts coefficients when an expression is already in one basis.
+coefficientsInBasisIfPossibleM2 = (F, B) -> (
+    A := coefficientRing ring F;
+    result := new MutableHashTable;
+    basisId := B#"BasisId";
+    ok := true;
+    scan(rawTerms F, term -> (
+            if not ok then () else (
+                atoms := term#1;
+                idx := null;
+                if #atoms == 0 then idx = {}
+                else if #atoms == 1 and (atoms#0)#"BasisId" == basisId then idx = atomIndexForSpecialization atoms#0
+                else ok = false;
+                if ok then addCoefficientToMutableHash(result, idx, term#0, A);
+                )
+            ));
+    if ok then result else null
+    )
+
+-- Computes a diagonal inner product directly for one basis pair.
+directInnerProductForBasis = (F, G, contextName, B0) -> (
+    R0 := ring F;
+    A := coefficientRing R0;
+    rule := innerProductRule(B0, contextName);
+    if rule === null or not rule#?"DualBasis" or not rule#?"Pairing" then null
+    else (
+        dual := try basis(R0, rule#"DualBasis") else null;
+        if dual === null then null
+        else (
+            left := coefficientsInBasisIfPossibleM2(F, basis(R0, B0));
+            if left === null then null
+            else (
+                right := coefficientsInBasisIfPossibleM2(G, dual);
+                if right === null then null
+                else (
+                    pairing := rule#"Pairing";
+                    value := 0_A;
+                    scan(keys left, idx -> if right#?idx then value = value + left#idx * right#idx * promote(pairing(R0, idx), A));
+                    value
+                    )
+                )
+            )
+        )
+    )
+
+-- Tries every known diagonal basis pairing for a direct inner product.
+directInnerProductFromMetadata = (F, G, contextName) -> (
+    R0 := ring F;
+    result := null;
+    scan(R0#"Bases", B0 -> if result === null then result = directInnerProductForBasis(F, G, contextName, B0));
+    result
+    )
+
+-- Computes the Hall inner product by converting both arguments to power sums.
+powerSumFallbackInnerProduct = (F, G, contextName) -> (
+    R0 := ring F;
+    P := basis(R0, "p");
+    FP := toBasis(F, P);
+    GP := toBasis(G, P);
+    result := directInnerProductFromMetadata(FP, GP, contextName);
+    if result === null then error "could not compute power-sum fallback for the inner product";
+    result
+    )
+
+-- Specializes inner-product arguments and determines the pairing context.
+prepareInnerProductArguments = (f, g, substitutions, promoteSpecializedRing) -> (
+    if ring f =!= ring g then error "expected elements in the same symmetric ring";
+    sourceRing := ring f;
+    Rtarget := if #substitutions == 0 then sourceRing else specializationTargetRing(sourceRing, substitutions, promoteSpecializedRing);
+    F := if #substitutions == 0 then f else specializeSymmetricElementInRing(f, substitutions, Rtarget);
+    G := if #substitutions == 0 then g else specializeSymmetricElementInRing(g, substitutions, Rtarget);
+    {F, G, innerProductContextName(sourceRing, Rtarget, substitutions)}
+    )
+
+-- Defaults for the public Hall inner product method.
+hallInnerProductOptionDefaults = hashTable {"ParameterSpecialization" => {}, "PromoteSpecializedRing" => false}
+
+-- Public wrapper for the Hall inner product.
+hallInnerProduct = args -> (
+    L := argumentList args;
+    if #L < 2 then error "expected two symmetric functions";
+    f := L#0;
+    g := L#1;
+    if not instance(f, SymmetricRingElement) or not instance(g, SymmetricRingElement) then error "expected two symmetric functions";
+    opts := parseStringOptions(hallInnerProductOptionDefaults, drop(L, 2), "hallInnerProduct");
+    if ring f =!= ring g then error "expected elements in the same symmetric ring";
+    substitutions := opts#"ParameterSpecialization";
+    if not instance(substitutions, List) then error "expected a list for option ParameterSpecialization";
+    if class opts#"PromoteSpecializedRing" =!= Boolean then error "expected Boolean value for option PromoteSpecializedRing";
+    prepared := prepareInnerProductArguments(f, g, substitutions, opts#"PromoteSpecializedRing");
+    F := prepared#0;
+    G := prepared#1;
+    contextName := prepared#2;
+    R0 := ring F;
+    rememberRingBasisData R0;
+    result := directInnerProductFromMetadata(F, G, contextName);
+    if result =!= null then result else powerSumFallbackInnerProduct(F, G, contextName)
+    )
