@@ -139,7 +139,9 @@ toS = method()
 -- Converts a symmetric function to Schur functions.
 toS SymmetricRingElement := f -> toBasis(f, S)
 
--- Internal recursive h-to-Schur conversion used by toS.
+-- Legacy h-to-Schur conversion wrapper.  This is currently unused by toS/toBasis;
+-- the engine now calls the recursive h-to-Schur implementation directly as a
+-- fallback.  Keep temporarily for benchmarking; likely remove if no longer needed.
 toSViaHRecursive = method()
 
 -- Converts through h and then recursively to Schur.

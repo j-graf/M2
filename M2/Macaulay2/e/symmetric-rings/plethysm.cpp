@@ -371,6 +371,10 @@ bool SymmetricEngineRing::singleSchurPartition(ring_elem f, int schurId, Partiti
     return isPartitionIndex(lambda);
   }
 
+// Legacy Schur-plethysm path.  The public @ operator currently computes
+// plethysm in p and then converts to the chosen output basis.  Keep this
+// specialized path temporarily for benchmarking and possible future heuristics;
+// likely remove if no longer needed.
 std::string SymmetricEngineRing::schurCompletePlethysmKey(int n,
                                        int schurId,
                                        const Partition& inner) const
@@ -568,6 +572,8 @@ ring_elem SymmetricEngineRing::plethysm(ring_elem f,
     return plethysmPowerSums(fPowerSums, gPowerSums);
   }
 
+// Legacy plethysm-to-basis entry point.  This is currently unused by the public
+// @ operator; it remains reachable through the raw interface for comparison.
 ring_elem SymmetricEngineRing::plethysmToBasis(ring_elem f,
                             ring_elem g,
                             int pBasisId,

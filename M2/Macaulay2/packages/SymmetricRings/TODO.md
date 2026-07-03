@@ -13,6 +13,8 @@ of these.
   operators, raising operators, etc.
 - Add mixed-base features: collect by basis, partial basis conversion, and
   related tools for decomposing expressions into mixed-basis formulas.
+- Centralize the list of useful inner-product pairings, including explicit
+  basis-dual-basis relationships and their diagonal coefficient functions.
 - Add more coefficient helper formulas for common symmetric-function constants.
 - Revisit virtual alphabet support beyond linear alphabet scaling.
 - Add support for power series.

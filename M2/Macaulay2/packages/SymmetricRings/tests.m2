@@ -18,6 +18,18 @@ TEST ///
 ///
 
 TEST ///
+    A = frac(QQ[t])
+    R0 = symmetricRing A
+    displayedCoefficient = toString net ((t^2-1)/(t+3)*S_{3,2})
+    assert(not match("t2", displayedCoefficient))
+    assert(match(" \\* ", displayedCoefficient))
+    displayedNegativeCoefficient = toString net (-(t^2-1)/(t+3)*S_{3,2})
+    assert(not match("-\\*", displayedNegativeCoefficient))
+    displayedSkew = toString net S_({3,2},{1})
+    assert(match("/", displayedSkew))
+///
+
+TEST ///
     R0 = symmetricRing QQ
     A = registerBasis("A", "DisplayOrder" => 90)
     assert(instance(A, SymmetricBasis))

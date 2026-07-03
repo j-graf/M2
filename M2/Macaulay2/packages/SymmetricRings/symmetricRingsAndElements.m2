@@ -438,8 +438,107 @@ displayTermLimit = 100
 -- Converts a symmetric function to a full string.
 toString SymmetricRingElement := f -> rawSymmetricRingsElementToString raw f
 
+-- Formats a partition index for use as an expression subscript.
+partitionSubscriptExpression = lambda -> (
+    if #lambda == 0 then hold "{}"
+    else if #lambda == 1 then lambda#0
+    else toSequence lambda
+    )
+
+-- Formats a partition index for compact string subscripts, used for skew atoms.
+partitionSubscriptString = lambda -> (
+    if #lambda == 0 then "{}"
+    else if #lambda == 1 then toString lambda#0
+    else "{" | demark(",", apply(lambda, toString)) | "}"
+    )
+
+-- Formats one decoded atom as a structured expression.
+atomExpression = (R0, atom) -> (
+    B := basisWithId(R0, atom#"BasisId");
+    basisSymbol := B#"BasisSymbol";
+    outer := atom#"Outer";
+    inner := atom#"Inner";
+    indexExpr := if #inner == 0 then partitionSubscriptExpression outer
+        else hold(partitionSubscriptString outer | "/" | partitionSubscriptString inner);
+    new Subscript from {basisSymbol, indexExpr}
+    )
+
+-- Formats one decoded monomial as a structured expression.
+monomialExpression = (R0, atoms) -> (
+    if #atoms == 0 then return expression 1;
+    product apply(atoms, atom -> atomExpression(R0, atom))
+    )
+
+-- Formats one decoded term as a structured expression, preserving native
+-- coefficient-ring display for coefficients.
+termExpression = (R0, term) -> (
+    A := coefficientRing R0;
+    c := promote(term#0, A);
+    atoms := term#1;
+    if #atoms == 0 then return expression c;
+    m := monomialExpression(R0, atoms);
+    if c == 1_A then m
+    else if c == -1_A then -m
+    else expression c * m
+    )
+
+-- Formats a symmetric function as a structured expression, optionally limiting
+-- the number of terms shown.
+symmetricElementExpression = (f, maxTerms) -> (
+    R0 := ring f;
+    T := rawTerms f;
+    if #T == 0 then return expression 0;
+    displayCount := if maxTerms === null then #T else min(#T, maxTerms);
+    pieces := apply(take(T, displayCount), term -> termExpression(R0, term));
+    result := if #pieces == 0 then expression 0 else sum pieces;
+    if displayCount < #T then result = result + hold(toString(#T - displayCount) | " terms");
+    result
+    )
+
+-- Joins nets horizontally with a text delimiter.
+joinNets = (parts, delimiter) -> (
+    if #parts == 0 then return net "";
+    result := parts#0;
+    scan(drop(parts, 1), part -> result = result | delimiter | part);
+    result
+    )
+
+-- Formats one decoded monomial as a net, using spaced multiplication.
+monomialNet = (R0, atoms) -> (
+    if #atoms == 0 then return net "1";
+    joinNets(apply(atoms, atom -> net atomExpression(R0, atom)), " * ")
+    )
+
+-- Formats one decoded term as a net, preserving native coefficient-ring
+-- display while keeping a visible space around multiplication.
+termNet = (R0, term) -> (
+    A := coefficientRing R0;
+    c := promote(term#0, A);
+    atoms := term#1;
+    if #atoms == 0 then return net c;
+    m := monomialNet(R0, atoms);
+    if c == 1_A then m
+    else if c == -1_A then net "-" | m
+    else net c | " * " | m
+    )
+
+-- Formats a symmetric function as a net, optionally limiting the number of
+-- terms shown.
+symmetricElementNet = (f, maxTerms) -> (
+    R0 := ring f;
+    T := rawTerms f;
+    if #T == 0 then return net "0";
+    displayCount := if maxTerms === null then #T else min(#T, maxTerms);
+    pieces := apply(take(T, displayCount), term -> termNet(R0, term));
+    if displayCount < #T then pieces = append(pieces, net(toString(#T - displayCount) | " terms"));
+    joinNets(pieces, " + ")
+    )
+
+-- Converts a symmetric function to a full structured expression.
+expression SymmetricRingElement := f -> symmetricElementExpression(f, null)
+
 -- Displays a symmetric function with a term limit.
-net SymmetricRingElement := f -> net rawSymmetricRingsElementToStringLimited(raw f, displayTermLimit)
+net SymmetricRingElement := f -> symmetricElementNet(f, displayTermLimit)
 
 -- External string form agrees with the ordinary string form.
 toExternalString SymmetricRingElement := toString

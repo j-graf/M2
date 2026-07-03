@@ -40,6 +40,7 @@ class SymmetricEngineRing : public Ring
   mutable std::map<std::string, std::vector<SchurConversionRecipeEntry>>
       powerSumsToSchurRecipeCache;
   mutable std::map<std::string, std::vector<LRProductTerm>> lrProductCache;
+  // Cache for the legacy Schur-plethysm path, currently unused by public @.
   mutable GCMap<std::string, ring_elem> schurCompletePlethysmCache;
   mutable GCMap<std::string, ring_elem> hJacobiTrudiCache;
   mutable GCMap<std::string, ring_elem> eJacobiTrudiCache;
