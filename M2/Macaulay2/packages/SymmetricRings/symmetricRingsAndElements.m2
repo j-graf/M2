@@ -602,9 +602,6 @@ symmetricElementNet = (f, maxTerms) -> (
     joinSignedTermNets pieces
     )
 
--- Converts a symmetric function to a full structured expression.
-expression SymmetricRingElement := f -> symmetricElementExpression(f, null)
-
 -- Displays a symmetric function with a term limit.
 net SymmetricRingElement := f -> symmetricElementNet(f, displayTermLimit)
 

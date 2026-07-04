@@ -17,13 +17,19 @@ doc ///
     functions Somega, monomial functions m, forgotten functions ff, and
     Hall-Littlewood bases q, b, Q, B, P, and R.
    Text
-    The ring is mixed-basis: an expression such as $S_{3,1,2}h_5+e_2$ is a
-    sum of terms in different bases rather than being forced into one preferred
-    basis.  Standard changes of basis are built into the main operations.  In
-    particular, Schur functions are related to h by the @TO hJacobiTrudi@
-    determinant, Somega is related to e by the @TO eJacobiTrudi@ determinant,
-    Hall-Littlewood bases are controlled by the parameter t, and @TO plethysm@
-    is computed through the power-sum basis.
+    This package has two unique features. First, the ring is mixed-basis:
+    An expression such as $S_{3,1,2}h_5+e_2$ is a formal sum of terms in different
+    bases rather than being forced into one preferred basis. One major benefit of
+    this design is efficiency: Expressions do not need to be converted to a
+    canonical basis, which can be computationally expensive. Expressions can
+    be converted to another basis through @TO toBasis@.
+
+    Next, in addition to the built-in bases, the user can register custom bases.
+    These user-made bases have the same feature set as the built-in bases.
+    A user-made basis can be converted to any other basis, can compute the
+    @TO hallInnerProduct@, and can compute @TO plethysm@. Even though one-part
+    Macdonald polynomials are not yet built-in, the user can easily construct them
+    (see @TO registerTransformedBasis@). Future updates will expand support.
    Example
     A = QQ
     R = symmetricRing A
@@ -50,6 +56,7 @@ doc ///
    hallInnerProduct
    straighten
    weight
+   rawTerms
 
  Node
   Key
@@ -330,7 +337,6 @@ doc ///
    (coefficientRing,SymmetricRingElement)
    (net,SymmetricRingElement)
    (terms,SymmetricRingElement)
-   (rawTerms,SymmetricRingElement)
    (toExternalString,SymmetricRingElement)
    (toString,SymmetricRingElement)
    (symbol ==,SymmetricRingElement,SymmetricRingElement)
@@ -529,15 +535,18 @@ doc ///
    Example
     A = frac(QQ[t])
     R = symmetricRing A
-    registerTransformedBasis("DocQ", "SourceBasis" => "h",
+    registerTransformedBasis("hTransformed", "SourceBasis" => "h",
         "Alphabet" => "(1-t)*X",
         "Companions" => hashTable {
-            "Omega" => "DocB",
-            "InnerProductPartner" => "DocQM",
-            "OmegaInnerProductPartner" => "DocQFF"
+            "Omega" => "hTransformedOmega",
+            "InnerProductPartner" => "hTransformedDual",
+            "OmegaInnerProductPartner" => "hTransformedDualOmega"
             })
-    toBasis(DocQ_2, p) == toBasis(q_2, p)
-    omegaInvolution DocQ_2
+    hTransformed_{4,1} == q_{4,1}
+    omegaInvolution hTransformed_3
+    (omegaInvolution hTransformed_3) == b_3
+    hallInnerProduct(hTransformed_{4,1}, hTransformedDual_{4,1})
+    hallInnerProduct(hTransformedOmega_{4,1}, hTransformedDualOmega_{4,1})
    Text
     Macdonald-style parameter names are inferred from the coefficient ring
     when present.
@@ -585,13 +594,20 @@ doc ///
   Description
    Text
     By default, bases R lists the available bases by basis symbol and
-    display name.  With the verbose option, it returns the full
-    @TO SymmetricBasis@ objects.  The available bases consist of the built-in
-    bases together with the user-defined bases.
+    display name.  The available bases consist of the built-in bases together
+    with the user-defined bases.
    Example
     A = QQ
     R = symmetricRing A
+    bases R
     (bases R)#"S"
+   Text
+    With the verbose option, bases returns the full @TO SymmetricBasis@
+    objects.  This is useful for inspecting metadata such as basis symbols,
+    display order, omega partners, indexing conventions, and conversion data.
+   Example
+    A = QQ
+    R = symmetricRing A
     select(bases(R, "verbose" => true), B -> B#"BasisSymbol" == "S")
     any(bases(R, "verbose" => true), B -> B#"BasisSymbol" == "p")
 
@@ -956,6 +972,28 @@ doc ///
    Example
     partitionWeight {5,3,1}
     partitionLength {5,3,1,0,0}
+
+ Node
+  Key
+   rawTerms
+   (rawTerms,SymmetricRingElement)
+  Headline
+   inspect the stored terms of a symmetric function
+  Usage
+   rawTerms f
+  Description
+   Text
+    The function rawTerms returns the internal term data for a
+    @TO SymmetricRingElement@.  Each entry contains the coefficient of a term
+    and a list of basis factors, where every basis factor records its basis id,
+    outer index, and optional inner index for skew shapes.  This is mainly an
+    inspection tool for debugging, tests, and user-defined conversion formulas.
+    For ordinary mathematical use, @TO terms@ returns the summands themselves.
+   Example
+    A = QQ
+    R = symmetricRing A
+    rawTerms(S_{2,1}*e_2 - 3*p_5)
+    terms(S_{2,1}*e_2 - 3*p_5)
 
  Node
   Key
