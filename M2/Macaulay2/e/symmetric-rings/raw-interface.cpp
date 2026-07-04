@@ -220,6 +220,103 @@ const RingElement *rawSymmetricRingsToSchurViaHRecursive(
     }
 }
 
+const RingElement *rawSymmetricRingsToSchurFast(
+    const RingElement *f,
+    int powerSumBasisId,
+    M2_string powerSumDisplaySymbol,
+    int powerSumDisplayOrder,
+    bool powerSumIsMultiplicative,
+    int schurBasisId,
+    M2_string schurDisplaySymbol,
+    int schurDisplayOrder)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      ring_elem result = S->toSchurFast(f->get_value(),
+                                        powerSumBasisId,
+                                        fromM2String(powerSumDisplaySymbol),
+                                        powerSumDisplayOrder,
+                                        powerSumIsMultiplicative,
+                                        schurBasisId,
+                                        fromM2String(schurDisplaySymbol),
+                                        schurDisplayOrder);
+      if (error()) return nullptr;
+      return RingElement::make_raw(S, result);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+const RingElement *rawSymmetricRingsMultiplyToSchurFast(
+    const RingElement *f,
+    const RingElement *g,
+    int powerSumBasisId,
+    M2_string powerSumDisplaySymbol,
+    int powerSumDisplayOrder,
+    bool powerSumIsMultiplicative,
+    int schurBasisId,
+    M2_string schurDisplaySymbol,
+    int schurDisplayOrder)
+{
+  return symmetric_rings::rawSymmetricRingsMultiplyToBasisFast(
+      f,
+      g,
+      powerSumBasisId,
+      powerSumDisplaySymbol,
+      powerSumDisplayOrder,
+      powerSumIsMultiplicative,
+      schurBasisId,
+      schurDisplaySymbol,
+      schurDisplayOrder,
+      false);
+}
+
+const RingElement *rawSymmetricRingsMultiplyToBasisFast(
+    const RingElement *f,
+    const RingElement *g,
+    int powerSumBasisId,
+    M2_string powerSumDisplaySymbol,
+    int powerSumDisplayOrder,
+    bool powerSumIsMultiplicative,
+    int targetBasisId,
+    M2_string targetDisplaySymbol,
+    int targetDisplayOrder,
+    bool targetIsMultiplicative)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      if (g->get_ring() != S)
+        {
+          ERROR("expected elements in the same symmetric ring");
+          return nullptr;
+        }
+      ring_elem result = S->multiplyToBasisFast(f->get_value(),
+                                                g->get_value(),
+                                                powerSumBasisId,
+                                                fromM2String(powerSumDisplaySymbol),
+                                                powerSumDisplayOrder,
+                                                powerSumIsMultiplicative,
+                                                targetBasisId,
+                                                fromM2String(targetDisplaySymbol),
+                                                targetDisplayOrder,
+                                                targetIsMultiplicative);
+      if (error()) return nullptr;
+      return RingElement::make_raw(S, result);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
 const RingElement *rawSymmetricRingsPlethysm(const RingElement *f,
                                              const RingElement *g,
                                              int powerSumBasisId,

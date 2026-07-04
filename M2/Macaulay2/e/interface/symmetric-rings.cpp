@@ -111,8 +111,76 @@ const RingElement *rawSymmetricRingsToSchurViaHRecursive(
                                                                 hDisplayOrder,
                                                                 hIsMultiplicative,
                                                                 schurBasisId,
-                                                                schurDisplaySymbol,
-                                                                schurDisplayOrder);
+                                                            schurDisplaySymbol,
+                                                            schurDisplayOrder);
+}
+
+const RingElement *rawSymmetricRingsToSchurFast(
+    const RingElement *f,
+    int powerSumBasisId,
+    M2_string powerSumDisplaySymbol,
+    int powerSumDisplayOrder,
+    bool powerSumIsMultiplicative,
+    int schurBasisId,
+    M2_string schurDisplaySymbol,
+    int schurDisplayOrder)
+{
+  return symmetric_rings::rawSymmetricRingsToSchurFast(f,
+                                                       powerSumBasisId,
+                                                       powerSumDisplaySymbol,
+                                                       powerSumDisplayOrder,
+                                                       powerSumIsMultiplicative,
+                                                       schurBasisId,
+                                                       schurDisplaySymbol,
+                                                       schurDisplayOrder);
+}
+
+const RingElement *rawSymmetricRingsMultiplyToSchurFast(
+    const RingElement *f,
+    const RingElement *g,
+    int powerSumBasisId,
+    M2_string powerSumDisplaySymbol,
+    int powerSumDisplayOrder,
+    bool powerSumIsMultiplicative,
+    int schurBasisId,
+    M2_string schurDisplaySymbol,
+    int schurDisplayOrder)
+{
+  return symmetric_rings::rawSymmetricRingsMultiplyToSchurFast(
+      f,
+      g,
+      powerSumBasisId,
+      powerSumDisplaySymbol,
+      powerSumDisplayOrder,
+      powerSumIsMultiplicative,
+      schurBasisId,
+      schurDisplaySymbol,
+      schurDisplayOrder);
+}
+
+const RingElement *rawSymmetricRingsMultiplyToBasisFast(
+    const RingElement *f,
+    const RingElement *g,
+    int powerSumBasisId,
+    M2_string powerSumDisplaySymbol,
+    int powerSumDisplayOrder,
+    bool powerSumIsMultiplicative,
+    int targetBasisId,
+    M2_string targetDisplaySymbol,
+    int targetDisplayOrder,
+    bool targetIsMultiplicative)
+{
+  return symmetric_rings::rawSymmetricRingsMultiplyToBasisFast(
+      f,
+      g,
+      powerSumBasisId,
+      powerSumDisplaySymbol,
+      powerSumDisplayOrder,
+      powerSumIsMultiplicative,
+      targetBasisId,
+      targetDisplaySymbol,
+      targetDisplayOrder,
+      targetIsMultiplicative);
 }
 
 const RingElement *rawSymmetricRingsPlethysm(const RingElement *f,

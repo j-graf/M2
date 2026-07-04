@@ -112,17 +112,24 @@ toPowerSumsForConversion = F -> (
     else engineToBasis(F, p)
     )
 
--- Public method for basis conversion.
+-- Public methods for basis conversion.
 toBasis = method()
+toBasisFallback = method()
 
--- Converts a symmetric function to the requested basis.
-toBasis(SymmetricRingElement, Thing) := (f, target) -> (
-    R0 := ring f;
-    rememberRingBasisData R0;
-    B := if class target === SymmetricRingIndexedVariableTable then (
+targetBasisOnRing = (R0, target) -> (
+    if class target === SymmetricRingIndexedVariableTable then (
         if target.SymmetricBasis === null then error("basis ", toString target, " is not available for this symmetric ring");
         target.SymmetricBasis
-        ) else basis(R0, target);
+        )
+    else basis(R0, target)
+    )
+
+-- Fallback conversion route: convert the whole element through the standard
+-- basis-conversion machinery without product-aware M2 dispatch.
+toBasisFallback(SymmetricRingElement, Thing) := (f, target) -> (
+    R0 := ring f;
+    rememberRingBasisData R0;
+    B := targetBasisOnRing(R0, target);
     if needsM2PowerSumConversion f then (
         FP := elementToPowerSumsM2 f;
         if B#"BasisId" == p#"BasisId" then return FP;
@@ -133,11 +140,113 @@ toBasis(SymmetricRingElement, Thing) := (f, target) -> (
     engineToBasis(f, B)
     )
 
--- Shortcut method for conversion to the Schur basis.
-toS = method()
+-- Product-aware multiplication followed by conversion to a target basis.
+multiplyToBasis = method()
+multiplyToBasisLegacy = method()
+multiplyToBasisFast = method()
 
--- Converts a symmetric function to Schur functions.
-toS SymmetricRingElement := f -> toBasis(f, S)
+multiplyToBasis(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, target) -> (
+    R0 := ring f;
+    if ring g =!= R0 then error "expected elements in the same symmetric ring";
+    rememberRingBasisData R0;
+    B := targetBasisOnRing(R0, target);
+    if B#"MultiplicativeIndex" then (
+        targetId := B#"BasisId";
+        leftBasisId := rawSymmetricRingsSingleBasisId raw f;
+        rightBasisId := rawSymmetricRingsSingleBasisId raw g;
+        if leftBasisId == targetId then return f * toBasis(g, B);
+        if rightBasisId == targetId then return toBasis(f, B) * g;
+        );
+    if needsM2PowerSumConversion f or needsM2PowerSumConversion g or B#"FromPowerSums" =!= null then return toBasisFallback(f*g, B);
+    userSymmetricElement(R0, rawSymmetricRingsMultiplyToBasisFast(
+        raw f,
+        raw g,
+        p#"BasisId", p#"BasisSymbol", p#"DisplayOrder", p#"MultiplicativeIndex",
+        B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex"))
+    )
+
+-- Legacy product conversion route: form the product, then use legacy conversion.
+multiplyToBasisLegacy(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, target) -> (
+    if ring f =!= ring g then error "expected elements in the same symmetric ring";
+    toBasisFallback(f*g, target)
+    )
+
+-- Compatibility alias for benchmark scripts that still mention the old name.
+multiplyToBasisFast(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, target) -> (
+    multiplyToBasis(f, g, target)
+    )
+
+multiplyToMonomialTarget = (R0, atoms, B) -> (
+    if #atoms == 0 then return 1_R0;
+    if #atoms == 1 then return toBasisFallback(atomAsElement(R0, atoms#0), B);
+    result := atomAsElement(R0, atoms#0);
+    for i from 1 to (#atoms - 1) do result = multiplyToBasis(result, atomAsElement(R0, atoms#i), B);
+    result
+    )
+
+toBasisProductAware = (f, B) -> (
+    termsData := rawTerms f;
+    if not any(termsData, term -> #(term#1) > 1) then return null;
+    R0 := ring f;
+    A := coefficientRing R0;
+    result := 0_R0;
+    scan(termsData, term -> (
+            c := promote(term#0, A);
+            if c != 0_A then result = result + promote(c, R0) * multiplyToMonomialTarget(R0, term#1, B);
+            ));
+    result
+    )
+
+-- Converts a symmetric function to the requested basis using product-aware
+-- dispatch before falling back to the standard conversion route.
+toBasis(SymmetricRingElement, Thing) := (f, target) -> (
+    R0 := ring f;
+    rememberRingBasisData R0;
+    B := targetBasisOnRing(R0, target);
+    productAware := toBasisProductAware(f, B);
+    if productAware =!= null then return productAware;
+    if B#"BasisId" == S#"BasisId" and not needsM2PowerSumConversion f then return toS f;
+    toBasisFallback(f, B)
+    )
+
+-- Shortcut methods for conversion to the Schur basis.
+toS = method()
+toSLegacy = method()
+toSFast = method()
+
+-- Converts to Schur functions using the direct LR/Pieri fast path.
+toS SymmetricRingElement := f -> (
+    R0 := ring f;
+    rememberRingBasisData R0;
+    if needsM2PowerSumConversion f then return toBasisFallback(f, S);
+    userSymmetricElement(R0, rawSymmetricRingsToSchurFast(
+        raw f,
+        p#"BasisId", p#"BasisSymbol", p#"DisplayOrder", p#"MultiplicativeIndex",
+        S#"BasisId", S#"BasisSymbol", S#"DisplayOrder"))
+    )
+
+-- Legacy Schur conversion route kept for benchmarks.
+toSLegacy SymmetricRingElement := f -> toBasisFallback(f, S)
+
+-- Compatibility alias for benchmark scripts that still mention the old name.
+toSFast SymmetricRingElement := f -> toS f
+
+multiplyToS = method()
+multiplyToSLegacy = method()
+multiplyToSFast = method()
+
+multiplyToS(SymmetricRingElement, SymmetricRingElement) := (f, g) -> (
+    multiplyToBasis(f, g, S)
+    )
+
+multiplyToSLegacy(SymmetricRingElement, SymmetricRingElement) := (f, g) -> (
+    multiplyToBasisLegacy(f, g, S)
+    )
+
+-- Compatibility alias for benchmark scripts that still mention the old name.
+multiplyToSFast(SymmetricRingElement, SymmetricRingElement) := (f, g) -> (
+    multiplyToS(f, g)
+    )
 
 -- Legacy h-to-Schur conversion wrapper.  This is currently unused by toS/toBasis;
 -- the engine now calls the recursive h-to-Schur implementation directly as a

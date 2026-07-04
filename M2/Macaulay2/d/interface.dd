@@ -364,6 +364,153 @@ export rawSymmetricRingsToBasis(e:Expr):Expr := (
      else WrongNumArgs(8));
 setupfun("rawSymmetricRingsToSchurViaHRecursive", rawSymmetricRingsToSchurViaHRecursive);
 
+export rawSymmetricRingsToSchurFast(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 8 then return WrongNumArgs(8);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is powerSumBasisId:ZZcell do (
+		    if !isInt(powerSumBasisId) then return WrongArgSmallInteger(2);
+		    when s.2
+		    is powerSumDisplaySymbol:stringCell do (
+			 when s.3
+			 is powerSumDisplayOrder:ZZcell do (
+			      if !isInt(powerSumDisplayOrder) then return WrongArgSmallInteger(4);
+			      when s.4
+			      is powerSumIsMultiplicative:Boolean do (
+				   when s.5
+				   is schurBasisId:ZZcell do (
+					if !isInt(schurBasisId) then return WrongArgSmallInteger(6);
+					when s.6
+					is schurDisplaySymbol:stringCell do (
+					     when s.7
+					     is schurDisplayOrder:ZZcell do (
+						  if !isInt(schurDisplayOrder) then return WrongArgSmallInteger(8);
+						  toExpr(Ccode(RawRingElementOrNull,
+						       "rawSymmetricRingsToSchurFast(",
+						       f.p, ", ",
+						       toInt(powerSumBasisId), ", ",
+						       powerSumDisplaySymbol.v, ", ",
+						       toInt(powerSumDisplayOrder), ", ",
+						       toBoolean(s.4), ", ",
+						       toInt(schurBasisId), ", ",
+						       schurDisplaySymbol.v, ", ",
+						       toInt(schurDisplayOrder), ")")))
+					     else WrongArgZZ(8))
+					else WrongArgString(7))
+				   else WrongArgZZ(6))
+			      else WrongArg(5, "a Boolean"))
+			 else WrongArgZZ(4))
+		    else WrongArgString(3))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(8));
+setupfun("rawSymmetricRingsToSchurFast", rawSymmetricRingsToSchurFast);
+
+export rawSymmetricRingsMultiplyToSchurFast(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 9 then return WrongNumArgs(9);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is g:RawRingElementCell do (
+		    when s.2
+		    is powerSumBasisId:ZZcell do (
+			 if !isInt(powerSumBasisId) then return WrongArgSmallInteger(3);
+			 when s.3
+			 is powerSumDisplaySymbol:stringCell do (
+			      when s.4
+			      is powerSumDisplayOrder:ZZcell do (
+				   if !isInt(powerSumDisplayOrder) then return WrongArgSmallInteger(5);
+				   when s.5
+				   is powerSumIsMultiplicative:Boolean do (
+					when s.6
+					is schurBasisId:ZZcell do (
+					     if !isInt(schurBasisId) then return WrongArgSmallInteger(7);
+					     when s.7
+					     is schurDisplaySymbol:stringCell do (
+						  when s.8
+						  is schurDisplayOrder:ZZcell do (
+						       if !isInt(schurDisplayOrder) then return WrongArgSmallInteger(9);
+						       toExpr(Ccode(RawRingElementOrNull,
+							    "rawSymmetricRingsMultiplyToSchurFast(",
+							    f.p, ", ",
+							    g.p, ", ",
+							    toInt(powerSumBasisId), ", ",
+							    powerSumDisplaySymbol.v, ", ",
+							    toInt(powerSumDisplayOrder), ", ",
+							    toBoolean(s.5), ", ",
+							    toInt(schurBasisId), ", ",
+							    schurDisplaySymbol.v, ", ",
+							    toInt(schurDisplayOrder), ")")))
+						  else WrongArgZZ(9))
+					     else WrongArgString(8))
+					else WrongArgZZ(7))
+				   else WrongArg(6, "a Boolean"))
+			      else WrongArgZZ(5))
+			 else WrongArgString(4))
+		    else WrongArgZZ(3))
+	       else WrongArg(2, "a raw ring element"))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(9));
+setupfun("rawSymmetricRingsMultiplyToSchurFast", rawSymmetricRingsMultiplyToSchurFast);
+
+export rawSymmetricRingsMultiplyToBasisFast(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 10 then return WrongNumArgs(10);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is g:RawRingElementCell do (
+		    when s.2
+		    is powerSumBasisId:ZZcell do (
+			 if !isInt(powerSumBasisId) then return WrongArgSmallInteger(3);
+			 when s.3
+			 is powerSumDisplaySymbol:stringCell do (
+			      when s.4
+			      is powerSumDisplayOrder:ZZcell do (
+				   if !isInt(powerSumDisplayOrder) then return WrongArgSmallInteger(5);
+				   when s.5
+				   is powerSumIsMultiplicative:Boolean do (
+					when s.6
+					is targetBasisId:ZZcell do (
+					     if !isInt(targetBasisId) then return WrongArgSmallInteger(7);
+					     when s.7
+					     is targetDisplaySymbol:stringCell do (
+						  when s.8
+						  is targetDisplayOrder:ZZcell do (
+						       if !isInt(targetDisplayOrder) then return WrongArgSmallInteger(9);
+						       when s.9
+						       is targetIsMultiplicative:Boolean do (
+							    toExpr(Ccode(RawRingElementOrNull,
+								 "rawSymmetricRingsMultiplyToBasisFast(",
+								 f.p, ", ",
+								 g.p, ", ",
+								 toInt(powerSumBasisId), ", ",
+								 powerSumDisplaySymbol.v, ", ",
+								 toInt(powerSumDisplayOrder), ", ",
+								 toBoolean(s.5), ", ",
+								 toInt(targetBasisId), ", ",
+								 targetDisplaySymbol.v, ", ",
+								 toInt(targetDisplayOrder), ", ",
+								 toBoolean(s.9), ")")))
+						       else WrongArg(10, "a Boolean"))
+						  else WrongArgZZ(9))
+					     else WrongArgString(8))
+					else WrongArgZZ(7))
+				   else WrongArg(6, "a Boolean"))
+			      else WrongArgZZ(5))
+			 else WrongArgString(4))
+		    else WrongArgZZ(3))
+	       else WrongArg(2, "a raw ring element"))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(10));
+setupfun("rawSymmetricRingsMultiplyToBasisFast", rawSymmetricRingsMultiplyToBasisFast);
+
 export rawSymmetricRingsPlethysm(e:Expr):Expr := (
      when e
      is s:Sequence do (

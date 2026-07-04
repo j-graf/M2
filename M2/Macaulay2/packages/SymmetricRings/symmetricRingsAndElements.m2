@@ -509,17 +509,85 @@ monomialNet = (R0, atoms) -> (
     joinNets(apply(atoms, atom -> net atomExpression(R0, atom)), " * ")
     )
 
+-- Returns numerator and denominator data when the coefficient ring provides it.
+coefficientNumeratorDenominator = c -> {
+    try numerator c else c,
+    try denominator c else 1
+    }
+
+-- Counts terms when the coefficient object is a polynomial-like ring element;
+-- scalars and unsupported objects are treated as one term.
+coefficientTermCount = c -> try #terms c else if c == 0 then 0 else 1
+
+-- Returns a leading scalar when available.
+coefficientLeadingScalar = c -> try leadCoefficient c else c
+
+-- Detects negative scalar leading coefficients using ring comparison when
+-- available.  If the coefficient ring cannot compare with zero, be conservative.
+coefficientScalarIsNegative = c -> try c < 0 else try c < 0_(ring c) else false
+
+-- A coefficient is treated as fractional exactly when a nontrivial denominator
+-- is visible through numerator/denominator.
+coefficientIsFraction = c -> (
+    nd := coefficientNumeratorDenominator c;
+    nd#1 != 1
+    )
+
+-- The display pulls out a negative sign only for coefficients that are a single
+-- term divided by a single term, such as -3, -t, or -1/t.
+coefficientIsSingleTermQuotient = c -> (
+    nd := coefficientNumeratorDenominator c;
+    coefficientTermCount(nd#0) == 1 and coefficientTermCount(nd#1) == 1
+    )
+
+-- Determines whether a coefficient should contribute the term's external sign.
+coefficientPullsNegativeSign = c -> (
+    if not coefficientIsSingleTermQuotient c then return false;
+    nd := coefficientNumeratorDenominator c;
+    nNegative := coefficientScalarIsNegative coefficientLeadingScalar nd#0;
+    dNegative := coefficientScalarIsNegative coefficientLeadingScalar nd#1;
+    nNegative =!= dNegative
+    )
+
+-- Multiterm non-fraction coefficients need grouping before multiplication by a
+-- basis term.  Fractions are already grouped by their built-in display.
+coefficientNeedsParentheses = c -> (
+    nd := coefficientNumeratorDenominator c;
+    nd#1 == 1 and coefficientTermCount(nd#0) > 1
+    )
+
+-- Parenthesizes a coefficient net when its expression would bind ambiguously
+-- next to a following multiplication sign.
+coefficientFactorNet = c -> (
+    n := net c;
+    if coefficientNeedsParentheses c then net "(" | n | ")" else n
+    )
+
 -- Formats one decoded term as a net, preserving native coefficient-ring
 -- display while keeping a visible space around multiplication.
-termNet = (R0, term) -> (
+termNetData = (R0, term) -> (
     A := coefficientRing R0;
     c := promote(term#0, A);
     atoms := term#1;
-    if #atoms == 0 then return net c;
-    m := monomialNet(R0, atoms);
-    if c == 1_A then m
-    else if c == -1_A then net "-" | m
-    else net c | " * " | m
+    negative := coefficientPullsNegativeSign c;
+    sign := if negative then "-" else "+";
+    absC := if negative then -c else c;
+    body := if #atoms == 0 then net absC
+        else (
+            m := monomialNet(R0, atoms);
+            if absC == 1_A then m else coefficientFactorNet absC | " * " | m
+            );
+    {sign, body}
+    )
+
+-- Joins signed term nets horizontally, letting negative terms replace the
+-- preceding plus sign.
+joinSignedTermNets = parts -> (
+    if #parts == 0 then return net "";
+    first := parts#0;
+    result := if first#0 == "-" then net "- " | first#1 else first#1;
+    scan(drop(parts, 1), part -> result = result | (if part#0 == "-" then " - " else " + ") | part#1);
+    result
     )
 
 -- Formats a symmetric function as a net, optionally limiting the number of
@@ -529,9 +597,9 @@ symmetricElementNet = (f, maxTerms) -> (
     T := rawTerms f;
     if #T == 0 then return net "0";
     displayCount := if maxTerms === null then #T else min(#T, maxTerms);
-    pieces := apply(take(T, displayCount), term -> termNet(R0, term));
-    if displayCount < #T then pieces = append(pieces, net(toString(#T - displayCount) | " terms"));
-    joinNets(pieces, " + ")
+    pieces := apply(take(T, displayCount), term -> termNetData(R0, term));
+    if displayCount < #T then pieces = append(pieces, {"+", net(toString(#T - displayCount) | " terms")});
+    joinSignedTermNets pieces
     )
 
 -- Converts a symmetric function to a full structured expression.

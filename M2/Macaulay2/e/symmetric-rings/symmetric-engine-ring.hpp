@@ -22,6 +22,15 @@ class SymmetricEngineRing : public Ring
 {
 
  private:
+  struct SchurCompatibleFactor
+  {
+    enum Kind { General, Horizontal, Vertical, PowerSum, SchurExpansion };
+    Kind kind;
+    Partition index;
+    CoeffMap expansion;
+    int weight;
+  };
+
   const Ring *coefficientRing;
   mutable std::map<int, std::string> basisDisplays;
   mutable std::map<int, int> basisOrders;
@@ -40,6 +49,15 @@ class SymmetricEngineRing : public Ring
   mutable std::map<std::string, std::vector<SchurConversionRecipeEntry>>
       powerSumsToSchurRecipeCache;
   mutable std::map<std::string, std::vector<LRProductTerm>> lrProductCache;
+  mutable std::map<std::pair<Partition, Partition>, std::vector<LRProductTerm>>
+      directLRProductCache;
+  mutable std::map<std::pair<Partition, Partition>, std::vector<LRProductTerm>>
+      skewSchurExpansionCache;
+  mutable std::map<std::pair<Partition, int>, std::vector<LRProductTerm>>
+      powerSumSchurProductCache;
+  mutable std::map<std::pair<Partition, Partition>, std::vector<LRProductTerm>>
+      monomialProductCache;
+  mutable GCMap<long, ring_elem> smallIntegerCoeffCache;
   // Cache for the legacy Schur-plethysm path, currently unused by public @.
   mutable GCMap<std::string, ring_elem> schurCompletePlethysmCache;
   mutable GCMap<std::string, ring_elem> hJacobiTrudiCache;
@@ -105,11 +123,13 @@ class SymmetricEngineRing : public Ring
   CoeffMap scaledCoeffMap(ring_elem coeff, const CoeffMap& source) const;
   CoeffMap addCoeffMaps(const CoeffMap& a, const CoeffMap& b) const;
   CoeffMap multiplyCoeffMaps(const CoeffMap& a, const CoeffMap& b) const;
+  CoeffMap multiplyMonomialCoeffMaps(const CoeffMap& a, const CoeffMap& b) const;
   CoeffMap oneCoeffMap() const;
   bool isPartitionIndex(const Partition& p) const;
   int partitionPart(const Partition& p, size_t i) const;
   bool partitionContains(const Partition& outer, const Partition& inner) const;
   std::string lrProductKey(const Partition& lambda, const Partition& mu) const;
+  ring_elem cachedInteger(long n) const;
   long lrCoefficient(const Partition& lambda,
                        const Partition& content,
                        const Partition& nu) const;
@@ -123,6 +143,29 @@ class SymmetricEngineRing : public Ring
                                                 int addedWeight) const;
   const std::vector<LRProductTerm>& lrProduct(const Partition& a,
                                                 const Partition& b) const;
+  const std::vector<LRProductTerm>& directLRProduct(const Partition& a,
+                                                     const Partition& b) const;
+  const std::vector<LRProductTerm>& skewSchurExpansion(const Partition& outer,
+                                                        const Partition& inner) const;
+  bool addedBorderStripCell(const Partition& lambda,
+                              const Partition& nu,
+                              int row,
+                              int col) const;
+  bool addedBorderStripConnected(const Partition& lambda,
+                                   const Partition& nu) const;
+  bool addedBorderStripHasNoTwoByTwo(const Partition& lambda,
+                                       const Partition& nu) const;
+  const std::vector<LRProductTerm>& powerSumSchurProduct(const Partition& lambda,
+                                                          int part) const;
+  long monomialProductCoefficient(const Partition& lambda,
+                                    const Partition& mu,
+                                    const Partition& nu) const;
+  const std::vector<LRProductTerm>& monomialProduct(const Partition& a,
+                                                     const Partition& b) const;
+  std::vector<Partition> horizontalStripProducts(const Partition& lambda,
+                                                  int row) const;
+  std::vector<Partition> verticalStripProducts(const Partition& lambda,
+                                                int col) const;
   ring_elem multiplySchurElements(ring_elem f,
                                     ring_elem g,
                                     int schurId,
@@ -299,11 +342,26 @@ class SymmetricEngineRing : public Ring
                             size_t pos,
                             int targetBasisId,
                             std::vector<Partition>& factors) const;
+  bool schurCompatibleFactorsFromMonomial(
+        const SymmetricMonomial& monomial,
+        int targetBasisId,
+        std::vector<SchurCompatibleFactor>& factors) const;
+  bool multiplySchurCompatibleFactorsToSchur(
+        std::vector<SchurCompatibleFactor> factors,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetDisplayOrder,
+        ring_elem& result) const;
   bool schurProductMonomialToSchur(const SymmetricMonomial& monomial,
                                      int targetBasisId,
                                      const std::string& targetDisplay,
                                      int targetDisplayOrder,
                                      ring_elem& result) const;
+  bool fastSchurProductMonomialToSchur(const SymmetricMonomial& monomial,
+                                         int targetBasisId,
+                                         const std::string& targetDisplay,
+                                         int targetDisplayOrder,
+                                         ring_elem& result) const;
   bool termToDirectTarget(const SymmetricTerm& term,
                             int targetBasisId,
                             const std::string& targetDisplay,
@@ -316,6 +374,41 @@ class SymmetricEngineRing : public Ring
                                int targetDisplayOrder,
                                bool targetIsMultiplicative,
                                ring_elem& result) const;
+  bool fastElementToSchur(ring_elem f,
+                            int targetBasisId,
+                            const std::string& targetDisplay,
+                            int targetDisplayOrder,
+                            ring_elem& result) const;
+  bool fastProductToSchur(ring_elem f,
+                            ring_elem g,
+                            int targetBasisId,
+                            const std::string& targetDisplay,
+                            int targetDisplayOrder,
+                            ring_elem& result) const;
+  bool monomialLikeAtomToCoeffMap(const SymmetricMonomial& monomial,
+                                    size_t pos,
+                                    const std::string& targetDisplay,
+                                    CoeffMap& result) const;
+  bool monomialLikeMonomialToTarget(const SymmetricMonomial& monomial,
+                                      int targetBasisId,
+                                      const std::string& targetDisplay,
+                                      int targetDisplayOrder,
+                                      bool targetIsMultiplicative,
+                                      ring_elem& result) const;
+  bool fastProductToMonomialLike(ring_elem f,
+                                   ring_elem g,
+                                   int targetBasisId,
+                                   const std::string& targetDisplay,
+                                   int targetDisplayOrder,
+                                   bool targetIsMultiplicative,
+                                   ring_elem& result) const;
+  bool fastProductToTarget(ring_elem f,
+                             ring_elem g,
+                             int targetBasisId,
+                             const std::string& targetDisplay,
+                             int targetDisplayOrder,
+                             bool targetIsMultiplicative,
+                             ring_elem& result) const;
   ring_elem omegaDirectAtom(const SymmetricMonomial& monomial,
                               size_t pos,
                               const std::map<int, OmegaTarget>& omegaTargets,
@@ -459,6 +552,33 @@ class SymmetricEngineRing : public Ring
                       const std::string& targetDisplay,
                       int targetOrder,
                       bool targetIsMultiplicative) const;
+  ring_elem toSchurFast(ring_elem f,
+                          int pBasisId,
+                          const std::string& pDisplay,
+                          int pOrder,
+                          bool pIsMultiplicative,
+                          int schurBasisId,
+                          const std::string& schurDisplay,
+                          int schurOrder) const;
+  ring_elem multiplyToSchurFast(ring_elem f,
+                                  ring_elem g,
+                                  int pBasisId,
+                                  const std::string& pDisplay,
+                                  int pOrder,
+                                  bool pIsMultiplicative,
+                                  int schurBasisId,
+                                  const std::string& schurDisplay,
+                                  int schurOrder) const;
+  ring_elem multiplyToBasisFast(ring_elem f,
+                                  ring_elem g,
+                                  int pBasisId,
+                                  const std::string& pDisplay,
+                                  int pOrder,
+                                  bool pIsMultiplicative,
+                                  int targetBasisId,
+                                  const std::string& targetDisplay,
+                                  int targetOrder,
+                                  bool targetIsMultiplicative) const;
   ring_elem plethysm(ring_elem f,
                        ring_elem g,
                        int pBasisId,

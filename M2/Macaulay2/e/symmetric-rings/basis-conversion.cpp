@@ -185,6 +185,27 @@ CoeffMap SymmetricEngineRing::multiplyCoeffMaps(const CoeffMap& a, const CoeffMa
     return result;
   }
 
+CoeffMap SymmetricEngineRing::multiplyMonomialCoeffMaps(const CoeffMap& a,
+                                                        const CoeffMap& b) const
+{
+    CoeffMap result;
+    for (const auto& left : a)
+      for (const auto& right : b)
+        {
+          ring_elem baseCoeff = coefficientRing->mult(left.second, right.second);
+          if (coefficientRing->is_zero(baseCoeff)) continue;
+          for (const auto& product : monomialProduct(left.first, right.first))
+            {
+              ring_elem coeff = product.coefficient == 1
+                  ? baseCoeff
+                  : coefficientRing->mult(cachedInteger(product.coefficient),
+                                          baseCoeff);
+              addCoeff(result, product.nu, coeff);
+            }
+        }
+    return result;
+  }
+
 CoeffMap SymmetricEngineRing::oneCoeffMap() const
 {
     return CoeffMap{{Partition{}, coefficientRing->one()}};
@@ -212,6 +233,15 @@ std::string SymmetricEngineRing::lrProductKey(const Partition& lambda, const Par
     if (lexLessPartition(mu, lambda))
       return partitionKey(mu) + "*" + partitionKey(lambda);
     return partitionKey(lambda) + "*" + partitionKey(mu);
+  }
+
+ring_elem SymmetricEngineRing::cachedInteger(long n) const
+{
+    auto found = smallIntegerCoeffCache.find(n);
+    if (found != smallIntegerCoeffCache.end()) return found->second;
+    ring_elem value = coefficientRing->from_long(n);
+    smallIntegerCoeffCache[n] = value;
+    return value;
   }
 
 long SymmetricEngineRing::lrCoefficient(const Partition& lambda,
@@ -367,6 +397,416 @@ const std::vector<LRProductTerm>& SymmetricEngineRing::lrProduct(const Partition
 
     auto inserted = lrProductCache.emplace(key, std::move(result));
     return inserted.first->second;
+  }
+
+const std::vector<LRProductTerm>& SymmetricEngineRing::directLRProduct(
+    const Partition& a,
+    const Partition& b) const
+{
+    Partition first = normalizePartition(a);
+    Partition second = normalizePartition(b);
+    if (lexLessPartition(second, first)) std::swap(first, second);
+
+    std::pair<Partition, Partition> key{first, second};
+    auto cached = directLRProductCache.find(key);
+    if (cached != directLRProductCache.end()) return cached->second;
+
+    std::vector<LRProductTerm> result;
+    if (first.empty())
+      {
+        result.push_back({second, 1});
+      }
+    else if (second.empty())
+      {
+        result.push_back({first, 1});
+      }
+    else
+      {
+        int firstRows = static_cast<int>(first.size());
+        int secondRows = static_cast<int>(second.size());
+        int maxRows = firstRows + secondRows;
+        int offset = second.front();
+
+        std::vector<int> outer(maxRows + 1, 0);
+        std::vector<int> inner(maxRows + 1, 0);
+        for (int i = 1; i <= firstRows; ++i)
+          {
+            outer[i] = offset + first[static_cast<size_t>(i - 1)];
+            inner[i] = offset;
+          }
+        for (int i = firstRows + 1; i <= maxRows; ++i)
+          outer[i] = second[static_cast<size_t>(i - firstRows - 1)];
+
+        int finalWeight = 0;
+        for (int i = 1; i <= maxRows; ++i) finalWeight += outer[i] - inner[i];
+
+        std::vector<int> cellRow(finalWeight + 1, 0);
+        std::vector<int> cellCol(finalWeight + 1, 0);
+        int nextCell = 1;
+        for (int row = 1; row <= maxRows; ++row)
+          for (int col = outer[row]; col > inner[row]; --col)
+            {
+              cellRow[nextCell] = row;
+              cellCol[nextCell] = col;
+              ++nextCell;
+            }
+
+        std::vector<int> counts(maxRows + 1, 0);
+        std::vector<int> valueAtCell(finalWeight + 1, 0);
+        std::vector<int> countAtCell(finalWeight + 1, 0);
+        std::vector<Partition> emitted;
+
+        std::function<void(int)> fill = [&](int current) {
+          if (current == finalWeight)
+            {
+              Partition nu;
+              nu.reserve(static_cast<size_t>(maxRows));
+              for (int i = 1; i <= maxRows; ++i)
+                if (counts[i] > 0) nu.push_back(counts[i]);
+              emitted.push_back(nu);
+              return;
+            }
+
+          int k = current + 1;
+          int row = cellRow[k];
+          int col = cellCol[k];
+
+          int hi;
+          if (col == outer[row])
+            {
+              hi = maxRows;
+              for (int i = 1; i <= maxRows; ++i)
+                if (counts[i] == 0)
+                  {
+                    hi = i;
+                    break;
+                  }
+            }
+          else
+            hi = valueAtCell[k - 1];
+
+          int lo = 1;
+          if (row > 1 && col > inner[row - 1])
+            {
+              int above = k - outer[row] + inner[row - 1];
+              int aboveValue = valueAtCell[above];
+              int aboveCount = countAtCell[above];
+              lo = hi + 1;
+              for (int i = aboveValue + 1; i <= hi; ++i)
+                if (counts[i] < aboveCount)
+                  {
+                    lo = i;
+                    break;
+                  }
+            }
+
+          int thisCount = 32000;
+          for (int value = lo; value <= hi; ++value)
+            {
+              int previousCount = thisCount;
+              thisCount = counts[value];
+              if (previousCount <= thisCount) continue;
+              ++counts[value];
+              valueAtCell[k] = value;
+              countAtCell[k] = counts[value];
+              fill(k);
+              --counts[value];
+            }
+        };
+
+        fill(0);
+        std::sort(emitted.begin(), emitted.end());
+        for (size_t i = 0; i < emitted.size();)
+          {
+            size_t j = i + 1;
+            while (j < emitted.size() && emitted[j] == emitted[i]) ++j;
+            result.push_back({emitted[i], static_cast<long>(j - i)});
+            i = j;
+          }
+      }
+
+    auto inserted = directLRProductCache.emplace(key, std::move(result));
+    return inserted.first->second;
+  }
+
+const std::vector<LRProductTerm>& SymmetricEngineRing::skewSchurExpansion(
+    const Partition& outer0,
+    const Partition& inner0) const
+{
+    Partition outer = normalizePartition(outer0);
+    Partition inner = normalizePartition(inner0);
+    std::pair<Partition, Partition> key{outer, inner};
+    auto cached = skewSchurExpansionCache.find(key);
+    if (cached != skewSchurExpansionCache.end()) return cached->second;
+
+    std::vector<LRProductTerm> result;
+    if (!partitionContains(outer, inner))
+      {
+        auto inserted = skewSchurExpansionCache.emplace(key, std::move(result));
+        return inserted.first->second;
+      }
+
+    int weightDifference = partitionWeight(outer) - partitionWeight(inner);
+    if (weightDifference == 0)
+      {
+        result.push_back({Partition{}, 1});
+      }
+    else if (inner.empty())
+      {
+        result.push_back({outer, 1});
+      }
+    else
+      {
+        for (const auto& alpha : partitionsOf(weightDifference))
+          {
+            long coefficient = lrCoefficient(inner, alpha, outer);
+            if (coefficient != 0) result.push_back({alpha, coefficient});
+          }
+      }
+
+    auto inserted = skewSchurExpansionCache.emplace(key, std::move(result));
+    return inserted.first->second;
+  }
+
+bool SymmetricEngineRing::addedBorderStripCell(const Partition& lambda,
+                                               const Partition& nu,
+                                               int row,
+                                               int col) const
+{
+    if (row < 0 || static_cast<size_t>(row) >= nu.size()) return false;
+    if (col < 1 || col > nu[static_cast<size_t>(row)]) return false;
+    return col > partitionPart(lambda, static_cast<size_t>(row));
+  }
+
+bool SymmetricEngineRing::addedBorderStripConnected(const Partition& lambda,
+                                                    const Partition& nu) const
+{
+    int total = 0;
+    int startRow = -1;
+    int startCol = -1;
+    for (size_t r = 0; r < nu.size(); ++r)
+      for (int c = partitionPart(lambda, r) + 1; c <= nu[r]; ++c)
+        {
+          ++total;
+          if (startRow < 0)
+            {
+              startRow = static_cast<int>(r);
+              startCol = c;
+            }
+        }
+    if (total == 0) return false;
+
+    std::vector<std::pair<int, int>> stack{{startRow, startCol}};
+    std::map<std::pair<int, int>, bool> seen;
+    seen[stack.back()] = true;
+    int visited = 0;
+    while (!stack.empty())
+      {
+        auto cell = stack.back();
+        stack.pop_back();
+        ++visited;
+        const int dr[4] = {1, -1, 0, 0};
+        const int dc[4] = {0, 0, 1, -1};
+        for (int i = 0; i < 4; ++i)
+          {
+            std::pair<int, int> next{cell.first + dr[i], cell.second + dc[i]};
+            if (!seen[next] &&
+                addedBorderStripCell(lambda, nu, next.first, next.second))
+              {
+                seen[next] = true;
+                stack.push_back(next);
+              }
+          }
+      }
+    return visited == total;
+  }
+
+bool SymmetricEngineRing::addedBorderStripHasNoTwoByTwo(
+    const Partition& lambda,
+    const Partition& nu) const
+{
+    for (size_t r = 0; r + 1 < nu.size(); ++r)
+      for (int c = 1; c <= std::max(partitionPart(nu, r),
+                                    partitionPart(nu, r + 1)); ++c)
+        if (addedBorderStripCell(lambda, nu, static_cast<int>(r), c) &&
+            addedBorderStripCell(lambda, nu, static_cast<int>(r) + 1, c) &&
+            addedBorderStripCell(lambda, nu, static_cast<int>(r), c + 1) &&
+            addedBorderStripCell(lambda, nu, static_cast<int>(r) + 1, c + 1))
+          return false;
+    return true;
+  }
+
+const std::vector<LRProductTerm>& SymmetricEngineRing::powerSumSchurProduct(
+    const Partition& lambda0,
+    int part) const
+{
+    Partition lambda = normalizePartition(lambda0);
+    std::pair<Partition, int> key{lambda, part};
+    auto cached = powerSumSchurProductCache.find(key);
+    if (cached != powerSumSchurProductCache.end()) return cached->second;
+
+    std::vector<LRProductTerm> result;
+    if (part < 0)
+      {
+        auto inserted = powerSumSchurProductCache.emplace(key, std::move(result));
+        return inserted.first->second;
+      }
+    if (part == 0)
+      {
+        result.push_back({lambda, 1});
+        auto inserted = powerSumSchurProductCache.emplace(key, std::move(result));
+        return inserted.first->second;
+      }
+
+    for (const auto& nu : partitionsContaining(lambda, part))
+      {
+        if (!addedBorderStripConnected(lambda, nu)) continue;
+        if (!addedBorderStripHasNoTwoByTwo(lambda, nu)) continue;
+        int rows = 0;
+        for (size_t r = 0; r < nu.size(); ++r)
+          if (partitionPart(nu, r) > partitionPart(lambda, r)) ++rows;
+        long sign = ((rows - 1) % 2 == 0) ? 1 : -1;
+        result.push_back({nu, sign});
+      }
+
+    auto inserted = powerSumSchurProductCache.emplace(key, std::move(result));
+    return inserted.first->second;
+  }
+
+long SymmetricEngineRing::monomialProductCoefficient(
+    const Partition& lambda0,
+    const Partition& mu0,
+    const Partition& nu0) const
+{
+    Partition lambda = normalizePartition(lambda0);
+    Partition mu = normalizePartition(mu0);
+    Partition nu = normalizePartition(nu0);
+    if (partitionWeight(lambda) + partitionWeight(mu) != partitionWeight(nu))
+      return 0;
+
+    std::map<int, int> lambdaCounts;
+    std::map<int, int> muCounts;
+    for (int part : lambda) ++lambdaCounts[part];
+    for (int part : mu) ++muCounts[part];
+
+    auto allUsed = [](const std::map<int, int>& counts) {
+      for (const auto& item : counts)
+        if (item.second != 0) return false;
+      return true;
+    };
+
+    long total = 0;
+    std::function<void(size_t)> split = [&](size_t pos) {
+      if (pos == nu.size())
+        {
+          if (allUsed(lambdaCounts) && allUsed(muCounts)) ++total;
+          return;
+        }
+
+      int part = nu[pos];
+      for (int left = 0; left <= part; ++left)
+        {
+          int right = part - left;
+          if (left > 0)
+            {
+              auto found = lambdaCounts.find(left);
+              if (found == lambdaCounts.end() || found->second == 0) continue;
+              --found->second;
+            }
+          if (right > 0)
+            {
+              auto found = muCounts.find(right);
+              if (found == muCounts.end() || found->second == 0)
+                {
+                  if (left > 0) ++lambdaCounts[left];
+                  continue;
+                }
+              --found->second;
+            }
+
+          split(pos + 1);
+
+          if (right > 0) ++muCounts[right];
+          if (left > 0) ++lambdaCounts[left];
+        }
+    };
+
+    split(0);
+    return total;
+  }
+
+const std::vector<LRProductTerm>& SymmetricEngineRing::monomialProduct(
+    const Partition& a,
+    const Partition& b) const
+{
+    Partition first = normalizePartition(a);
+    Partition second = normalizePartition(b);
+    if (lexLessPartition(second, first)) std::swap(first, second);
+    std::pair<Partition, Partition> key{first, second};
+    auto cached = monomialProductCache.find(key);
+    if (cached != monomialProductCache.end()) return cached->second;
+
+    std::vector<LRProductTerm> result;
+    if (first.empty())
+      {
+        result.push_back({second, 1});
+      }
+    else if (second.empty())
+      {
+        result.push_back({first, 1});
+      }
+    else
+      {
+        int totalWeight = partitionWeight(first) + partitionWeight(second);
+        for (const auto& nu : partitionsOf(totalWeight))
+          {
+            if (partitionLength(nu) > partitionLength(first) + partitionLength(second))
+              continue;
+            long coefficient = monomialProductCoefficient(first, second, nu);
+            if (coefficient != 0) result.push_back({nu, coefficient});
+          }
+      }
+
+    auto inserted = monomialProductCache.emplace(key, std::move(result));
+    return inserted.first->second;
+  }
+
+std::vector<Partition> SymmetricEngineRing::horizontalStripProducts(
+    const Partition& lambda,
+    int row) const
+{
+    std::vector<Partition> result;
+    if (row < 0) return result;
+    if (row == 0)
+      {
+        result.push_back(normalizePartition(lambda));
+        return result;
+      }
+    Partition base = normalizePartition(lambda);
+    for (const auto& nu : partitionsContaining(base, row))
+      {
+        bool horizontal = true;
+        for (size_t i = 0; i + 1 < nu.size(); ++i)
+          if (partitionPart(nu, i + 1) > partitionPart(base, i))
+            {
+              horizontal = false;
+              break;
+            }
+        if (horizontal) result.push_back(nu);
+      }
+    return result;
+  }
+
+std::vector<Partition> SymmetricEngineRing::verticalStripProducts(
+    const Partition& lambda,
+    int col) const
+{
+    std::vector<Partition> result;
+    if (col < 0) return result;
+    Partition conjugate = conjugatePartition(lambda);
+    for (const auto& nu : horizontalStripProducts(conjugate, col))
+      result.push_back(conjugatePartition(nu));
+    return result;
   }
 
 ring_elem SymmetricEngineRing::multiplySchurElements(ring_elem f,
@@ -1475,7 +1915,8 @@ bool SymmetricEngineRing::atomToSchurFactors(
     Partition index = atomIndex(monomial, pos);
     if (basisId == targetBasisId)
       {
-        factors.push_back(index);
+        if (!isPartitionIndex(index)) return false;
+        factors.push_back(trimTrailingZerosPartition(index));
         return true;
       }
 
@@ -1539,6 +1980,529 @@ bool SymmetricEngineRing::schurProductMonomialToSchur(
                                targetDisplayOrder,
                                false);
     return true;
+  }
+
+bool SymmetricEngineRing::fastSchurProductMonomialToSchur(
+    const SymmetricMonomial& monomial,
+    int targetBasisId,
+    const std::string& targetDisplay,
+    int targetDisplayOrder,
+    ring_elem& result) const
+{
+    if (targetDisplay != "S") return false;
+    std::vector<SchurCompatibleFactor> factors;
+    if (!schurCompatibleFactorsFromMonomial(monomial, targetBasisId, factors))
+      return false;
+    return multiplySchurCompatibleFactorsToSchur(std::move(factors),
+                                                targetBasisId,
+                                                targetDisplay,
+                                                targetDisplayOrder,
+                                                result);
+  }
+
+bool SymmetricEngineRing::schurCompatibleFactorsFromMonomial(
+    const SymmetricMonomial& monomial,
+    int targetBasisId,
+    std::vector<SchurCompatibleFactor>& factors) const
+{
+    size_t pos = 0;
+    while (pos < monomial.data.size())
+      {
+        int basisId = atomBasisIdAt(monomial, pos);
+        if (atomIsSkewAt(monomial, pos))
+          {
+            if (basisId != targetBasisId) return false;
+            CoeffMap expansion;
+            int weight = partitionWeight(atomOuterIndex(monomial, pos)) -
+                         partitionWeight(atomInnerIndex(monomial, pos));
+            for (const auto& item : skewSchurExpansion(atomOuterIndex(monomial, pos),
+                                                       atomInnerIndex(monomial, pos)))
+              addCoeff(expansion, item.nu, cachedInteger(item.coefficient));
+            factors.push_back({SchurCompatibleFactor::SchurExpansion,
+                               Partition{},
+                               expansion,
+                               weight});
+            pos += atomLengthAt(monomial, pos);
+            continue;
+          }
+
+        Partition index = atomIndex(monomial, pos);
+        if (basisId == targetBasisId)
+          {
+            auto straightened = straightenSchurIndex(index);
+            if (straightened.first == 1)
+              {
+                factors.push_back({SchurCompatibleFactor::General,
+                                   straightened.second,
+                                   CoeffMap{},
+                                   partitionWeight(straightened.second)});
+              }
+            else
+              {
+                CoeffMap expansion;
+                if (straightened.first != 0)
+                  addCoeff(expansion,
+                           straightened.second,
+                           cachedInteger(straightened.first));
+                factors.push_back({SchurCompatibleFactor::SchurExpansion,
+                                   Partition{},
+                                   expansion,
+                                   partitionWeight(index)});
+              }
+          }
+        else
+          {
+            std::string display = displayForBasis(basisId);
+            if (display != "h" && display != "e" && display != "p") return false;
+            for (int part : index)
+              {
+                if (part < 0) return false;
+                if (part == 0) continue;
+                SchurCompatibleFactor::Kind kind = SchurCompatibleFactor::PowerSum;
+                if (display == "h")
+                  kind = SchurCompatibleFactor::Horizontal;
+                else if (display == "e")
+                  kind = SchurCompatibleFactor::Vertical;
+                factors.push_back({kind, Partition{part}, CoeffMap{}, part});
+              }
+          }
+        pos += atomLengthAt(monomial, pos);
+      }
+    return true;
+  }
+
+bool SymmetricEngineRing::multiplySchurCompatibleFactorsToSchur(
+    std::vector<SchurCompatibleFactor> factors,
+    int targetBasisId,
+    const std::string& targetDisplay,
+    int targetDisplayOrder,
+    ring_elem& result) const
+{
+    if (targetDisplay != "S") return false;
+    if (factors.empty())
+      {
+        result = one();
+        return true;
+      }
+
+    if (factors.size() == 1 &&
+        factors.front().kind == SchurCompatibleFactor::General)
+      {
+        result = basisElementFromIndex(targetBasisId,
+                                       targetDisplay,
+                                       targetDisplayOrder,
+                                       false,
+                                       factors.front().index);
+        return true;
+      }
+
+    if (factors.size() == 2 &&
+        factors[0].kind == SchurCompatibleFactor::General &&
+        factors[1].kind == SchurCompatibleFactor::General)
+      {
+        const auto& product = directLRProduct(factors[0].index, factors[1].index);
+        VECTOR(SymmetricTerm) terms;
+        terms.reserve(product.size());
+        rememberBasis(targetBasisId, targetDisplay, targetDisplayOrder, false);
+        for (const auto& item : product)
+          {
+            SymmetricMonomial termMonomial;
+            appendAtomBlock(termMonomial,
+                            makeAtomBlock(targetDisplayOrder,
+                                          targetBasisId,
+                                          0,
+                                          item.nu));
+            terms.push_back({cachedInteger(item.coefficient),
+                             canonicalMonomial(termMonomial)});
+          }
+        result = fromTermVector(terms, false);
+        return true;
+      }
+
+    std::stable_sort(factors.begin(),
+                     factors.end(),
+                     [](const SchurCompatibleFactor& a,
+                        const SchurCompatibleFactor& b) {
+                       if (a.weight != b.weight) return a.weight < b.weight;
+                       int aRank =
+                           (a.kind == SchurCompatibleFactor::General ||
+                            a.kind == SchurCompatibleFactor::SchurExpansion) ? 0 :
+                           a.kind == SchurCompatibleFactor::PowerSum ? 2 : 1;
+                       int bRank =
+                           (b.kind == SchurCompatibleFactor::General ||
+                            b.kind == SchurCompatibleFactor::SchurExpansion) ? 0 :
+                           b.kind == SchurCompatibleFactor::PowerSum ? 2 : 1;
+                       if (aRank != bRank) return aRank < bRank;
+                       if (a.kind != b.kind) return a.kind < b.kind;
+                       return lexLessPartition(a.index, b.index);
+                     });
+
+    CoeffMap current = oneCoeffMap();
+    for (const auto& factor : factors)
+      {
+        CoeffMap next;
+        for (const auto& term : current)
+          {
+            if (factor.kind == SchurCompatibleFactor::Horizontal)
+              {
+                int row = factor.index.empty() ? 0 : factor.index.front();
+                for (const auto& nu : horizontalStripProducts(term.first, row))
+                  addCoeff(next, nu, term.second);
+              }
+            else if (factor.kind == SchurCompatibleFactor::Vertical)
+              {
+                int col = factor.index.empty() ? 0 : factor.index.front();
+                for (const auto& nu : verticalStripProducts(term.first, col))
+                  addCoeff(next, nu, term.second);
+              }
+            else if (factor.kind == SchurCompatibleFactor::PowerSum)
+              {
+                int part = factor.index.empty() ? 0 : factor.index.front();
+                for (const auto& product : powerSumSchurProduct(term.first, part))
+                  {
+                    ring_elem coeff = product.coefficient == 1
+                        ? term.second
+                        : coefficientRing->mult(cachedInteger(product.coefficient),
+                                                term.second);
+                    addCoeff(next, product.nu, coeff);
+                  }
+              }
+            else if (factor.kind == SchurCompatibleFactor::SchurExpansion)
+              {
+                for (const auto& expansionTerm : factor.expansion)
+                  {
+                    ring_elem expansionCoeff = coefficientRing->mult(term.second,
+                                                                     expansionTerm.second);
+                    if (coefficientRing->is_zero(expansionCoeff)) continue;
+                    for (const auto& product : directLRProduct(term.first,
+                                                               expansionTerm.first))
+                      {
+                        ring_elem coeff = product.coefficient == 1
+                            ? expansionCoeff
+                            : coefficientRing->mult(cachedInteger(product.coefficient),
+                                                    expansionCoeff);
+                        addCoeff(next, product.nu, coeff);
+                      }
+                  }
+              }
+            else
+              {
+                for (const auto& product : directLRProduct(term.first, factor.index))
+                  {
+                    ring_elem coeff = product.coefficient == 1
+                        ? term.second
+                        : coefficientRing->mult(cachedInteger(product.coefficient),
+                                                term.second);
+                    addCoeff(next, product.nu, coeff);
+                  }
+              }
+          }
+        current = next;
+      }
+
+    result = coeffMapToElement(current,
+                               targetBasisId,
+                               targetDisplay,
+                               targetDisplayOrder,
+                               false);
+    return true;
+  }
+
+bool SymmetricEngineRing::fastElementToSchur(ring_elem f,
+                          int targetBasisId,
+                          const std::string& targetDisplay,
+                          int targetDisplayOrder,
+                          ring_elem& result) const
+{
+    if (targetDisplay != "S") return false;
+    const auto *poly = polyValue(f);
+    VECTOR(SymmetricTerm) terms;
+    for (const auto& term : poly->terms)
+      {
+        ring_elem converted;
+        if (!fastSchurProductMonomialToSchur(term.monomial,
+                                             targetBasisId,
+                                             targetDisplay,
+                                             targetDisplayOrder,
+                                             converted))
+          return false;
+        const auto *convertedPoly = polyValue(converted);
+        terms.reserve(terms.size() + convertedPoly->terms.size());
+        for (const auto& convertedTerm : convertedPoly->terms)
+          terms.push_back({coefficientRing->mult(term.coeff, convertedTerm.coeff),
+                           convertedTerm.monomial});
+      }
+    result = fromTermVector(terms, false);
+    return true;
+  }
+
+bool SymmetricEngineRing::fastProductToSchur(ring_elem f,
+                          ring_elem g,
+                          int targetBasisId,
+                          const std::string& targetDisplay,
+                          int targetDisplayOrder,
+                          ring_elem& result) const
+{
+    if (targetDisplay != "S") return false;
+    const auto *left = polyValue(f);
+    const auto *right = polyValue(g);
+    VECTOR(SymmetricTerm) terms;
+    for (const auto& leftTerm : left->terms)
+      for (const auto& rightTerm : right->terms)
+        {
+          ring_elem baseCoeff = coefficientRing->mult(leftTerm.coeff,
+                                                      rightTerm.coeff);
+          if (coefficientRing->is_zero(baseCoeff)) continue;
+
+          SymmetricMonomial productMonomial =
+              multiplyMonomials(leftTerm.monomial, rightTerm.monomial);
+          ring_elem converted;
+          if (!fastSchurProductMonomialToSchur(productMonomial,
+                                               targetBasisId,
+                                               targetDisplay,
+                                               targetDisplayOrder,
+                                               converted))
+            return false;
+
+          const auto *convertedPoly = polyValue(converted);
+          terms.reserve(terms.size() + convertedPoly->terms.size());
+          for (const auto& convertedTerm : convertedPoly->terms)
+            terms.push_back({coefficientRing->mult(baseCoeff,
+                                                   convertedTerm.coeff),
+                             convertedTerm.monomial});
+        }
+
+    result = fromTermVector(terms, false);
+    return true;
+  }
+
+bool SymmetricEngineRing::monomialLikeAtomToCoeffMap(
+    const SymmetricMonomial& monomial,
+    size_t pos,
+    const std::string& targetDisplay,
+    CoeffMap& result) const
+{
+    if (atomIsSkewAt(monomial, pos)) return false;
+    bool forgottenTarget = isForgottenDisplay(targetDisplay);
+    if (targetDisplay != "m" && !forgottenTarget) return false;
+
+    std::string display = displayForBasis(atomBasisIdAt(monomial, pos));
+    Partition index = atomIndex(monomial, pos);
+
+    auto partMap = [&](const std::string& kind, int part, long sign) {
+      CoeffMap map;
+      if (part < 0) return map;
+      if (part == 0)
+        {
+          addCoeff(map, Partition{}, cachedInteger(sign));
+          return map;
+        }
+      if (kind == "h")
+        {
+          for (const auto& lambda : partitionsOf(part))
+            addCoeff(map, lambda, cachedInteger(sign));
+        }
+      else if (kind == "e")
+        {
+          addCoeff(map, Partition(static_cast<size_t>(part), 1),
+                   cachedInteger(sign));
+        }
+      else if (kind == "p")
+        {
+          addCoeff(map, Partition{part}, cachedInteger(sign));
+        }
+      return map;
+    };
+
+    if (!forgottenTarget && display == "m")
+      {
+        addCoeff(result, index, coefficientRing->one());
+        return true;
+      }
+    if (forgottenTarget && isForgottenDisplay(display))
+      {
+        addCoeff(result, index, coefficientRing->one());
+        return true;
+      }
+
+    std::string mappedDisplay = display;
+    bool powerSumOmegaSign = false;
+    if (forgottenTarget)
+      {
+        if (display == "h")
+          mappedDisplay = "e";
+        else if (display == "e")
+          mappedDisplay = "h";
+        else if (display == "p")
+          {
+            mappedDisplay = "p";
+            powerSumOmegaSign = true;
+          }
+        else
+          return false;
+      }
+    else if (display != "h" && display != "e" && display != "p")
+      return false;
+
+    result = oneCoeffMap();
+    for (int part : index)
+      {
+        if (part < 0) return false;
+        long sign = 1;
+        if (powerSumOmegaSign && part % 2 == 0) sign = -1;
+        CoeffMap factor = partMap(mappedDisplay, part, sign);
+        result = multiplyMonomialCoeffMaps(result, factor);
+      }
+    return true;
+  }
+
+bool SymmetricEngineRing::monomialLikeMonomialToTarget(
+    const SymmetricMonomial& monomial,
+    int targetBasisId,
+    const std::string& targetDisplay,
+    int targetDisplayOrder,
+    bool targetIsMultiplicative,
+    ring_elem& result) const
+{
+    if (targetDisplay != "m" && !isForgottenDisplay(targetDisplay))
+      return false;
+
+    CoeffMap current = oneCoeffMap();
+    size_t pos = 0;
+    while (pos < monomial.data.size())
+      {
+        CoeffMap factor;
+        if (!monomialLikeAtomToCoeffMap(monomial, pos, targetDisplay, factor))
+          return false;
+        current = multiplyMonomialCoeffMaps(current, factor);
+        pos += atomLengthAt(monomial, pos);
+      }
+
+    result = coeffMapToElement(current,
+                               targetBasisId,
+                               targetDisplay,
+                               targetDisplayOrder,
+                               targetIsMultiplicative);
+    return true;
+  }
+
+bool SymmetricEngineRing::fastProductToMonomialLike(
+    ring_elem f,
+    ring_elem g,
+    int targetBasisId,
+    const std::string& targetDisplay,
+    int targetDisplayOrder,
+    bool targetIsMultiplicative,
+    ring_elem& result) const
+{
+    if (targetDisplay != "m" && !isForgottenDisplay(targetDisplay))
+      return false;
+
+    const auto *left = polyValue(f);
+    const auto *right = polyValue(g);
+    VECTOR(SymmetricTerm) terms;
+    for (const auto& leftTerm : left->terms)
+      for (const auto& rightTerm : right->terms)
+        {
+          ring_elem baseCoeff = coefficientRing->mult(leftTerm.coeff,
+                                                      rightTerm.coeff);
+          if (coefficientRing->is_zero(baseCoeff)) continue;
+
+          SymmetricMonomial productMonomial =
+              multiplyMonomials(leftTerm.monomial, rightTerm.monomial);
+          ring_elem converted;
+          if (!monomialLikeMonomialToTarget(productMonomial,
+                                            targetBasisId,
+                                            targetDisplay,
+                                            targetDisplayOrder,
+                                            targetIsMultiplicative,
+                                            converted))
+            return false;
+
+          const auto *convertedPoly = polyValue(converted);
+          terms.reserve(terms.size() + convertedPoly->terms.size());
+          for (const auto& convertedTerm : convertedPoly->terms)
+            terms.push_back({coefficientRing->mult(baseCoeff,
+                                                   convertedTerm.coeff),
+                             convertedTerm.monomial});
+        }
+
+    result = fromTermVector(terms, false);
+    return true;
+  }
+
+bool SymmetricEngineRing::fastProductToTarget(ring_elem f,
+                          ring_elem g,
+                          int targetBasisId,
+                          const std::string& targetDisplay,
+                          int targetDisplayOrder,
+                          bool targetIsMultiplicative,
+                          ring_elem& result) const
+{
+    rememberBasis(targetBasisId,
+                  targetDisplay,
+                  targetDisplayOrder,
+                  targetIsMultiplicative);
+
+    if (targetDisplay == "S")
+      return fastProductToSchur(f,
+                                g,
+                                targetBasisId,
+                                targetDisplay,
+                                targetDisplayOrder,
+                                result);
+
+    if (targetDisplay == "m" || isForgottenDisplay(targetDisplay))
+      return fastProductToMonomialLike(f,
+                                       g,
+                                       targetBasisId,
+                                       targetDisplay,
+                                       targetDisplayOrder,
+                                       targetIsMultiplicative,
+                                       result);
+
+    int leftBasis = singleBasisId(f);
+    int rightBasis = singleBasisId(g);
+    if (targetIsMultiplicative && leftBasis == targetBasisId)
+      {
+        ring_elem convertedRight;
+        if (elementToDirectTarget(g,
+                                  targetBasisId,
+                                  targetDisplay,
+                                  targetDisplayOrder,
+                                  targetIsMultiplicative,
+                                  convertedRight))
+          {
+            result = mult(f, convertedRight);
+            return !error();
+          }
+        if (error()) return false;
+      }
+    if (targetIsMultiplicative && rightBasis == targetBasisId)
+      {
+        ring_elem convertedLeft;
+        if (elementToDirectTarget(f,
+                                  targetBasisId,
+                                  targetDisplay,
+                                  targetDisplayOrder,
+                                  targetIsMultiplicative,
+                                  convertedLeft))
+          {
+            result = mult(convertedLeft, g);
+            return !error();
+          }
+        if (error()) return false;
+      }
+
+    bool leftNative = leftBasis == 0 || leftBasis == targetBasisId;
+    bool rightNative = rightBasis == 0 || rightBasis == targetBasisId;
+    if (leftNative && rightNative)
+      {
+        result = mult(f, g);
+        return !error();
+      }
+
+    return false;
   }
 
 bool SymmetricEngineRing::termToDirectTarget(const SymmetricTerm& term,
@@ -1726,6 +2690,94 @@ ring_elem SymmetricEngineRing::toBasis(ring_elem f,
                                            targetIsMultiplicative);
     if (error()) return zero();
     return add(result, convertedRemainder);
+  }
+
+ring_elem SymmetricEngineRing::toSchurFast(ring_elem f,
+                    int pBasisId,
+                    const std::string& pDisplay,
+                    int pOrder,
+                    bool pIsMultiplicative,
+                    int schurBasisId,
+                    const std::string& schurDisplay,
+                    int schurOrder) const
+{
+    rememberBasis(pBasisId, pDisplay, pOrder, pIsMultiplicative);
+    rememberBasis(schurBasisId, schurDisplay, schurOrder, false);
+
+    ring_elem direct;
+    if (fastElementToSchur(f, schurBasisId, schurDisplay, schurOrder, direct))
+      return direct;
+    if (error()) return zero();
+
+    return toBasis(f,
+                   pBasisId,
+                   pDisplay,
+                   pOrder,
+                   pIsMultiplicative,
+                   schurBasisId,
+                   schurDisplay,
+                   schurOrder,
+                   false);
+  }
+
+ring_elem SymmetricEngineRing::multiplyToSchurFast(ring_elem f,
+                    ring_elem g,
+                    int pBasisId,
+                    const std::string& pDisplay,
+                    int pOrder,
+                    bool pIsMultiplicative,
+                    int schurBasisId,
+                    const std::string& schurDisplay,
+                    int schurOrder) const
+{
+    return multiplyToBasisFast(f,
+                               g,
+                               pBasisId,
+                               pDisplay,
+                               pOrder,
+                               pIsMultiplicative,
+                               schurBasisId,
+                               schurDisplay,
+                               schurOrder,
+                               false);
+  }
+
+ring_elem SymmetricEngineRing::multiplyToBasisFast(ring_elem f,
+                    ring_elem g,
+                    int pBasisId,
+                    const std::string& pDisplay,
+                    int pOrder,
+                    bool pIsMultiplicative,
+                    int targetBasisId,
+                    const std::string& targetDisplay,
+                    int targetOrder,
+                    bool targetIsMultiplicative) const
+{
+    rememberBasis(pBasisId, pDisplay, pOrder, pIsMultiplicative);
+    rememberBasis(targetBasisId, targetDisplay, targetOrder, targetIsMultiplicative);
+
+    ring_elem direct;
+    if (fastProductToTarget(f,
+                            g,
+                            targetBasisId,
+                            targetDisplay,
+                            targetOrder,
+                            targetIsMultiplicative,
+                            direct))
+      return direct;
+    if (error()) return zero();
+
+    ring_elem product = mult(f, g);
+    if (error()) return zero();
+    return toBasis(product,
+                   pBasisId,
+                   pDisplay,
+                   pOrder,
+                   pIsMultiplicative,
+                   targetBasisId,
+                   targetDisplay,
+                   targetOrder,
+                   targetIsMultiplicative);
   }
 
 } // namespace symmetric_rings
