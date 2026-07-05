@@ -36,8 +36,8 @@ ringHasBasis = (R0, B0) -> any(R0#"Bases", C -> C#"BasisId" == B0#"BasisId")
 rememberRingBasisData = R0 -> scan(R0#"Bases", B0 -> rememberBasisInEngine(R0, B0))
 
 -- Builds the compact omega map consumed by the C++ engine.
-omegaMapData = R0 -> flatten apply(select(R0#"Bases", B0 -> B0#"Omega" =!= null), B0 -> (
-        target := basis(R0, B0#"Omega");
+omegaMapData = R0 -> flatten apply(select(R0#"Bases", B0 -> omegaPartnerSymbol B0 =!= null), B0 -> (
+        target := basis(R0, omegaPartnerSymbol B0);
         {B0#"BasisId", target#"BasisId", target#"DisplayOrder", if target#"MultiplicativeIndex" then 1 else 0}
         ))
 
@@ -51,21 +51,17 @@ innerProductKindCode = kind -> (
 
 -- Looks up inner-product metadata for one basis and context.
 innerProductRule = (B0, contextName) -> (
-    data := B0#"InnerProductData";
-    if data === null then null
-    else if instance(data, HashTable) and data#?contextName then data#contextName
-    else null
+    rules := innerProductRules(B0, contextName);
+    if #rules == 0 then null else rules#0
     )
 
 -- Builds the compact inner-product map consumed by the C++ engine.
-innerProductMapData = (R0, contextName) -> flatten apply(select(R0#"Bases", B0 -> (
-            rule := innerProductRule(B0, contextName);
-            rule =!= null and rule#?"DualBasis" and rule#?"EngineKind"
-            )), B0 -> (
-        rule := innerProductRule(B0, contextName);
+innerProductMapData = (R0, contextName) -> flatten flatten apply(R0#"Bases", B0 -> apply(select(innerProductRules(B0, contextName), rule -> (
+                rule =!= null and rule#?"DualBasis" and rule#?"EngineKind" and rule#"EngineKind" =!= null
+                )), rule -> (
         target := basis(R0, rule#"DualBasis");
         {B0#"BasisId", target#"BasisId", innerProductKindCode rule#"EngineKind"}
-        ))
+        )))
 
 -- Returns the coefficient ring of a symmetric ring.
 coefficientRing SymmetricRing := R0 -> R0.CoefficientRing
@@ -151,7 +147,7 @@ basisOnRing = (B, R0) -> new SymmetricBasis from hashTable(pairs B | {"Ring" => 
 basis(SymmetricRing, String) := SymmetricBasis => opts -> (R0, basisSymbol) -> (
     symbolString := toString basisSymbol;
     if not BasisIndex#?symbolString then error("unknown symmetric function basis: ", symbolString);
-    B0 := BasisIndex#symbolString;
+    B0 := BasisIndex#(canonicalBasisSymbol symbolString);
     if not ringHasBasis(R0, B0) then error("basis ", symbolString, " is not available for this symmetric ring");
     basisOnRing(B0, R0)
     )
@@ -183,7 +179,7 @@ basis SymmetricBasis := SymmetricBasis => opts -> B -> (
 -- Installs an indexed variable table for an available basis symbol.
 installBasisAlias = (R0, B0) -> (
     X := getSymbol(B0#"BasisSymbol");
-    B1 := basis(R0, B0);
+    B1 := if B0#?"BasisAliasOf" then basis(R0, B0#"BasisAliasOf") else basis(R0, B0);
     t := new SymmetricRingIndexedVariableTable from X;
     t.SymmetricRing = R0;
     t.SymmetricBasis = B1;
@@ -209,8 +205,72 @@ installBasisAliases = R0 -> (
     scan(availableSymmetricBases, B0 -> (
             aliases#(B0#"BasisSymbol") = if ringHasBasis(R0, B0) then installBasisAlias(R0, B0) else installUnavailableBasisAlias(R0, B0)
             ));
+    scan(registeredBasisAliases(), B0 -> aliases#(B0#"BasisSymbol") = if ringHasBasis(R0, BasisIndex#(B0#"BasisAliasOf")) then installBasisAlias(R0, B0) else installUnavailableBasisAlias(R0, B0));
     R0.cache#"Aliases" = aliases;
     aliases
+    )
+
+-- Lists aliases grouped by canonical basis symbol on a ring.
+aliasesForRing = R0 -> (
+    H := new MutableHashTable;
+    scan(keys BasisAliasIndex, aliasSymbol -> (
+            targetSymbol := BasisAliasIndex#aliasSymbol;
+            target := BasisIndex#targetSymbol;
+            if ringHasBasis(R0, target) then
+                H#targetSymbol = append(if H#?targetSymbol then H#targetSymbol else {}, aliasSymbol);
+            ));
+    hashTable pairs H
+    )
+
+-- Public function for listing mathematical basis aliases.
+aliases = args -> (
+    L := argumentList args;
+    if #L == 1 and instance(L#0, SymmetricRing) then aliasesForRing L#0
+    else error "expected a symmetric ring"
+    )
+
+-- Public function for listing omega partners on a ring.
+omegaPartners = args -> (
+    L := argumentList args;
+    if #L != 1 or not instance(L#0, SymmetricRing) then error "expected a symmetric ring";
+    R0 := L#0;
+    H := new MutableHashTable;
+    scan(R0#"Bases", B0 -> (
+            omegaSymbol := omegaPartnerSymbol B0;
+            if omegaSymbol =!= null and BasisIndex#?omegaSymbol and ringHasBasis(R0, BasisIndex#omegaSymbol) then
+                H#(B0#"BasisSymbol") = omegaSymbol;
+            ));
+    hashTable pairs H
+    )
+
+-- Public function for listing specialization rules on a ring.
+specializations = args -> (
+    L := argumentList args;
+    if #L != 1 or not instance(L#0, SymmetricRing) then error "expected a symmetric ring";
+    R0 := L#0;
+    H := new MutableHashTable;
+    scan(R0#"Bases", B0 -> (
+            specs := specializationRulesForBasis B0;
+            if #specs > 0 then H#(B0#"BasisSymbol") = specs;
+            ));
+    hashTable pairs H
+    )
+
+-- Public function for listing inner-product pairings on a ring.
+innerProductPairings = args -> (
+    L := argumentList args;
+    if #L != 1 or not instance(L#0, SymmetricRing) then error "expected a symmetric ring";
+    R0 := L#0;
+    contexts := new MutableHashTable;
+    scan(keys InnerProductPairingRegistry, contextName -> (
+            contextRules := new MutableHashTable;
+            scan(R0#"Bases", B0 -> (
+                    rules := innerProductRules(B0, contextName);
+                    if #rules > 0 then contextRules#(B0#"BasisSymbol") = rules;
+                    ));
+            if #keys contextRules > 0 then contexts#contextName = hashTable pairs contextRules;
+            ));
+    hashTable pairs contexts
     )
 
 -- Compact display pair for a basis in bases().
@@ -256,14 +316,51 @@ bases(SymmetricRing, Boolean) := (R0, verbose) -> (
 -- Public method for inspecting basis data.
 basisData = method()
 
+-- Returns basis data enriched with the centralized registry view.
+enrichedBasisData = B -> (
+    H := new MutableHashTable from pairs B;
+    omegaSymbol := omegaPartnerSymbol B;
+    if omegaSymbol =!= null then H#"Omega" = omegaSymbol;
+    ipData := new MutableHashTable;
+    scan(keys InnerProductPairingRegistry, contextName -> (
+            rules := innerProductRules(B, contextName);
+            if #rules > 0 then ipData#contextName = rules;
+            ));
+    if #keys ipData > 0 then H#"InnerProductData" = hashTable pairs ipData;
+    specs := specializationRulesForBasis B;
+    if #specs > 0 then H#"Specialization" = specs;
+    data := B#"TransformData";
+    if data =!= null then (
+        H#"TransformedBasisData" = hashTable {
+            "SourceBasis" => data#"SourceBasis",
+            "Alphabet" => data#"Alphabet",
+            "SumOver" => (data#"SumOver")#"Kind",
+            "OutputBasis" => data#"OutputBasis",
+            "UsesMixedBases" => data#"UsesMixedBases",
+            "PreservesSourceBasis" => data#"PreservesSourceBasis",
+            "InverseConversionAvailable" => data#"InverseConversionAvailable",
+            "OmegaPartner" => omegaSymbol,
+            "InnerProductPartners" => if #keys ipData > 0 then hashTable pairs ipData else null,
+            "KnownEquivalentBasis" => if data#?"KnownEquivalentBasis" then data#"KnownEquivalentBasis" else null,
+            "OnEquivalentBasis" => if data#?"OnEquivalentBasis" then data#"OnEquivalentBasis" else null
+            };
+        );
+    if H#?"TransformData" then remove(H, "TransformData");
+    new SymmetricBasis from hashTable pairs H
+    )
+
 -- Returns basis data from a basis metadata object.
-basisData SymmetricBasis := B -> B
+basisData SymmetricBasis := B -> enrichedBasisData B
 
 -- Returns basis data by basis symbol.
-basisData String := basisSymbol -> basisData(basis basisSymbol)
+basisData String := basisSymbol -> (
+    symbolString := toString basisSymbol;
+    if BasisIndex#?symbolString and BasisAliasIndex#?symbolString then enrichedBasisData(BasisIndex#symbolString)
+    else basisData(basis basisSymbol)
+    )
 
 -- Returns basis data by symbol.
-basisData Symbol := basisSymbol -> basisData(basis basisSymbol)
+basisData Symbol := basisSymbol -> basisData(toString basisSymbol)
 
 -- ============================================================================
 -- Element Construction And Arithmetic

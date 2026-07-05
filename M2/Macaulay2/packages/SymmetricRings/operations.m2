@@ -335,24 +335,40 @@ specializationValuesEqual = (a, b, A) -> (
     else a == promote(b, A)
     )
 
--- Finds a specialization rule whose parameter value matches.
+-- Tests whether a substitution-list specialization rule matches.
+substitutionSpecializationRuleMatches = (rule, sourceRing, substitutions, A) -> (
+    rule#?"Substitutions"
+    and instance(rule#"Substitutions", List)
+    and all(rule#"Substitutions", opt -> (
+            class opt === Option
+            and specializationValuesEqual(
+                specializedParameterValue(sourceRing, opt#0, substitutions, A),
+                opt#1,
+                A)
+            ))
+    )
+
+-- Tests whether a legacy one-parameter specialization rule matches.
+parameterSpecializationRuleMatches = (rule, sourceRing, substitutions, A) -> (
+    rule#?"Parameter"
+    and rule#?"Value"
+    and specializationValuesEqual(
+        specializedParameterValue(sourceRing, rule#"Parameter", substitutions, A),
+        rule#"Value",
+        A)
+    )
+
+-- Finds a specialization rule whose parameter values match.
 matchingSpecializationRule = (B, sourceRing, Rtarget, substitutions) -> (
-    specs := B#"Specialization";
-    if specs === null then null
-    else (
-        A := coefficientRing Rtarget;
-        hits := select(specs, rule -> (
-                instance(rule, HashTable)
-                and rule#?"Parameter"
-                and rule#?"Value"
-                and rule#?"Map"
-                and specializationValuesEqual(
-                    specializedParameterValue(sourceRing, rule#"Parameter", substitutions, A),
-                    rule#"Value",
-                    A)
-                ));
-        if #hits == 0 then null else hits#0
-        )
+    specs := specializationRulesForBasis B;
+    A := coefficientRing Rtarget;
+    hits := select(specs, rule -> (
+            instance(rule, HashTable)
+            and rule#?"Map"
+            and (substitutionSpecializationRuleMatches(rule, sourceRing, substitutions, A)
+                or parameterSpecializationRuleMatches(rule, sourceRing, substitutions, A))
+            ));
+    if #hits == 0 then null else hits#0
     )
 
 -- Converts decoded atom data into the index passed to specialization maps.
@@ -539,30 +555,28 @@ coefficientsInBasisIfPossibleM2 = (F, B) -> (
     if ok then result else null
     )
 
--- Computes a diagonal inner product directly for one basis pair.
-directInnerProductForBasis = (F, G, contextName, B0) -> (
+-- Computes a diagonal inner product directly for one pairing rule.
+directInnerProductForRule = (F, G, B0, rule) -> (
+    if rule === null or not rule#?"DualBasis" or not rule#?"Pairing" then return null;
     R0 := ring F;
     A := coefficientRing R0;
-    rule := innerProductRule(B0, contextName);
-    if rule === null or not rule#?"DualBasis" or not rule#?"Pairing" then null
-    else (
-        dual := try basis(R0, rule#"DualBasis") else null;
-        if dual === null then null
-        else (
-            left := coefficientsInBasisIfPossibleM2(F, basis(R0, B0));
-            if left === null then null
-            else (
-                right := coefficientsInBasisIfPossibleM2(G, dual);
-                if right === null then null
-                else (
-                    pairing := rule#"Pairing";
-                    value := 0_A;
-                    scan(keys left, idx -> if right#?idx then value = value + left#idx * right#idx * promote(pairing(R0, idx), A));
-                    value
-                    )
-                )
-            )
-        )
+    dual := try basis(R0, rule#"DualBasis") else null;
+    if dual === null then return null;
+    left := coefficientsInBasisIfPossibleM2(F, basis(R0, B0));
+    if left === null then return null;
+    right := coefficientsInBasisIfPossibleM2(G, dual);
+    if right === null then return null;
+    pairing := rule#"Pairing";
+    value := 0_A;
+    scan(keys left, idx -> if right#?idx then value = value + left#idx * right#idx * promote(pairing(R0, idx), A));
+    value
+    )
+
+-- Computes a diagonal inner product directly for one basis pair.
+directInnerProductForBasis = (F, G, contextName, B0) -> (
+    result := null;
+    scan(innerProductRules(B0, contextName), rule -> if result === null then result = directInnerProductForRule(F, G, B0, rule));
+    result
     )
 
 -- Tries every known diagonal basis pairing for a direct inner product.

@@ -43,9 +43,13 @@ doc ///
    SymmetricRing
    SymmetricRingElement
    SymmetricBasis
-   registerBasis
    registerTransformedBasis
+   registerSpecializedBasis
    bases
+   aliases
+   omegaPartners
+   specializations
+   innerProductPairings
    basisData
    toBasis
    toS
@@ -161,13 +165,15 @@ doc ///
     @SUBSECTION "Registering a transformed basis"@
    Text
     The function @TO registerTransformedBasis@ is useful when a new basis is
-    obtained from an existing basis by a scalar factor or a linear plethystic
+    obtained from an existing basis by a term transform or a linear plethystic
     alphabet.  For example, the Hall-Littlewood generators satisfy
     $q_\lambda=h_\lambda[(1-t)X]$.
    Example
     A = frac(QQ[t])
     R = symmetricRing A
-    registerTransformedBasis("hTransformed", "SourceBasis" => "h", "Alphabet" => "(1-t)*X")
+    registerTransformedBasis("hTransformed", "h",
+        "Alphabet" => "(1-t)*X",
+        "OnEquivalentBasis" => "RegisterIndependent")
     hTransformed_{2,1} == q_{2,1}
    Text
     The main reference pages linked below give the full list of available
@@ -252,17 +258,16 @@ doc ///
     @SUBSECTION "Transformed bases and companions"@
    Text
     The function @TO registerTransformedBasis@ creates a new basis from an
-    existing source basis.  A scale changes $u_\lambda$ to
-    $c_\lambda u_\lambda$, while a linear alphabet changes
-    $u_\lambda[X]$ to $u_\lambda[\mathcal A]$.  Companion bases may also be
-    registered for omega and inner-product duality.
+    existing source basis.  The source basis is the second argument.  A
+    "TermTransform" callback changes each source term, while a linear alphabet
+    changes $u_\lambda[X]$ to $u_\lambda[\mathcal A]$.  Companion bases may
+    also be registered for omega and inner-product duality.
    Example
     A = QQ
     R = symmetricRing A
-    registerTransformedBasis("AdvH", "SourceBasis" => "h",
-        "Scale" => (R, lambda) -> 2^(#lambda),
-        "Companions" => hashTable {
-            "Omega" => "AdvE",
+    registerTransformedBasis("AdvH", "h",
+        "RegisterCompanions" => hashTable {
+            "OmegaPartner" => "AdvE",
             "InnerProductPartner" => "AdvM",
             "OmegaInnerProductPartner" => "AdvFF"
             })
@@ -276,23 +281,10 @@ doc ///
    Example
     A = frac(QQ[t])
     R = symmetricRing A
-    registerTransformedBasis("AdvQ", "SourceBasis" => "h",
-        "Alphabet" => "(1-t)*X")
+    registerTransformedBasis("AdvQ", "h",
+        "Alphabet" => "(1-t)*X",
+        "OnEquivalentBasis" => "RegisterIndependent")
     toBasis(AdvQ_2, p) == toBasis(q_2, p)
-   Text
-    @SUBSECTION "Low-level basis registration"@
-   Text
-    The function @TO registerBasis@ is the primitive way to introduce a basis.
-    For a basis that should participate in conversions, provide formulas such
-    as "ToPowerSums" and "FromPowerSums"; see @TO "registerBasis options"@.
-    A basis without these formulas can still be used as a named basis, but
-    general changes of basis involving it are not available.
-   Example
-    A = QQ
-    R = symmetricRing A
-    AdvFormal = registerBasis("AdvFormal", "DisplayOrder" => 99)
-    AdvFormal_{3,1} + h_2
-    basisData "AdvFormal"
    Text
     The function @TO bases@ lists the bases available for the current ring, and
     @TO basisData@ gives the data attached to a particular basis.
@@ -303,7 +295,6 @@ doc ///
   SeeAlso
    "SymmetricRings Guide"
    "symmetricRing(...,\"Parameters\"=>...)"
-   "registerBasis options"
    registerTransformedBasis
    specializeParameters
    hallInnerProduct
@@ -383,8 +374,7 @@ doc ///
     are allowed, and any known formulas for omega, inner products, and changes
     of basis.  A multiplicative basis satisfies
     $B_\lambda=\prod_i B_{\lambda_i}$.  See @TO basisData@ for inspecting this
-    basis data, @TO registerTransformedBasis@ for transformed bases, and
-    @TO registerBasis@ for adding a basis directly.
+    basis data and @TO registerTransformedBasis@ for transformed bases.
    Example
     A = QQ
     R = symmetricRing A
@@ -444,55 +434,49 @@ doc ///
 
  Node
   Key
-   registerBasis
-  Headline
-   register a user-defined basis
-  Usage
-   registerBasis basisSymbol
-  Description
-   Text
-    The command registerBasis adds a new @TO SymmetricBasis@ to the list of
-    available bases; see @TO bases@.  A registered basis can be used to form
-    symmetric functions such as $A_\lambda$.  Unless change-of-basis formulas
-    are supplied, the new basis is treated as an independent named basis.
-   Text
-    Change-of-basis formulas may be supplied with options such as
-    "ToPowerSums" and "FromPowerSums"; see @TO "registerBasis options"@.
-    The general @TO toBasis@ method uses these formulas when it needs to
-    convert expressions involving user-defined bases.
-   Example
-    A = QQ
-    R = symmetricRing A
-    DocA = registerBasis("DocA", "DisplayOrder" => 90)
-    DocA_{3,1} + h_2
-    basisData "DocA"
-
- Node
-  Key
    registerTransformedBasis
   Headline
    register a basis transformed from an existing basis
   Usage
-   registerTransformedBasis basisSymbol
+   registerTransformedBasis(basisSymbol, sourceBasis)
   Description
    Text
     The command registerTransformedBasis is the preferred user-facing way to
-    create a basis obtained from an existing source basis by diagonal
-    transformations.  The required option "SourceBasis" names the source
-    basis.  The option "Scale" is a function (R,lambda)->c_lambda defining
-    $A_\lambda=c_\lambda u_\lambda$.  The option "Alphabet" accepts a string
+    create a basis obtained from an existing source basis.  The second argument
+    names the source basis.  The option "TermTransform" is a function
+    (lambda,mu,sourceTerm)->transformedTerm defining the contribution of
+    $u_\mu[\mathcal A]$ to $A_\lambda$.  The option "Alphabet" accepts a string
     such as "(1-t)*X" or "((1-t)/(1-q))*X"; the package parses it in a hidden
     one-variable ring over the coefficient ring and interprets X as the ambient
-    alphabet.  With both options the intended definition is
-    $A_\lambda[X]=c_\lambda u_\lambda[\mathcal A]$.
+    alphabet.
    Text
     The helper creates the corresponding basis and derives its power-sum
     conversion formulas from the source basis.  Basic index behavior such as
     MultiplicativeIndex, ZeroIndexIsOne, and ZeroOnNegative is inherited from
     the source basis unless explicitly supplied.
    Text
+    The option "SumOver" controls which source indices contribute to each
+    transformed basis element.  The built-in values are "SameIndex",
+    "DominanceLower", "DominanceUpper", and "AllPartitionsOfWeight".  The two
+    dominance options support triangular inverse conversion when the transform
+    is source-basis triangular.
+   Text
+    If a transformed-basis definition is known to agree with an existing
+    built-in basis, registration errors by default.  Set "OnEquivalentBasis"
+    to "RegisterIndependent" when an independent basis is intentional, or to
+    "CreateAlias" to make the requested symbol a mathematical alias for the
+    known basis.
+   Text
+    Generated specialization families can be attached during registration with
+    "RegisterSpecializations".  Its value is a list of substitution lists.  For
+    example, {{t=>-1}, {t=>0,q=>0}} creates specialized bases whose names are
+    obtained by appending suffixes such as tm1 and t0q0 to the main basis and
+    to any companions registered in the same call.  The helper
+    @TO registerSpecializedBasis@ is the explicit form for giving one
+    specialized basis a custom name.
+   Text
     Optional companion bases may be created at the same time.  The companions
-    named by "Omega", "InnerProductPartner", and "OmegaInnerProductPartner"
+    named by "OmegaPartner", "InnerProductPartner", and "OmegaInnerProductPartner"
     represent the omega image, the diagonal inner-product partner, and the
     omega image of that partner.  If the requested companion cannot be derived
     from the source basis, registration throws an error.
@@ -503,10 +487,9 @@ doc ///
    Example
     A = QQ
     R = symmetricRing A
-    registerTransformedBasis("DocH", "SourceBasis" => "h",
-        "Scale" => (R, lambda) -> 2^(#lambda),
-        "Companions" => hashTable {
-            "Omega" => "DocE",
+    registerTransformedBasis("DocH", "h",
+        "RegisterCompanions" => hashTable {
+            "OmegaPartner" => "DocE",
             "InnerProductPartner" => "DocM",
             "OmegaInnerProductPartner" => "DocFF"
             })
@@ -519,14 +502,13 @@ doc ///
     the plethystic power-sum rule
     $p_n[cX]=p_n[c]p_n[X]$.  For example, $(1-t)X$ gives
     $p_n\mapsto (1-t^n)p_n$.
-    The option "AlphabetScale" may be used directly to specify the scalars
-    $p_n[\mathcal A]/p_n[X]$.  When inverse conversions require denominators,
-    use a fraction field.
+    When inverse conversions require denominators, use a fraction field.
    Example
     A = frac(QQ[t])
     R = symmetricRing A
-    registerTransformedBasis("DocAlphaH", "SourceBasis" => "h",
-        "Alphabet" => "(1-t)*X")
+    registerTransformedBasis("DocAlphaH", "h",
+        "Alphabet" => "(1-t)*X",
+        "OnEquivalentBasis" => "RegisterIndependent")
     toBasis(DocAlphaH_2, p)
     toBasis(toBasis(DocAlphaH_2, p), "DocAlphaH")
    Text
@@ -535,10 +517,21 @@ doc ///
    Example
     A = frac(QQ[t])
     R = symmetricRing A
-    registerTransformedBasis("hTransformed", "SourceBasis" => "h",
+    registerTransformedBasis("DocQAlias", "h",
         "Alphabet" => "(1-t)*X",
-        "Companions" => hashTable {
-            "Omega" => "hTransformedOmega",
+        "OnEquivalentBasis" => "CreateAlias")
+    DocQAlias_2 == q_2
+   Text
+    This can also be used to register an independent basis equivalent to the
+    Hall-Littlewood generators $q_\lambda=h_\lambda[(1-t)X]$.
+   Example
+    A = frac(QQ[t])
+    R = symmetricRing A
+    registerTransformedBasis("hTransformed", "h",
+        "Alphabet" => "(1-t)*X",
+        "OnEquivalentBasis" => "RegisterIndependent",
+        "RegisterCompanions" => hashTable {
+            "OmegaPartner" => "hTransformedOmega",
             "InnerProductPartner" => "hTransformedDual",
             "OmegaInnerProductPartner" => "hTransformedDualOmega"
             })
@@ -553,9 +546,48 @@ doc ///
    Example
     A = frac(QQ[t,q])
     R = symmetricRing A
-    registerTransformedBasis("DocMacAlphaH", "SourceBasis" => "h",
+    registerTransformedBasis("DocMacAlphaH", "h",
         "Alphabet" => "((1-t)/(1-q))*X")
     toBasis(DocMacAlphaH_1, p)
+   Text
+    A transformed basis can generate named specialization families.  The
+    suffix is appended to the main basis and to each registered companion.
+   Example
+    A = QQ[t]
+    R = symmetricRing A
+    registerTransformedBasis("DocSpecDeclared", "h",
+        "TermTransform" => (lambda, mu, sourceTerm) -> (1 + t) * sourceTerm,
+        "RegisterSpecializations" => {{t => 0}, {t => -1}})
+    toBasis(DocSpecDeclaredt0_2, p)
+    specializeParameters(DocSpecDeclared_2, {t => 0})
+    specializeParameters(DocSpecDeclared_2, {t => -1})
+
+ Node
+  Key
+   registerSpecializedBasis
+  Headline
+   register a basis obtained by parameter specialization
+  Usage
+   registerSpecializedBasis(basisSymbol, sourceBasis, substitutions)
+  Description
+   Text
+    The command registerSpecializedBasis creates a transformed basis by taking
+    the power-sum expansion of each source-basis element and applying the given
+    coefficient substitutions.  It also records a specialization rule from the
+    source basis to the new basis when the substitution list consists of rules
+    such as t=>0 or {t=>0,q=>0}.
+   Example
+    A = QQ[t]
+    R = symmetricRing A
+    registerTransformedBasis("DocSpecSource", "h",
+        "TermTransform" => (lambda, mu, sourceTerm) -> (1 + t) * sourceTerm)
+    registerSpecializedBasis("DocSpecSourceAtZero", "DocSpecSource", {t => 0})
+    toBasis(DocSpecSourceAtZero_2, p)
+    specializeParameters(DocSpecSource_2, {t => 0})
+  SeeAlso
+   registerTransformedBasis
+   specializeParameters
+   toBasis
 
  Node
   Key
@@ -573,6 +605,12 @@ doc ///
     basis symbol, display order, index conventions, and optional mathematical
     structures such as omega partners, power-sum conversion, transformed-basis
     data, and diagonal @TO hallInnerProduct@ pairings.
+   Text
+    For transformed bases, the key "TransformedBasisData" gives a compact
+    summary of the source basis, alphabet, summation policy, output basis,
+    inverse availability, companions, and known-equivalence policy.  Lower-level
+    transform records are internal and are not part of the public basisData
+    output.
    Example
     A = QQ[t]
     R = symmetricRing A
@@ -604,12 +642,112 @@ doc ///
    Text
     With the verbose option, bases returns the full @TO SymmetricBasis@
     objects.  This is useful for inspecting metadata such as basis symbols,
-    display order, omega partners, indexing conventions, and conversion data.
+    display order, indexing conventions, and conversion data.  Use
+    @TO basisData@ for the registry-enriched public view of omega,
+    specialization, inner-product, alias, and transformed-basis metadata.
    Example
     A = QQ
     R = symmetricRing A
     select(bases(R, "verbose" => true), B -> B#"BasisSymbol" == "S")
     any(bases(R, "verbose" => true), B -> B#"BasisSymbol" == "p")
+
+ Node
+  Key
+   aliases
+  Headline
+   list input aliases for bases
+  Usage
+   aliases R
+  Description
+   Text
+    The function aliases returns a hash table whose keys are canonical basis
+    symbols and whose values are lists of additional input symbols for those
+    bases.  These aliases are input conveniences only: they share the canonical
+    basis id, construct canonical basis elements, display with the canonical
+    basis symbol, and do not appear in @TO bases@.
+   Example
+    A = frac(QQ[t])
+    R = symmetricRing A
+    registerTransformedBasis("DocAliasQ", "h",
+        "Alphabet" => "(1-t)*X",
+        "OnEquivalentBasis" => "CreateAlias")
+    DocAliasQ_2
+    aliases R
+    (basisData "DocAliasQ")#"BasisAliasOf"
+  SeeAlso
+   bases
+   basisData
+   registerTransformedBasis
+
+ Node
+  Key
+   omegaPartners
+  Headline
+   list registered omega partners on a ring
+  Usage
+   omegaPartners R
+  Description
+   Text
+    The function omegaPartners returns a hash table whose keys are basis
+    symbols available on R and whose values are their registered omega partner
+    basis symbols.
+   Example
+    A = frac(QQ[t])
+    R = symmetricRing A
+    (omegaPartners R)#"q"
+    (omegaPartners R)#"Q"
+  SeeAlso
+   aliases
+   specializations
+   innerProductPairings
+   omegaInvolution
+
+ Node
+  Key
+   specializations
+  Headline
+   list registered specialization rules on a ring
+  Usage
+   specializations R
+  Description
+   Text
+    The function specializations returns a hash table whose keys are basis
+    symbols available on R and whose values are lists of registered
+    specialization rules for those bases.
+   Example
+    A = frac(QQ[t])
+    R = symmetricRing A
+    (specializations R)#?"q"
+    (specializations R)#"Q"
+  SeeAlso
+   aliases
+   omegaPartners
+   innerProductPairings
+   specializeParameters
+
+ Node
+  Key
+   innerProductPairings
+  Headline
+   list registered inner-product pairings on a ring
+  Usage
+   innerProductPairings R
+  Description
+   Text
+    The function innerProductPairings returns a hash table keyed by
+    inner-product context.  Each context contains a hash table whose keys are
+    basis symbols available on R and whose values are the registered diagonal
+    pairing rules for those bases.
+   Example
+    A = frac(QQ[t])
+    R = symmetricRing A
+    keys (innerProductPairings R)
+    ((innerProductPairings R)#"HallLittlewood")#"Q"
+  SeeAlso
+   aliases
+   omegaPartners
+   specializations
+   hallInnerProduct
 
  Node
   Key
@@ -729,24 +867,10 @@ doc ///
    Example
     A = frac(QQ[t])
     R = symmetricRing A
-    specializeParameters((1-A_0)*Q_2 + A_0*h_1, {A_0 => 0})
+    specializeParameters((1-t)*Q_2 + t*h_1, {t => 0})
     coefficientRing ring oo
-    specializeParameters((1-A_0)*Q_2 + A_0*h_1, {A_0 => 0}, "PromoteSpecializedRing" => true)
+    specializeParameters((1-t)*Q_2 + t*h_1, {t => 0}, "PromoteSpecializedRing" => true)
     coefficientRing ring oo
-   Text
-    A user-defined basis may also provide specialization rules.  Each rule
-    gives a parameter, the specialized value to match, and a map from an index
-    to the corresponding symmetric function in the target ring.
-   Example
-    TargetDoc = registerBasis("TargetDoc", "Specialization" => {
-        hashTable {
-            "Parameter" => "HallLittlewoodParameter",
-            "Value" => 0,
-            "Map" => (R, idx) -> (basis(R, "h"))_idx
-            }
-        })
-    specializeParameters(TargetDoc_2, {A_0 => 0})
-
  Node
   Key
    plethysm
@@ -895,8 +1019,8 @@ doc ///
     R = symmetricRing A
     F = Q_2
     G = P_2
-    hallInnerProduct(F,G,"ParameterSpecialization"=>{A_0=>0})
-    hallInnerProduct(F,G,"ParameterSpecialization"=>{A_0=>0},"PromoteSpecializedRing"=>true)
+    hallInnerProduct(F,G,"ParameterSpecialization"=>{t=>0})
+    hallInnerProduct(F,G,"ParameterSpecialization"=>{t=>0},"PromoteSpecializedRing"=>true)
    Text
     The power-sum formula involves denominators depending on the
     Hall-Littlewood parameter, so a fraction field is often the natural
@@ -905,7 +1029,7 @@ doc ///
     A = frac(QQ[t])
     R = symmetricRing A
     hallInnerProduct(p_2,p_2)
-    hallInnerProduct((1+A_0)*q_3 + q_1, m_3 + A_0*m_1)
+    hallInnerProduct((1+t)*q_3 + q_1, m_3 + t*m_1)
    Text
     Inner products are also useful for extracting coefficients in a dual basis.
     For example, Schur functions are self-dual for the ordinary Hall inner
@@ -1030,20 +1154,20 @@ doc ///
     R#"HallLittlewoodParameter" and R#"NormalizeSomega".
    Example
     A = QQ[t]
-    R = symmetricRing(A, "HallLittlewoodParameter" => A_0)
+    R = symmetricRing(A, "HallLittlewoodParameter" => t)
     R#"HallLittlewoodParameter"
    Text
     The Macdonald parameter pair may be supplied explicitly when the coefficient
     ring has two distinguished parameters.
    Example
     A = QQ[t,q]
-    R = symmetricRing(A, "MacdonaldParameters" => {A_0,A_1})
+    R = symmetricRing(A, "MacdonaldParameters" => {t,q})
     R#"MacdonaldParameters"
    Text
     The general parameter lists may also be supplied explicitly.
    Example
     A = QQ[a,b]
-    R = symmetricRing(A, "Parameters" => {A_0,A_1}, "DefaultSeriesVariables" => {x,y})
+    R = symmetricRing(A, "Parameters" => {a,b}, "DefaultSeriesVariables" => {x,y})
     R#"Parameters"
     R#"DefaultSeriesVariables"
    Text
@@ -1054,60 +1178,6 @@ doc ///
     A = QQ
     R = symmetricRing(A, "NormalizeSomega" => false)
     Somega_3
-
- Node
-  Key
-   "registerBasis options"
-  Headline
-   options for registering symmetric function bases
-  Description
-   Text
-    These options describe the mathematical behavior of a user-defined
-    @TO SymmetricBasis@; they are supplied to @TO registerBasis@.
-    The first argument to @TO registerBasis@ is the basis symbol used in
-    notation and basis lookup.  DisplayName gives a prose description.  Index
-    options control how indices are normalized and validated.
-    MultiplicativeIndex means that an index lambda denotes the product over the
-    parts of lambda.  The remaining options give known maps such as omega,
-    power-sum conversion, triangular conversion, specialization, availability,
-    and Hall inner product pairings.
-   Example
-    A = QQ
-    R = symmetricRing A
-    DocB = registerBasis("DocB", "DisplayName" => "documented basis", "DisplayOrder" => 95)
-    (basisData "DocB")#"DisplayName"
-   Text
-    Multiplicative bases treat a partition index as a product over its parts.
-   Example
-    A = QQ
-    R = symmetricRing A
-    DocC = registerBasis("DocC", "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true)
-    DocC_{2,1}
-   Text
-    "AvailableWhen" may be "Always" or "HallLittlewood".  Inner products are
-    described by diagonal pairings.  In "InnerProductData", each context such as
-    "Ordinary" or "HallLittlewood" specifies a dual basis and a scalar
-    $c_\lambda$ so that the basis element indexed by lambda pairs with the dual
-    basis element indexed by lambda with coefficient $c_\lambda$.  The scalar
-    is supplied by a function (R,idx)->c.
-   Text
-    "ToPowerSums" and "FromPowerSums" give changes of basis to and from the
-    power-sum basis.  They are supplied by functions with signatures (F,B)->G
-    and (FP,B)->G.  The first converts an expression in the registered basis B
-    to the power-sum basis.  The second converts a power-sum expression FP to
-    the registered basis B.  When these are present, @TO toBasis@ uses them as
-    the source and target changes of basis.
-   Example
-    LeftDoc = registerBasis("LeftDoc", "InnerProductData" => hashTable {
-        "Ordinary" => hashTable {
-            "DualBasis" => "RightDoc",
-            "Pairing" => (R, idx) -> promote(2^(sum idx), coefficientRing R)
-            }
-        })
-    RightDoc = registerBasis("RightDoc")
-    A = QQ
-    R = symmetricRing A
-    hallInnerProduct(LeftDoc_2, RightDoc_2)
 
  Node
   Key

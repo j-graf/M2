@@ -49,28 +49,19 @@ TEST ///
 
 TEST ///
     R0 = symmetricRing QQ
-    A = registerBasis("A", "DisplayOrder" => 90)
-    assert(instance(A, SymmetricBasis))
-    assert(any(bases(R0, "verbose" => true), B0 -> B0#"BasisSymbol" == "A"))
-    g = A_{3,1} + 2*h_2
-    assert(g - A_{3,1} == 2*h_2)
-///
-
-TEST ///
-    R0 = symmetricRing QQ
-    registerTransformedBasis("HScaledSolo", "SourceBasis" => "h",
+    registerTransformedBasis("HScaledSolo", "h",
         "DisplayName" => "scaled h test basis without companions",
-        "Scale" => (R1, lambda) -> 2^(#lambda))
+        "TermTransform" => (lambda, mu, sourceTerm) -> 2^(#lambda) * sourceTerm)
     assert(HScaledSolo_{2,1} == HScaledSolo_2*HScaledSolo_1)
     assert(toBasis(HScaledSolo_2, p) == 2*toBasis(h_2, p))
     assert(toBasis(p_2, "HScaledSolo") == HScaledSolo_2 - (1/4)*HScaledSolo_{1,1})
     assert(hallInnerProduct(HScaledSolo_{2,1}, m_{2,1}) == 4_QQ)
 
-    registerTransformedBasis("HScaled", "SourceBasis" => "h",
+    registerTransformedBasis("HScaled", "h",
         "DisplayName" => "scaled h test basis",
-        "Scale" => (R1, lambda) -> 2^(#lambda),
-        "Companions" => hashTable {
-            "Omega" => "EScaled",
+        "TermTransform" => (lambda, mu, sourceTerm) -> 2^(#lambda) * sourceTerm,
+        "RegisterCompanions" => hashTable {
+            "OmegaPartner" => "EScaled",
             "InnerProductPartner" => "MScaled",
             "OmegaInnerProductPartner" => "FFScaled"
             })
@@ -81,133 +72,177 @@ TEST ///
     assert(omegaInvolution HScaled_2 == EScaled_2)
     assert(omegaInvolution MScaled_2 == FFScaled_2)
     assert(hallInnerProduct(HScaled_{2,1}, MScaled_{2,1}) == 1_QQ)
-    assert(hallInnerProduct(MScaled_{2,1}, HScaled_{2,1}) == 1_QQ)
     assert(hallInnerProduct(EScaled_{2,1}, FFScaled_{2,1}) == 1_QQ)
-    assert(toBasis(toBasis(HScaled_{3,1} + 2*HScaled_2, p), "HScaled") == HScaled_{3,1} + 2*HScaled_2)
+
+    registerTransformedBasis("HCopy", "h",
+        "DisplayName" => "copy of h test basis",
+        "RegisterCompanions" => hashTable {
+            "OmegaPartner" => "ECopy",
+            "InnerProductPartner" => "MCopy",
+            "OmegaInnerProductPartner" => "FFCopy"
+            })
+    assert(toBasis(HCopy_2, p) == toBasis(h_2, p))
+    assert(toBasis(p_2, "HCopy") == 2*HCopy_2 - HCopy_{1,1})
+    assert(toBasis(MCopy_2, p) == toBasis(m_2, p))
+    assert(toBasis(FFCopy_2, p) == toBasis(ff_2, p))
+    assert(omegaInvolution HCopy_2 == ECopy_2)
+    assert(omegaInvolution MCopy_2 == FFCopy_2)
+    assert(hallInnerProduct(HCopy_{2,1}, MCopy_{2,1}) == 1_QQ)
+    assert(hallInnerProduct(MCopy_{2,1}, HCopy_{2,1}) == 1_QQ)
+    assert(hallInnerProduct(ECopy_{2,1}, FFCopy_{2,1}) == 1_QQ)
+    assert(toBasis(toBasis(HCopy_{3,1} + 2*HCopy_2, p), "HCopy") == HCopy_{3,1} + 2*HCopy_2)
+
+    registerTransformedBasis("SDomLower", "S",
+        "SumOver" => "DominanceLower")
+    assert(toBasis(SDomLower_2, S) == S_2 + S_{1,1})
+    assert(toBasis(S_2, "SDomLower") == SDomLower_2 - SDomLower_{1,1})
+    assert(not ((basisData "SDomLower")#?"TransformData"))
+    SDomLowerData = (basisData "SDomLower")#"TransformedBasisData"
+    assert(SDomLowerData#"SourceBasis" == "S")
+    assert(SDomLowerData#"SumOver" == "DominanceLower")
+    assert(SDomLowerData#"OutputBasis" == "S")
+    assert(toBasis(S_3, "SDomLower") == SDomLower_3 - SDomLower_{2,1})
+    assert(toBasis(S_{2,1}, "SDomLower") == SDomLower_{2,1} - SDomLower_{1,1,1})
+
+    registerTransformedBasis("SDomUpper", "S",
+        "SumOver" => "DominanceUpper")
+    assert(toBasis(SDomUpper_{1,1}, S) == S_2 + S_{1,1})
+    assert(toBasis(S_{1,1}, "SDomUpper") == SDomUpper_{1,1} - SDomUpper_2)
+
+    registerTransformedBasis("SAllWeight", "S",
+        "SumOver" => "AllPartitionsOfWeight")
+    assert(toBasis(SAllWeight_2, S) == S_2 + S_{1,1})
+    assert(try (toBasis(S_2, "SAllWeight"); false) else true)
+
+    assert(try (registerTransformedBasis("BadCluster", "h",
+                "RegisterCompanions" => hashTable {
+                    "OmegaPartner" => "BadClusterPartner",
+                    "InnerProductPartner" => "BadClusterPartner"
+                    }); false) else true)
+    assert(try (basis "BadCluster"; false) else true)
+    assert(try (registerTransformedBasis("BadRollback", "h",
+                "AvailableWhen" => "Bogus"); false) else true)
+    assert(try (basis "BadRollback"; false) else true)
+
+    registerTransformedBasis("ZeroDiag", "h",
+        "TermTransform" => (lambda, mu, sourceTerm) -> if lambda == {2} then 0*sourceTerm else sourceTerm)
+    assert(try (toBasis(p_2, "ZeroDiag"); false) else true)
+    registerTransformedBasis("BadTriangularOutput", "S",
+        "SumOver" => "DominanceLower",
+        "TermTransform" => (lambda, mu, sourceTerm) -> toBasis(sourceTerm, p))
+    assert(try (toBasis(S_2, "BadTriangularOutput"); false) else true)
+    assert(try (registerTransformedBasis("MixedCompanion", "h",
+                "TermTransform" => (lambda, mu, sourceTerm) -> sourceTerm + S_mu,
+                "RegisterCompanions" => hashTable {"InnerProductPartner" => "MixedCompanionDual"}); false) else true)
 ///
 
 TEST ///
     A = frac(QQ[t])
     R0 = symmetricRing A
     oldX = value getSymbol "X"
-    registerTransformedBasis("AlphaH", "SourceBasis" => "h",
-        "Alphabet" => "(1-t)*X")
+    assert((basis "q")#"Omega" === null)
+    assert((basisData "q")#"Omega" == "b")
+    assert(try (registerTransformedBasis("KnownAlphaH", "h",
+                "Alphabet" => "(1-t)*X"); false) else true)
+    registerTransformedBasis("AlphaHAlias", "h",
+        "Alphabet" => "X-t*X",
+        "OnEquivalentBasis" => "CreateAlias")
+    assert(AlphaHAlias_2 == q_2)
+    assert(toString AlphaHAlias_2 == "q_2")
+    assert((basis "AlphaHAlias")#"BasisSymbol" == "q")
+    assert((basisData "AlphaHAlias")#"BasisAliasOf" == "q")
+    assert(not ((bases R0)#?"AlphaHAlias"))
+    assert(not any(bases(R0, "verbose" => true), B0 -> B0#"BasisSymbol" == "AlphaHAlias"))
+    assert((aliases R0)#"q" == {"AlphaHAlias"})
+    assert(try (aliases(); false) else true)
+    assert((omegaPartners R0)#"q" == "b")
+    assert((specializations R0)#?"q")
+    assert(((innerProductPairings R0)#"HallLittlewood")#?"q")
+    assert(try (omegaPartners(); false) else true)
+    assert(try (specializations(); false) else true)
+    assert(try (innerProductPairings(); false) else true)
+    assert(toBasis(p_2, "AlphaHAlias") == toBasis(p_2, q))
+    assert(omegaInvolution AlphaHAlias_2 == b_2)
+    assert(specializeParameters(AlphaHAlias_2, {A_0 => 0}) == h_2)
+    assert(try (registerTransformedBasis("AlphaHMerge", "h",
+                "Alphabet" => "(1-t)*X",
+                "OnEquivalentBasis" => "Merge"); false) else true)
+    registerTransformedBasis("AlphaH", "h",
+        "Alphabet" => "(1-t)*X",
+        "OnEquivalentBasis" => "RegisterIndependent")
     assert(value getSymbol "X" === oldX)
     assert(toBasis(AlphaH_2, p) == ((1-A_0^2)/2)*p_2 + (((1-A_0)^2)/2)*p_{1,1})
+    assert(toBasis(AlphaH_2, p) == toBasis(q_2, p))
+    assert(AlphaH_{2,1} == q_{2,1})
     assert(toBasis(toBasis(AlphaH_2, p), "AlphaH") == AlphaH_2)
 
     K = frac(QQ[t,q])
     R1 = symmetricRing K
-    registerTransformedBasis("MacAlphaH", "SourceBasis" => "h",
+    registerTransformedBasis("MacAlphaH", "h",
         "Alphabet" => "((1-t)/(1-q))*X")
     assert(toBasis(MacAlphaH_1, p) == ((1-K_0)/(1-K_1))*p_1)
     assert(toBasis(MacAlphaH_2, p) == ((1-K_0^2)/(2*(1-K_1^2)))*p_2 + (((1-K_0)^2)/(2*(1-K_1)^2))*p_{1,1})
-    assert(try (registerTransformedBasis("BadAlphabet", "SourceBasis" => "h", "Alphabet" => "X+1"); false) else true)
+    assert(try (registerTransformedBasis("BadAlphabet", "h", "Alphabet" => "X+1"); false) else true)
+
+    U = frac(QQ[u])
+    R2 = symmetricRing U
+    registerTransformedBasis("UAlphaH", "h",
+        "Alphabet" => "(1-u)*X",
+        "RegisterCompanions" => hashTable {"InnerProductPartner" => "UAlphaM"})
+    assert(toBasis(UAlphaH_1, p) == (1-U_0)*p_1)
+    assert(toBasis(UAlphaM_1, p) == (1/(1-U_0))*p_1)
+    assert(hallInnerProduct(UAlphaH_1, UAlphaM_1) == 1_U)
+
+    Rplain = symmetricRing QQ
+    assert(not ((aliases Rplain)#?"q"))
+    assert(not ((omegaPartners Rplain)#?"q"))
+    assert(try (AlphaHAlias_2; false) else true)
 ///
 
 TEST ///
-    R0 = symmetricRing QQ
-    testFactorial = n -> if n <= 1 then 1 else product toList(1..n)
-    testMultiplicity = (lambda, part) -> #select(lambda, i -> i == part)
-    testZValue = lambda -> (
-        parts := unique lambda;
-        if #parts == 0 then 1 else product(parts, part -> part^(testMultiplicity(lambda, part)) * testFactorial(testMultiplicity(lambda, part)))
-        )
-    testMultiplicityDenominator = lambda -> product(unique lambda, part -> testFactorial testMultiplicity(lambda, part))
-    completeAtomToP = (R1, n) -> (
-        if n == 0 then return 1_R1;
-        Pbasis := basis(R1, "p");
-        sum apply(partitions n, lam0 -> (
-                lam := toList lam0;
-                promote(1 / testZValue lam, R1) * Pbasis_lam
-                ))
-        )
-    elementaryAtomToP = (R1, n) -> (
-        if n == 0 then return 1_R1;
-        Pbasis := basis(R1, "p");
-        sum apply(partitions n, lam0 -> (
-                lam := toList lam0;
-                promote((-1)^(n - #lam) / testZValue lam, R1) * Pbasis_lam
-                ))
-        )
-    powerSumAtomToComplete = (R1, B, n) -> (
-        if n == 0 then return 1_R1;
-        sum apply(partitions n, lam0 -> (
-                lam := toList lam0;
-                c := (-1)^(#lam - 1) * n * testFactorial(#lam - 1) / testMultiplicityDenominator lam;
-                promote(c, R1) * B_lam
-                ))
-        )
-    powerSumAtomToElementary = (R1, B, n) -> (
-        if n == 0 then return 1_R1;
-        sum apply(partitions n, lam0 -> (
-                lam := toList lam0;
-                c := (-1)^(n - #lam) * n * testFactorial(#lam - 1) / testMultiplicityDenominator lam;
-                promote(c, R1) * B_lam
-                ))
-        )
-    testBasisToP = (F, B, atomFormula) -> (
-        R1 := ring F;
-        A1 := coefficientRing R1;
-        sourceMeta := basis(R1, B);
-        result := 0_R1;
-        scan(rawTerms F, term -> (
-                c := promote(term#0, A1);
-                monomial := 1_R1;
-                scan(term#1, atom -> (
-                        if atom#"BasisId" =!= sourceMeta#"BasisId" then error "unexpected basis in relabelBasis";
-                        if #atom#"Inner" != 0 then error "unexpected skew atom in testBasisToP";
-                        monomial = monomial * product(atom#"Outer", n -> atomFormula(R1, n));
-                        ));
-                result = result + promote(c, R1) * monomial;
-                ));
-        result
-        )
-    testBasisFromP = (FP, B, atomFormula) -> (
-        R1 := ring FP;
-        A1 := coefficientRing R1;
-        Pbasis := basis(R1, "p");
-        targetMeta := basis(R1, B);
-        result := 0_R1;
-        scan(rawTerms FP, term -> (
-                c := promote(term#0, A1);
-                monomial := 1_R1;
-                scan(term#1, atom -> (
-                        if atom#"BasisId" =!= Pbasis#"BasisId" then error "expected a power-sum expression";
-                        if #atom#"Inner" != 0 then error "unexpected skew atom in testBasisFromP";
-                        monomial = monomial * product(atom#"Outer", n -> atomFormula(R1, targetMeta, n));
-                        ));
-                result = result + promote(c, R1) * monomial;
-                ));
-        result
-        )
-    hTestToP = (F, B) -> testBasisToP(F, B, completeAtomToP)
-    hTestFromP = (FP, B) -> testBasisFromP(FP, B, powerSumAtomToComplete)
-    eTestToP = (F, B) -> testBasisToP(F, B, elementaryAtomToP)
-    eTestFromP = (FP, B) -> testBasisFromP(FP, B, powerSumAtomToElementary)
-    testUnitPairing = (R1, idx) -> 1_(coefficientRing R1)
-    hTest = registerBasis("hTest", "DisplayName" => "test complete homogeneous basis",
-        "DisplayOrder" => 120, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true,
-        "Omega" => "eTest", "ToPowerSums" => hTestToP, "FromPowerSums" => hTestFromP,
-        "InnerProductData" => hashTable {"Ordinary" => hashTable {"DualBasis" => "m", "Pairing" => testUnitPairing, "EngineKind" => "Dual"}})
-    eTest = registerBasis("eTest", "DisplayName" => "test elementary basis",
-        "DisplayOrder" => 121, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true,
-        "Omega" => "hTest", "ToPowerSums" => eTestToP, "FromPowerSums" => eTestFromP,
-        "InnerProductData" => hashTable {"Ordinary" => hashTable {"DualBasis" => "ff", "Pairing" => testUnitPairing, "EngineKind" => "Dual"}})
-    assert(toBasis(hTest_2, p) == (1/2)*p_2 + (1/2)*p_{1,1})
-    assert(toBasis(eTest_2, p) == (-1/2)*p_2 + (1/2)*p_{1,1})
-    assert(toBasis(p_2, hTest) == 2*hTest_2 - hTest_{1,1})
-    assert(toBasis(p_2, eTest) == eTest_{1,1} - 2*eTest_2)
-    assert(toBasis(hTest_2, h) == h_2)
-    assert(toBasis(eTest_2, e) == e_2)
-    assert(toBasis(h_2, hTest) == hTest_2)
-    assert(toBasis(e_2, eTest) == eTest_2)
-    assert(toBasis(hTest_2*eTest_1, p) == toBasis(h_2*e_1, p))
-    assert(toBasis(toBasis(hTest_{2,1} + eTest_2, p), hTest) == toBasis(h_{2,1} + e_2, hTest))
-    assert(toBasis(hTest_2*eTest_1, hTest) == hTest_2*toBasis(eTest_1, hTest))
-    assert(toBasis(eTest_2*hTest_1, eTest) == eTest_2*toBasis(hTest_1, eTest))
-    assert(omegaInvolution hTest_2 == eTest_2)
-    assert(hallInnerProduct(hTest_2, m_2) == 1_QQ)
+    A = QQ[t]
+    R0 = symmetricRing A
+    registerTransformedBasis("SpecSource", "h",
+        "TermTransform" => (lambda, mu, sourceTerm) -> (1 + A_0) * sourceTerm)
+    registerSpecializedBasis("SpecSourceAtZero", "SpecSource", {A_0 => 0})
+    assert(toBasis(SpecSourceAtZero_2, p) == toBasis(h_2, p))
+    assert(specializeParameters(SpecSource_2, {A_0 => 0}) == SpecSourceAtZero_2)
+    registerTransformedBasis("SpecDeclared", "h",
+        "TermTransform" => (lambda, mu, sourceTerm) -> (1 + A_0) * sourceTerm,
+        "RegisterSpecializations" => {{A_0 => 0}, {A_0 => -1}})
+    assert(toBasis(SpecDeclaredt0_2, p) == toBasis(h_2, p))
+    assert(toBasis(SpecDeclaredtm1_2, p) == 0_R0)
+    assert(specializeParameters(SpecDeclared_2, {A_0 => 0}) == SpecDeclaredt0_2)
+    assert(specializeParameters(SpecDeclared_2, {A_0 => -1}) == SpecDeclaredtm1_2)
+    C = frac(QQ[u])
+    Rfrac = symmetricRing(C, "HallLittlewoodParameter" => null)
+    registerTransformedBasis("SpecFam", "h",
+        "TermTransform" => (lambda, mu, sourceTerm) -> (1 + C_0) * sourceTerm,
+        "RegisterCompanions" => hashTable {
+            "OmegaPartner" => "SpecFamOmega",
+            "InnerProductPartner" => "SpecFamDual",
+            "OmegaInnerProductPartner" => "SpecFamDualOmega"
+            },
+        "RegisterSpecializations" => {{C_0 => 0}})
+    assert(specializeParameters(SpecFam_2, {C_0 => 0}) == SpecFamu0_2)
+    assert(specializeParameters(SpecFamOmega_2, {C_0 => 0}) == SpecFamOmegau0_2)
+    assert(omegaInvolution SpecFamu0_2 == SpecFamOmegau0_2)
+    assert(hallInnerProduct(SpecFamu0_2, SpecFamDualu0_2) == 1_C)
+    R0 = symmetricRing A
+    registerTransformedBasis("TScaleNonInvertible", "h",
+        "TermTransform" => (lambda, mu, sourceTerm) -> A_0 * sourceTerm)
+    assert(try (toBasis(p_1, "TScaleNonInvertible"); false) else true)
+    K = QQ[t,q]
+    R1 = symmetricRing K
+    registerTransformedBasis("MultiSpec", "h",
+        "TermTransform" => (lambda, mu, sourceTerm) -> (1 + K_0 + K_1) * sourceTerm,
+        "RegisterSpecializations" => {{K_0 => 0, K_1 => 0}})
+    assert(specializeParameters(MultiSpec_2, {K_0 => 0}) == MultiSpec_2)
+    assert(specializeParameters(MultiSpec_2, {K_0 => 0, K_1 => 0}) == MultiSpect0q0_2)
+    assert(try (registerTransformedBasis("BadSpecShape", "h",
+                "RegisterSpecializations" => hashTable {"Parameter" => K_0}); false) else true)
+    assert(try (registerTransformedBasis("BadSpecEntry", "h",
+                "RegisterSpecializations" => {{K_0 => 0}, "bad"}); false) else true)
 ///
 
 TEST ///
@@ -397,28 +432,15 @@ TEST ///
     assert(hallInnerProduct(FipSpecial2, GipSpecial2, "ParameterSpecialization" => {E_0 => 0}) == 1_E)
     assert(hallInnerProduct(FipSpecial1, GipSpecial1, "ParameterSpecialization" => {E_0 => 0}, "PromoteSpecializedRing" => true) == 1_QQ)
 
-    TargetAware = registerBasis("TargetAwareSpecialization", "Specialization" => {
-            hashTable {
-                "Parameter" => "HallLittlewoodParameter",
-                "Value" => 0,
-                "Map" => (Rtarget, idx) -> (
-                    assert(coefficientRing Rtarget === E);
-                    (basis(Rtarget, "h"))_idx
-                    )
-                }
-            })
     R4 = symmetricRing E
     Fspecial = (1-E_0)*Q_2 + E_0*h_1
     FqbSpecial = q_{2,1} + b_2
     FskewSpecial = Q_{{2}, {1}} + B_{{2}, {1}}
-    FtargetAware = TargetAware_2
     Fspecial0 = specializeParameters(Fspecial, {E_0 => 0})
     assert(coefficientRing ring Fspecial0 === E)
     assert(Fspecial0 == S_2)
     assert(specializeParameters(FqbSpecial, {E_0 => 0}) == h_{2,1} + e_2)
     assert(specializeParameters(FskewSpecial, {E_0 => 0}) == S_{{2}, {1}} + Somega_{{2}, {1}})
-    TargetAwareValue = specializeParameters(FtargetAware, {E_0 => 0})
-    assert(TargetAwareValue == h_2)
     FspecialPromoted = specializeParameters(Fspecial, {E_0 => 0}, "PromoteSpecializedRing" => true)
     assert(coefficientRing ring FspecialPromoted === QQ)
     assert(FspecialPromoted == (basis(ring FspecialPromoted, "S"))_2)
@@ -427,26 +449,18 @@ TEST ///
 ///
 
 TEST ///
-    IPLeft = registerBasis("InnerProductLeftTest", "InnerProductData" => hashTable {
-            "Ordinary" => hashTable {
-                "DualBasis" => "InnerProductRightTest",
-                "Pairing" => (Rtarget, idx) -> promote(2^(sum idx), coefficientRing Rtarget)
-                }
-            })
-    IPRight = registerBasis("InnerProductRightTest", "InnerProductData" => hashTable {
-            "Ordinary" => hashTable {
-                "DualBasis" => "InnerProductLeftTest",
-                "Pairing" => (Rtarget, idx) -> promote(2^(sum idx), coefficientRing Rtarget)
-                }
-            })
-    HLOnly = registerBasis("HallLittlewoodOnlyTest", "AvailableWhen" => "HallLittlewood")
     Rordinary = symmetricRing QQ
-    assert(not ((bases Rordinary)#?"HallLittlewoodOnlyTest"))
-    assert(try (HallLittlewoodOnlyTest_2; false) else true)
-    assert(hallInnerProduct(InnerProductLeftTest_2 + 3*InnerProductLeftTest_1, 5*InnerProductRightTest_2 + 7*InnerProductRightTest_1) == 5*4 + 3*7*2)
+    assert(hallInnerProduct(h_2, m_2) == 1_QQ)
+    assert(hallInnerProduct(e_2, ff_2) == 1_QQ)
+    assert(hallInnerProduct(p_2, p_2) == 2_QQ)
+    assert(omegaInvolution h_2 == e_2)
+    assert(not ((bases Rordinary)#?"Q"))
     A = QQ[t]
     Rhl = symmetricRing A
-    assert((bases Rhl)#?"HallLittlewoodOnlyTest")
+    assert((bases Rhl)#?"Q")
+    assert(omegaInvolution Q_2 == B_2)
+    assert(hallInnerProduct(Q_2, P_2) == 1_A)
+    assert(specializeParameters(Q_2, {A_0 => 0}) == S_2)
 ///
 
 TEST ///

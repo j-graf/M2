@@ -24,6 +24,9 @@ CurrentSymmetricRing = null
 -- Maps basis symbols to global basis metadata
 BasisIndex = new MutableHashTable
 
+-- Maps user-facing basis alias symbols to the canonical basis they share
+BasisAliasIndex = new MutableHashTable
+
 -- Assigns stable numeric ids to bases for the C++ engine
 NextBasisId = 0
 
@@ -31,6 +34,132 @@ NextBasisId = 0
 builtinSymmetricBases = {}
 userDefinedSymmetricBases = {}
 availableSymmetricBases = {}
+
+-- Centralized cross-basis metadata registries
+OmegaRegistry = new MutableHashTable
+InnerProductPairingRegistry = new MutableHashTable from {
+    "Ordinary" => new MutableHashTable,
+    "HallLittlewood" => new MutableHashTable,
+    "Macdonald" => new MutableHashTable,
+    "SchurQ" => new MutableHashTable
+    }
+BasisSpecializationRegistry = new MutableHashTable
+KnownTransformedBasisOutcomes = {}
+
+-- Converts basis-like inputs to the canonical string key used by registries
+basisRegistryKey = B -> if instance(B, SymmetricBasis) then B#"BasisSymbol" else toString B
+
+-- Returns the canonical basis symbol for a symbol or alias
+canonicalBasisSymbol = basisSymbol -> (
+    symbolString := toString basisSymbol;
+    if BasisAliasIndex#?symbolString then BasisAliasIndex#symbolString else symbolString
+    )
+
+-- Lists registered basis alias metadata records
+registeredBasisAliases = () -> apply(keys BasisAliasIndex, aliasSymbol -> BasisIndex#aliasSymbol)
+
+-- Groups registered aliases by canonical basis symbol
+registeredAliasTable = () -> (
+    H := new MutableHashTable;
+    scan(keys BasisAliasIndex, aliasSymbol -> (
+            targetSymbol := BasisAliasIndex#aliasSymbol;
+            H#targetSymbol = append(if H#?targetSymbol then H#targetSymbol else {}, aliasSymbol);
+            ));
+    hashTable pairs H
+    )
+
+-- Records a new user-facing symbol for an existing basis without a new basis id
+registerBasisAlias = (aliasSymbol, targetSymbol) -> (
+    aliasKey := toString aliasSymbol;
+    targetKey := toString targetSymbol;
+    if BasisIndex#?aliasKey then error("a symmetric function basis with symbol ", aliasKey, " is already registered");
+    if not BasisIndex#?targetKey then error("unknown symmetric function basis: ", targetKey);
+    target := BasisIndex#targetKey;
+    aliasBasis := new SymmetricBasis from hashTable(pairs target | {
+            "BasisSymbol" => aliasKey,
+            "DisplayName" => aliasKey | "-alias for " | targetKey,
+            "BasisAliasOf" => targetKey,
+            "TransformData" => null,
+            "Ring" => null
+            });
+    BasisIndex#aliasKey = aliasBasis;
+    BasisAliasIndex#aliasKey = targetKey;
+    if CurrentSymmetricRing =!= null and ringHasBasis(CurrentSymmetricRing, target) then
+        CurrentSymmetricRing.cache#"Aliases"#aliasKey = installBasisAlias(CurrentSymmetricRing, aliasBasis);
+    aliasBasis
+    )
+
+-- Records the named omega image of a basis
+registerOmegaLink = (source, target) -> (
+    if target =!= null then OmegaRegistry#(basisRegistryKey source) = basisRegistryKey target;
+    )
+
+-- Looks up the named omega image of a basis
+omegaPartnerSymbol = B -> (
+    key := basisRegistryKey B;
+    if OmegaRegistry#?key then OmegaRegistry#key
+    else null
+    )
+
+-- Chooses the registry for an inner-product context
+innerProductPairingRegistry = contextName -> (
+    contextString := toString contextName;
+    if InnerProductPairingRegistry#?contextString then InnerProductPairingRegistry#contextString
+    else error("unknown inner product context: ", contextString)
+    )
+
+-- Adds one directed diagonal pairing rule to the appropriate registry
+registerInnerProductRule = (contextName, source, rule) -> (
+    if rule =!= null and instance(rule, HashTable) and rule#?"DualBasis" and rule#?"Pairing" then (
+        registry := innerProductPairingRegistry contextName;
+        sourceKey := basisRegistryKey source;
+        entry := hashTable {
+            "DualBasis" => basisRegistryKey rule#"DualBasis",
+            "Pairing" => rule#"Pairing",
+            "EngineKind" => if rule#?"EngineKind" then rule#"EngineKind" else null
+            };
+        registry#sourceKey = append(if registry#?sourceKey then registry#sourceKey else {}, entry);
+        entry
+        )
+    else null
+    )
+
+-- Looks up all directed pairing rules for one basis in one context
+innerProductRules = (B, contextName) -> (
+    registry := innerProductPairingRegistry contextName;
+    sourceKey := basisRegistryKey B;
+    if registry#?sourceKey then registry#sourceKey else {}
+    )
+
+-- Records a specialization edge for one source basis
+registerBasisSpecializationRule = (source, rule) -> (
+    if rule =!= null then (
+        sourceKey := basisRegistryKey source;
+        BasisSpecializationRegistry#sourceKey = append(if BasisSpecializationRegistry#?sourceKey then BasisSpecializationRegistry#sourceKey else {}, rule);
+        rule
+        )
+    )
+
+-- Looks up specialization rules for one basis
+specializationRulesForBasis = B -> (
+    sourceKey := basisRegistryKey B;
+    if BasisSpecializationRegistry#?sourceKey then BasisSpecializationRegistry#sourceKey else {}
+    )
+
+-- Registers legacy per-basis metadata into the centralized registries
+registerBasisMetadataInRegistries = B -> (
+    registerOmegaLink(B, B#"Omega");
+    if B#"InnerProductData" =!= null and instance(B#"InnerProductData", HashTable) then
+        scan(keys B#"InnerProductData", contextName -> registerInnerProductRule(contextName, B, (B#"InnerProductData")#contextName));
+    if B#"Specialization" =!= null then
+        scan(B#"Specialization", rule -> registerBasisSpecializationRule(B, rule));
+    )
+
+-- Records a known transformed-basis definition that equals an existing basis
+registerKnownTransformedBasisOutcome = data -> (
+    KnownTransformedBasisOutcomes = append(KnownTransformedBasisOutcomes, data);
+    data
+    )
 
 -- Normalizes partition-like indices by removing trailing zeroes
 trimTrailingZeros = L -> (
@@ -128,30 +257,40 @@ refreshAvailableBases = () -> (
     availableSymmetricBases
     )
 
+-- Built-ins seed the registries from legacy option fields, then store a
+-- registry-first record so cross-basis metadata has one authoritative home.
+stripLegacyBuiltinRegistryFields = B -> new SymmetricBasis from hashTable(pairs B | {
+        "Omega" => null,
+        "InnerProductData" => null,
+        "Specialization" => null
+        })
+
 -- Installs a basis globally and in the current ring when appropriate
 installBasis = (B, builtin) -> (
     basisSymbol := B#"BasisSymbol";
     if BasisIndex#?basisSymbol then error("a symmetric function basis with symbol ", basisSymbol, " is already registered");
-    BasisIndex#basisSymbol = B;
-    if builtin then builtinSymmetricBases = append(builtinSymmetricBases, B)
-    else userDefinedSymmetricBases = append(userDefinedSymmetricBases, B);
+    registerBasisMetadataInRegistries B;
+    storedBasis := if builtin then stripLegacyBuiltinRegistryFields B else B;
+    BasisIndex#basisSymbol = storedBasis;
+    if builtin then builtinSymmetricBases = append(builtinSymmetricBases, storedBasis)
+    else userDefinedSymmetricBases = append(userDefinedSymmetricBases, storedBasis);
     refreshAvailableBases();
     if CurrentSymmetricRing =!= null then (
-        if basisAvailableForRing(CurrentSymmetricRing, B) then (
-            CurrentSymmetricRing#"Bases" = append(CurrentSymmetricRing#"Bases", B);
-            rememberBasisInEngine(CurrentSymmetricRing, B);
-            CurrentSymmetricRing.cache#"Aliases"#(B#"BasisSymbol") = installBasisAlias(CurrentSymmetricRing, B);
+        if basisAvailableForRing(CurrentSymmetricRing, storedBasis) then (
+            CurrentSymmetricRing#"Bases" = append(CurrentSymmetricRing#"Bases", storedBasis);
+            rememberBasisInEngine(CurrentSymmetricRing, storedBasis);
+            CurrentSymmetricRing.cache#"Aliases"#(storedBasis#"BasisSymbol") = installBasisAlias(CurrentSymmetricRing, storedBasis);
             )
-        else CurrentSymmetricRing.cache#"Aliases"#(B#"BasisSymbol") = installUnavailableBasisAlias(CurrentSymmetricRing, B);
+        else CurrentSymmetricRing.cache#"Aliases"#(storedBasis#"BasisSymbol") = installUnavailableBasisAlias(CurrentSymmetricRing, storedBasis);
         );
-    B
+    storedBasis
     )
 
--- User-facing primitive for registering a new basis
-registerBasis = args -> (
+-- Internal primitive for registering a new basis
+registerBasisInternal = args -> (
     L := argumentList args;
     if #L == 0 then error "expected a basis symbol";
-    installBasis(makeBasis(L#0, parseStringOptions(basisOptionDefaults, drop(L, 1), "registerBasis")), false)
+    installBasis(makeBasis(L#0, parseStringOptions(basisOptionDefaults, drop(L, 1), "registerBasisInternal")), false)
     )
 
 -- Registers a basis as part of the package's built-in basis list
@@ -167,37 +306,21 @@ makeBuiltinBasis = args -> (
 
 -- Options accepted by the transformed-basis helper
 transformedBasisOptionDefaults = hashTable(pairs basisOptionDefaults | {
-        "SourceBasis" => null,
         "CanBeSkew" => null,
         "MultiplicativeIndex" => null,
         "IsMultiplicativeIndex" => null,
         "ZeroIndexIsOne" => null,
         "ZeroOnNegative" => null,
-        "Scale" => null,
-        "InverseScale" => null,
-        "Alphabet" => null,
-        "AlphabetScale" => null,
-        "InverseAlphabetScale" => null,
-        "Expansion" => null,
-        "Triangular" => null,
-        "Companions" => null,
-        "OmegaOf" => null,
-        "InnerProductPartnerOf" => null
+        "Alphabet" => "X",
+        "SumOver" => "SameIndex",
+        "TermTransform" => null,
+        "RegisterCompanions" => null,
+        "RegisterSpecializations" => null,
+        "OnEquivalentBasis" => "Error"
         })
 
--- Identity scalar used when no transformed-basis scale is supplied
-transformedIdentityScale = (R0, lambda) -> 1_(coefficientRing R0)
-
--- Identity alphabet scale used when no plethystic alphabet is supplied
-transformedIdentityAlphabetScale = (R0, n) -> 1_(coefficientRing R0)
-
--- Evaluates the lambda-dependent scalar for a transformed basis
-transformedApplyIndexScale = (scale, R0, lambda) -> (
-    A := coefficientRing R0;
-    if scale === null then 1_A
-    else if instance(scale, Function) then promote(scale(R0, lambda), A)
-    else promote(scale, A)
-    )
+-- Default term transform for direct transformed bases
+transformedIdentityTermTransform = (lambda, mu, sourceTerm) -> sourceTerm
 
 -- Restores symbols after temporary parsing bindings are used
 restoreSymbolValues = oldValues -> scan(oldValues, pair -> globalAssign(pair#0, pair#1))
@@ -248,31 +371,40 @@ transformedApplyAlphabetScale = (scale, R0, n) -> (
     A := coefficientRing R0;
     if scale === null then 1_A
     else if instance(scale, HashTable) and scale#?"Alphabet" then promote(transformedAlphabetStringScale(scale#"Alphabet", R0, n), A)
-    else if instance(scale, Function) then promote(scale(R0, n), A)
+    else if instance(scale, HashTable) and scale#?"InverseAlphabet" then transformedInvertScalar(promote(transformedAlphabetStringScale(scale#"InverseAlphabet", R0, n), A),
+        "alphabet scale is not invertible for transformed basis")
     else promote(scale, A)
     )
 
 -- Inverts a scalar and gives a transformed-basis specific error on failure
 transformedInvertScalar = (c, message) -> try 1 / c else error message
 
--- Computes the inverse lambda-scale for conversion back to a transformed basis
-transformedInverseIndexScaleValue = (data, R0, lambda) -> (
-    inv := data#"InverseScale";
-    if inv =!= null then transformedApplyIndexScale(inv, R0, lambda)
-    else transformedInvertScalar(transformedApplyIndexScale(data#"Scale", R0, lambda),
-        "scale is not invertible for transformed basis " | data#"BasisSymbol" | "; supply \"InverseScale\" or register without this conversion")
-    )
-
 -- Computes the inverse p_n alphabet scale for inverse transformed conversion
 transformedInverseAlphabetScaleValue = (data, R0, n) -> (
-    inv := data#"InverseAlphabetScale";
-    if inv =!= null then transformedApplyAlphabetScale(inv, R0, n)
-    else transformedInvertScalar(transformedApplyAlphabetScale(data#"AlphabetScale", R0, n),
-        "alphabet scale is not invertible for transformed basis " | data#"BasisSymbol" | "; supply \"InverseAlphabetScale\" or omit this conversion")
+    transformedInvertScalar(transformedApplyAlphabetScale(data#"AlphabetData", R0, n),
+        "alphabet scale is not invertible for transformed basis " | data#"BasisSymbol")
     )
 
 -- Tests whether a transformed basis uses a nontrivial alphabet
-transformedHasNontrivialAlphabet = data -> data#"AlphabetScale" =!= null or data#"InverseAlphabetScale" =!= null
+transformedHasNontrivialAlphabet = data -> data#"AlphabetData" =!= null
+
+-- Tests dominance order on partition-like indices
+dominatesPartition = (lambda, mu) -> (
+    n := max(#lambda, #mu);
+    if n == 0 then return true;
+    lambdaPadded := lambda | toList(n - #lambda : 0);
+    muPadded := mu | toList(n - #mu : 0);
+    lambdaSum := 0;
+    muSum := 0;
+    all(toList(0..n-1), i -> (
+            lambdaSum = lambdaSum + lambdaPadded#i;
+            muSum = muSum + muPadded#i;
+            lambdaSum >= muSum
+            ))
+    )
+
+-- Lists partitions of a weight as ordinary lists
+partitionsOfWeight = n -> apply(partitions n, p0 -> toList p0)
 
 -- Multiplies every power-sum monomial by a scale depending on its parts
 transformedPowerSumScale = (F, scaleFunction) -> (
@@ -293,15 +425,99 @@ transformedPowerSumScale = (F, scaleFunction) -> (
     result
     )
 
+-- Extracts coefficients from a linear expression in one basis
+transformedCoefficientsInBasis = (F, B) -> (
+    A := coefficientRing ring F;
+    result := new MutableHashTable;
+    basisId := B#"BasisId";
+    ok := true;
+    scan(rawTerms F, term -> if ok then (
+            atoms := term#1;
+            idx := null;
+            if #atoms == 0 then idx = {}
+            else if #atoms == 1 and (atoms#0)#"BasisId" == basisId and #((atoms#0)#"Inner") == 0 then idx = (atoms#0)#"Outer"
+            else ok = false;
+            if ok then result#idx = (if result#?idx then result#idx else 0_A) + promote(term#0, A);
+            ));
+    if ok then result else null
+    )
+
+-- Computes the forward expansion of one transformed atom in the source basis
+transformedAtomToSourceBasis = (R0, data, lambda) -> (
+    source := basis(R0, data#"SourceBasis");
+    result := 0_R0;
+    scan(transformedSumOverIndices(data, lambda), mu -> (
+            sourceTerm := transformedSourceTerm(R0, data, mu);
+            transformedTerm := (data#"TermTransform")(lambda, mu, sourceTerm);
+            if not instance(transformedTerm, SymmetricRingElement) or ring transformedTerm =!= R0 then
+                error("TermTransform for transformed basis ", data#"BasisSymbol", " must return an element of the same symmetric ring");
+            result = result + toBasis(transformedTerm, source);
+            ));
+    result
+    )
+
+-- Builds and caches triangular inverse data for one degree
+transformedTriangularInverseData = (R0, data, target, n) -> (
+    cache := data#"TransitionCache";
+    if cache#?n then return cache#n;
+    source := basis(R0, data#"SourceBasis");
+    A := coefficientRing R0;
+    parts := partitionsOfWeight n;
+    remaining := parts;
+    inverseTable := new MutableHashTable;
+    while #remaining > 0 do (
+        progressed := false;
+        nextRemaining := {};
+        scan(remaining, lambda -> (
+                coeffs := transformedCoefficientsInBasis(transformedAtomToSourceBasis(R0, data, lambda), source);
+                if coeffs === null then error("triangular inversion for transformed basis ", data#"BasisSymbol", " requires source-basis output");
+                offDiagonal := select(keys coeffs, mu -> mu =!= lambda and coeffs#mu != 0_A);
+                if all(offDiagonal, mu -> inverseTable#?mu) then (
+                    diagonal := if coeffs#?lambda then coeffs#lambda else 0_A;
+                    if diagonal == 0_A then error("triangular transform for basis ", data#"BasisSymbol", " has zero diagonal coefficient");
+                    expr := target_lambda;
+                    scan(offDiagonal, mu -> expr = expr - promote(coeffs#mu, R0) * inverseTable#mu);
+                    inverseTable#lambda = promote(transformedInvertScalar(diagonal, "diagonal coefficient is not invertible for transformed basis " | data#"BasisSymbol"), R0) * expr;
+                    progressed = true;
+                    )
+                else nextRemaining = append(nextRemaining, lambda);
+                ));
+        if not progressed then error("could not triangularly invert transformed basis ", data#"BasisSymbol");
+        remaining = nextRemaining;
+        );
+    cache#n = inverseTable;
+    inverseTable
+    )
+
+-- Converts a source-basis expression to a triangular transformed basis
+transformedTriangularSourceToTarget = (F, target, data) -> (
+    R0 := ring F;
+    A := coefficientRing R0;
+    source := basis(R0, data#"SourceBasis");
+    result := 0_R0;
+    coeffs := transformedCoefficientsInBasis(F, source);
+    if coeffs === null then error("triangular inversion for transformed basis ", data#"BasisSymbol", " requires a linear source-basis expression");
+    scan(keys coeffs, idx -> if coeffs#idx != 0_A then (
+            table := transformedTriangularInverseData(R0, data, target, partitionWeight idx);
+            if not table#?idx then error("missing triangular inverse data for transformed basis ", data#"BasisSymbol");
+            result = result + promote(coeffs#idx, R0) * table#idx;
+            ));
+    result
+    )
+
 -- Converts one transformed-basis basis element to the power-sum basis
 transformedBasisAtomToPowerSums = (R0, data, atom) -> (
     if #atom#"Inner" != 0 then error("transformed basis ", data#"BasisSymbol", " does not currently support skew atoms");
-    source := basis(R0, data#"SourceBasis");
     lambda := atom#"Outer";
-    sourceElement := source_lambda;
-    pElement := toBasis(sourceElement, p);
-    scaledP := transformedPowerSumScale(pElement, (R1, n) -> transformedApplyAlphabetScale(data#"AlphabetScale", R1, n));
-    promote(transformedApplyIndexScale(data#"Scale", R0, lambda), R0) * scaledP
+    result := 0_R0;
+    scan(transformedSumOverIndices(data, lambda), mu -> (
+            sourceTerm := transformedSourceTerm(R0, data, mu);
+            transformedTerm := (data#"TermTransform")(lambda, mu, sourceTerm);
+            if not instance(transformedTerm, SymmetricRingElement) or ring transformedTerm =!= R0 then
+                error("TermTransform for transformed basis ", data#"BasisSymbol", " must return an element of the same symmetric ring");
+            result = result + toBasis(transformedTerm, p);
+            ));
+    result
     )
 
 -- Converts an expression in one transformed basis to power sums
@@ -323,7 +539,7 @@ transformedBasisToPowerSums = (F, B) -> (
     result
     )
 
--- Relabels a source-basis expression as a transformed basis after inverse scaling
+-- Relabels a source-basis expression as a transformed basis
 transformedRelabelSourceToTarget = (F, source, target, data) -> (
     R0 := ring F;
     A := coefficientRing R0;
@@ -336,7 +552,8 @@ transformedRelabelSourceToTarget = (F, source, target, data) -> (
                     if atom#"BasisId" =!= sourceId then error("could not convert from source basis ", source#"BasisSymbol", " to transformed basis ", target#"BasisSymbol");
                     if #atom#"Inner" != 0 then error("transformed basis ", target#"BasisSymbol", " does not currently support skew atoms");
                     lambda := atom#"Outer";
-                    monomial = monomial * promote(transformedInverseIndexScaleValue(data, R0, lambda), R0) * target_lambda;
+                    scale := if data#?"DiagonalSourceTransform" and data#"DiagonalSourceTransform" then transformedDiagonalScaleValue(R0, data, lambda) else 1_A;
+                    monomial = monomial * promote(transformedInvertScalar(scale, "diagonal coefficient is not invertible for transformed basis " | data#"BasisSymbol"), R0) * target_lambda;
                     ));
             result = result + promote(c, R0) * monomial;
             ));
@@ -348,17 +565,135 @@ transformedBasisFromPowerSums = (FP, B) -> (
     R0 := ring FP;
     data := B#"TransformData";
     if data === null then error("basis ", B#"BasisSymbol", " is not a transformed basis");
+    if not data#"InverseConversionAvailable" then error("inverse conversion is not available for transformed basis ", B#"BasisSymbol");
     source := basis(R0, data#"SourceBasis");
     inverseScaledP := transformedPowerSumScale(FP, (R1, n) -> transformedInverseAlphabetScaleValue(data, R1, n));
     sourceExpression := toBasis(inverseScaledP, source);
-    transformedRelabelSourceToTarget(sourceExpression, source, B, data)
+    if data#"TriangularOrder" =!= null then transformedTriangularSourceToTarget(sourceExpression, B, data)
+    else transformedRelabelSourceToTarget(sourceExpression, source, B, data)
     )
 
--- Builds the registerBasis option table for a transformed basis
-transformedBasisRegistrationOptions = (basisSymbol, opts, data, omegaSymbol, innerProductData) -> (
+-- Applies the transformed-basis alphabet to one source-basis element
+transformedSourceTerm = (R0, data, mu) -> (
+    source := basis(R0, data#"SourceBasis");
+    sourceElement := source_mu;
+    if not transformedHasNontrivialAlphabet data then sourceElement
+    else transformedPowerSumScale(toBasis(sourceElement, p), (R1, n) -> transformedApplyAlphabetScale(data#"AlphabetData", R1, n))
+    )
+
+-- Normalizes the SumOver option and records useful structural metadata
+transformedNormalizeSumOver = sumOver -> (
+    if sumOver === null or sumOver === "SameIndex" or toString sumOver == "SameIndex" then hashTable {
+        "Kind" => "SameIndex",
+        "Function" => null,
+        "Triangular" => true,
+        "TriangularOrder" => null
+        }
+    else if sumOver === "DominanceLower" or toString sumOver == "DominanceLower" then hashTable {
+        "Kind" => "DominanceLower",
+        "Function" => null,
+        "Triangular" => true,
+        "TriangularOrder" => "DominanceLower"
+        }
+    else if sumOver === "DominanceUpper" or toString sumOver == "DominanceUpper" then hashTable {
+        "Kind" => "DominanceUpper",
+        "Function" => null,
+        "Triangular" => true,
+        "TriangularOrder" => "DominanceUpper"
+        }
+    else if sumOver === "AllPartitionsOfWeight" or toString sumOver == "AllPartitionsOfWeight" then hashTable {
+        "Kind" => "AllPartitionsOfWeight",
+        "Function" => null,
+        "Triangular" => false,
+        "TriangularOrder" => null
+        }
+    else if instance(sumOver, Function) then hashTable {
+        "Kind" => "Function",
+        "Function" => sumOver,
+        "Triangular" => false,
+        "TriangularOrder" => null
+        }
+    else error("unsupported SumOver value for registerTransformedBasis: ", toString sumOver)
+    )
+
+-- Lists source indices used in the defining transformed-basis sum
+transformedSumOverIndices = (data, lambda) -> (
+    sumOverData := data#"SumOver";
+    kind := sumOverData#"Kind";
+    if kind == "SameIndex" then {lambda}
+    else if kind == "DominanceLower" then select(partitionsOfWeight(partitionWeight lambda), mu -> dominatesPartition(lambda, mu))
+    else if kind == "DominanceUpper" then select(partitionsOfWeight(partitionWeight lambda), mu -> dominatesPartition(mu, lambda))
+    else if kind == "AllPartitionsOfWeight" then partitionsOfWeight(partitionWeight lambda)
+    else if kind == "Function" then (
+        result := (sumOverData#"Function") lambda;
+        if not instance(result, List) then error "SumOver function must return a list of indices";
+        result
+        )
+    else error("unsupported SumOver kind: ", kind)
+    )
+
+-- Parses Alphabet into the current linear hidden-ring representation
+transformedAlphabetData = (R0, alphabet) -> (
+    if alphabet === null or alphabet === "X" or toString alphabet == "X" then null
+    else (
+        coefficient := if R0 =!= null then transformedAlphabetCoefficient(R0, alphabet) else null;
+        hashTable {"Alphabet" => alphabet, "Coefficient" => coefficient}
+        )
+    )
+
+-- Builds the inverse alphabet data used for inner-product companions
+transformedInverseAlphabetData = alphabetData -> (
+    if alphabetData === null then null
+    else if instance(alphabetData, HashTable) and alphabetData#?"Alphabet" then hashTable {"InverseAlphabet" => alphabetData#"Alphabet"}
+    else error "cannot invert transformed-basis alphabet data"
+    )
+
+-- Normalizes the TermTransform option
+transformedTermTransformData = phi -> (
+    if phi === null then {transformedIdentityTermTransform, "Identity"}
+    else if instance(phi, Function) then {phi, "UserFunction"}
+    else error "expected TermTransform to be a function"
+    )
+
+-- Tests whether two alphabet strings define the same linear alphabet.
+transformedAlphabetEquivalent = (R0, leftAlphabet, rightAlphabet) -> (
+    if leftAlphabet === rightAlphabet then return true;
+    if (leftAlphabet === null or toString leftAlphabet == "X") and (rightAlphabet === null or toString rightAlphabet == "X") then return true;
+    if R0 === null then return false;
+    try transformedAlphabetCoefficient(R0, leftAlphabet) == transformedAlphabetCoefficient(R0, rightAlphabet) else false
+    )
+
+-- Detects whether a transformed definition is diagonal in its source basis.
+transformedDiagonalSourceTransform = (alphabetData, sumOverData, outputData) -> (
+    alphabetData === null and (sumOverData#"Kind") == "SameIndex" and outputData#"PreservesSourceBasis"
+    )
+
+-- Computes the diagonal source-basis coefficient for one transformed atom.
+transformedDiagonalScaleValue = (R0, data, lambda) -> (
+    if data#"TermTransformKind" == "Identity" then return 1_(coefficientRing R0);
+    cache := data#"DiagonalScaleCache";
+    if cache#?lambda then return cache#lambda;
+    source := basis(R0, data#"SourceBasis");
+    sourceTerm := source_lambda;
+    transformedTerm := (data#"TermTransform")(lambda, lambda, sourceTerm);
+    if not instance(transformedTerm, SymmetricRingElement) or ring transformedTerm =!= R0 then
+        error("TermTransform for transformed basis ", data#"BasisSymbol", " must return an element of the same symmetric ring");
+    coeffs := transformedCoefficientsInBasis(toBasis(transformedTerm, source), source);
+    A := coefficientRing R0;
+    if coeffs === null then error("transformed basis ", data#"BasisSymbol", " is not diagonal in source basis ", data#"SourceBasis");
+    offDiagonal := select(keys coeffs, mu -> mu =!= lambda and coeffs#mu != 0_A);
+    if #offDiagonal > 0 then error("transformed basis ", data#"BasisSymbol", " is not diagonal in source basis ", data#"SourceBasis");
+    c := if coeffs#?lambda then coeffs#lambda else 0_A;
+    if c == 0_A then error("diagonal coefficient is zero for transformed basis ", data#"BasisSymbol");
+    cache#lambda = c;
+    c
+    )
+
+-- Builds the low-level option table for a transformed basis, inheriting index
+-- behavior from a known source basis.
+transformedBasisRegistrationOptionsFromSource = (basisSymbol, opts, data, omegaSymbol, innerProductData, sourceForOptions) -> (
     H := new MutableHashTable from pairs basisOptionDefaults;
     scan(keys basisOptionDefaults, optKey -> if opts#?optKey then H#optKey = opts#optKey);
-    sourceForOptions := basis(data#"SourceBasis");
     if H#"CanBeSkew" === null then H#"CanBeSkew" = sourceForOptions#"CanBeSkew";
     if H#"MultiplicativeIndex" === null then H#"MultiplicativeIndex" = sourceForOptions#"MultiplicativeIndex";
     if H#"IsMultiplicativeIndex" === null then H#"IsMultiplicativeIndex" = sourceForOptions#"MultiplicativeIndex";
@@ -366,18 +701,31 @@ transformedBasisRegistrationOptions = (basisSymbol, opts, data, omegaSymbol, inn
     if H#"ZeroOnNegative" === null then H#"ZeroOnNegative" = sourceForOptions#"ZeroOnNegative";
     H#"DisplayName" = if data#?"DisplayName" then data#"DisplayName" else H#"DisplayName";
     H#"DisplayOrder" = if data#?"DisplayOrder" then data#"DisplayOrder" else H#"DisplayOrder";
-    H#"Omega" = omegaSymbol;
-    H#"InnerProductData" = innerProductData;
+    H#"Omega" = null;
+    H#"InnerProductData" = null;
     H#"TransformData" = data;
     H#"ToPowerSums" = transformedBasisToPowerSums;
     H#"FromPowerSums" = transformedBasisFromPowerSums;
     hashTable pairs H
     )
 
--- Reads one named companion entry from the Companions option
+-- Builds the low-level option table for a transformed basis.
+transformedBasisRegistrationOptions = (basisSymbol, opts, data, omegaSymbol, innerProductData) ->
+    transformedBasisRegistrationOptionsFromSource(basisSymbol, opts, data, omegaSymbol, innerProductData, basis(data#"SourceBasis"))
+
+-- Installs a transformed basis and records its cross-basis links in registries.
+installTransformedBasis = (B, omegaSymbol, innerProductData) -> (
+    installed := installBasis(B, false);
+    registerOmegaLink(installed, omegaSymbol);
+    if innerProductData =!= null and instance(innerProductData, HashTable) then
+        scan(keys innerProductData, contextName -> registerInnerProductRule(contextName, installed, innerProductData#contextName));
+    installed
+    )
+
+-- Reads one named companion entry from the RegisterCompanions option
 transformedCompanionEntry = (companions, companionName) -> (
     if companions === null then null
-    else if not instance(companions, HashTable) then error "expected \"Companions\" to be a hash table"
+    else if not instance(companions, HashTable) then error "expected \"RegisterCompanions\" to be a hash table"
     else if companions#?companionName then companions#companionName else null
     )
 
@@ -417,13 +765,12 @@ transformedDualScaleFunction = (data, source) -> (
     rule := transformedSourceDualRule(source, "Ordinary");
     if rule === null then error("cannot infer dual transform for source basis ", source#"BasisSymbol");
     pairing := rule#"Pairing";
-    (R0, lambda) -> transformedInverseIndexScaleValue(data, R0, lambda) / promote(pairing(R0, lambda), coefficientRing R0)
-    )
-
--- Computes the inverse scale for an inferred inner-product companion
-transformedDualInverseScaleFunction = (data, source) -> (
-    dualScale := transformedDualScaleFunction(data, source);
-    (R0, lambda) -> transformedInvertScalar(dualScale(R0, lambda), "dual scale is not invertible")
+    (lambda, mu, sourceTerm) -> (
+        R0 := ring sourceTerm;
+        A := coefficientRing R0;
+        diagonalScale := if data#?"DiagonalSourceTransform" and data#"DiagonalSourceTransform" then transformedDiagonalScaleValue(R0, data, lambda) else 1_A;
+        promote(1_A / (promote(pairing(R0, lambda), A) * promote(diagonalScale, A)), R0) * sourceTerm
+        )
     )
 
 -- Pairing used when two transformed companions are declared dual by construction
@@ -440,7 +787,7 @@ transformedSingleDualInnerProductData = (dualSymbol, pairing) -> hashTable {
 
 -- Inherits diagonal inner-product data from the source basis when possible
 transformedInheritedInnerProductData = (data, source) -> (
-    if transformedHasNontrivialAlphabet data then null
+    if transformedHasNontrivialAlphabet data or data#"TermTransformKind" =!= "Identity" then null
     else (
         rule := transformedSourceDualRule(source, "Ordinary");
         if rule === null then null
@@ -449,7 +796,7 @@ transformedInheritedInnerProductData = (data, source) -> (
             hashTable {
                 "Ordinary" => hashTable {
                     "DualBasis" => rule#"DualBasis",
-                    "Pairing" => (R0, idx) -> transformedApplyIndexScale(data#"Scale", R0, idx) * promote(sourcePairing(R0, idx), coefficientRing R0),
+                    "Pairing" => (R0, idx) -> promote(sourcePairing(R0, idx), coefficientRing R0),
                     "EngineKind" => "Dual"
                     }
                 }
@@ -457,15 +804,64 @@ transformedInheritedInnerProductData = (data, source) -> (
         )
     )
 
--- Records the source, scale, alphabet, and display data for a transformed basis
-transformedMakeData = (basisSymbol, sourceSymbol, opts, scale, inverseScale, alphabetScale, inverseAlphabetScale, companionMeta) -> hashTable {
+-- Tests whether the transform has enough structure for automatic dual companions.
+transformedSupportsInnerProductCompanions = data -> (
+    ((data#"SumOver")#"Kind") == "SameIndex" and (data#"TermTransformKind" == "Identity" or (data#?"DiagonalSourceTransform" and data#"DiagonalSourceTransform"))
+    )
+
+-- Inspects a sample transformed term to record output-basis metadata
+transformedInspectOutputMetadata = (R0, sourceSymbol, alphabetData, termTransform, termTransformKind) -> (
+    if termTransformKind == "Identity" and alphabetData === null then return hashTable {
+        "PreservesSourceBasis" => true,
+        "OutputBasis" => sourceSymbol,
+        "UsesMixedBases" => false
+        };
+    if termTransformKind == "Identity" and alphabetData =!= null then return hashTable {
+        "PreservesSourceBasis" => false,
+        "OutputBasis" => "p",
+        "UsesMixedBases" => false
+        };
+    if R0 === null then return hashTable {
+        "PreservesSourceBasis" => false,
+        "OutputBasis" => null,
+        "UsesMixedBases" => true
+        };
+    source := basis(R0, sourceSymbol);
+    sampleSourceTerm := if alphabetData === null then source_1 else transformedPowerSumScale(toBasis(source_1, p), (R1, n) -> transformedApplyAlphabetScale(alphabetData, R1, n));
+    sample := try termTransform({1}, {1}, sampleSourceTerm) else null;
+    if sample === null or not instance(sample, SymmetricRingElement) or ring sample =!= R0 then return hashTable {
+        "PreservesSourceBasis" => false,
+        "OutputBasis" => null,
+        "UsesMixedBases" => true
+        };
+    basisIds := unique flatten apply(rawTerms sample, term -> apply(term#1, atom -> atom#"BasisId"));
+    outputBasis := if #basisIds == 1 then (basisWithId(R0, basisIds#0))#"BasisSymbol" else null;
+    hashTable {
+        "PreservesSourceBasis" => outputBasis === sourceSymbol,
+        "OutputBasis" => outputBasis,
+        "UsesMixedBases" => outputBasis === null or any(rawTerms sample, term -> #(term#1) > 1)
+        }
+    )
+
+-- Records the source, alphabet, summation, transform, and display data for a transformed basis
+transformedMakeData = (basisSymbol, sourceSymbol, opts, alphabetData, sumOverData, termTransform, termTransformKind, outputData, companionMeta) -> hashTable {
     "BasisSymbol" => basisSymbol,
     "SourceBasis" => sourceSymbol,
-    "Scale" => scale,
-    "InverseScale" => inverseScale,
     "Alphabet" => opts#"Alphabet",
-    "AlphabetScale" => alphabetScale,
-    "InverseAlphabetScale" => inverseAlphabetScale,
+    "AlphabetData" => alphabetData,
+    "SumOver" => sumOverData,
+    "TermTransform" => termTransform,
+    "TermTransformKind" => termTransformKind,
+    "InverseConversionAvailable" => (termTransformKind == "Identity" and (sumOverData#"Kind") == "SameIndex") or transformedDiagonalSourceTransform(alphabetData, sumOverData, outputData) or (sumOverData#"Triangular" and sumOverData#"TriangularOrder" =!= null and alphabetData === null and outputData#"PreservesSourceBasis"),
+    "DiagonalSourceTransform" => transformedDiagonalSourceTransform(alphabetData, sumOverData, outputData),
+    "DiagonalScaleCache" => new MutableHashTable,
+    "PreservesSourceBasis" => outputData#"PreservesSourceBasis",
+    "OutputBasis" => outputData#"OutputBasis",
+    "UsesMixedBases" => outputData#"UsesMixedBases",
+    "Triangular" => sumOverData#"Triangular",
+    "TriangularOrder" => sumOverData#"TriangularOrder",
+    "TransitionCache" => new MutableHashTable,
+    "OnEquivalentBasis" => opts#"OnEquivalentBasis",
     "DisplayName" => if companionMeta =!= null and companionMeta#?"DisplayName" then companionMeta#"DisplayName" else opts#"DisplayName",
     "DisplayOrder" => if companionMeta =!= null and companionMeta#?"DisplayOrder" then companionMeta#"DisplayOrder" else opts#"DisplayOrder"
     }
@@ -475,65 +871,318 @@ transformedValidateSymbolAvailable = basisSymbol -> (
     if BasisIndex#?basisSymbol then error("a symmetric function basis with symbol ", basisSymbol, " is already registered")
     )
 
+-- Ensures a cluster of transformed-basis symbols is collision-free before install.
+transformedValidateSymbolsAvailable = symbols -> (
+    if #unique symbols != #symbols then error "transformed basis companion symbols must be distinct";
+    scan(symbols, transformedValidateSymbolAvailable)
+    )
+
+-- Finds a registered known outcome for a transformed basis definition.
+transformedKnownOutcome = (R0, sourceSymbol, opts, sumOverData, termTransformKind) -> (
+    matches := select(KnownTransformedBasisOutcomes, data -> (
+            data#?"SourceBasis" and data#"SourceBasis" == sourceSymbol
+            and data#?"Alphabet" and transformedAlphabetEquivalent(R0, opts#"Alphabet", data#"Alphabet")
+            and data#?"SumOver" and data#"SumOver" == sumOverData#"Kind"
+            and data#?"TermTransformKind" and data#"TermTransformKind" == termTransformKind
+            ));
+    if #matches == 0 then null else matches#0
+    )
+
+-- Applies the policy for transformed bases known to equal an existing built-in basis.
+transformedApplyKnownOutcomePolicy = (basisSymbol, outcome, policy) -> (
+    if outcome === null then return null;
+    policyString := toString policy;
+    if policyString == "RegisterIndependent" then null
+    else if policyString == "Error" then error("transformed basis ", basisSymbol, " is known to agree with existing basis ", outcome#"EquivalentBasis", "; use \"OnEquivalentBasis\" => \"RegisterIndependent\" to register it anyway")
+    else if policyString == "CreateAlias" then registerBasisAlias(basisSymbol, outcome#"EquivalentBasis")
+    else error("unknown OnEquivalentBasis policy: ", policyString)
+    )
+
+-- Sanitizes a string into a deterministic basis-name suffix token.
+transformedSpecializationSanitizeToken = s -> (
+    token := concatenate apply(characters toString s, c -> (
+            if match("^[A-Za-z0-9]$", c) then c
+            else if c == "-" then "m"
+            else if c == "+" then "p"
+            else if c == "/" then "over"
+            else if c == "_" then "_"
+            else ""
+            ));
+    if token == "" then error("could not build specialization suffix token from ", toString s);
+    token
+    )
+
+-- Builds the suffix for a specialization substitution list, e.g. t=>-1 gives tm1.
+transformedSpecializationSuffix = substitutions -> concatenate apply(substitutions, opt -> (
+        parameterToken := transformedSpecializationSanitizeToken toString opt#0;
+        valueToken := transformedSpecializationSanitizeToken toString opt#1;
+        parameterToken | valueToken
+        ))
+
+-- Normalizes generated specialization family declarations.
+transformedNormalizeGeneratedSpecializations = families -> (
+    if families === null then return {}
+    else if not instance(families, List) then error "expected \"RegisterSpecializations\" to be a list of substitution lists";
+    records := apply(families, substitutions -> (
+            if not instance(substitutions, List) then error "expected each RegisterSpecializations entry to be a substitution list";
+            if #substitutions == 0 then error "expected each RegisterSpecializations entry to be nonempty";
+            if not all(substitutions, opt -> class opt === Option) then error "expected each RegisterSpecializations entry to contain substitutions such as t=>0";
+            hashTable {
+                "Substitutions" => substitutions,
+                "Suffix" => transformedSpecializationSuffix substitutions
+                }
+            ));
+    suffixes := apply(records, r -> r#"Suffix");
+    if #unique suffixes != #suffixes then error "RegisterSpecializations produced duplicate generated basis suffixes";
+    records
+    )
+
+-- Specializes the coefficients of a transformed source term.
+transformedSpecializedTermTransform = substitutions -> (lambda, mu, sourceTerm) -> specializePowerSumCoefficients(toBasis(sourceTerm, p), substitutions)
+
+-- Builds specialization registry metadata from a substitution list.
+transformedSpecializationRuleFromSubstitutions = (targetSymbol, substitutions) -> (
+    if #substitutions == 0 or not all(substitutions, opt -> class opt === Option) then null
+    else hashTable {
+        "Substitutions" => substitutions,
+        "Map" => basisSpecializationMap targetSymbol
+        }
+    )
+
+-- Keeps only inner-product links whose partners are generated in the same family.
+transformedSpecializedInnerProductData = (innerProductData, suffixMap) -> (
+    if innerProductData === null or not instance(innerProductData, HashTable) then null
+    else (
+        result := new MutableHashTable;
+        scan(keys innerProductData, contextName -> (
+                rule := innerProductData#contextName;
+                if instance(rule, HashTable) and rule#?"DualBasis" and suffixMap#?(rule#"DualBasis") then
+                    result#contextName = hashTable(pairs rule | {"DualBasis" => suffixMap#(rule#"DualBasis")});
+                ));
+        if #keys result == 0 then null else hashTable pairs result
+        )
+    )
+
+-- Adds automatically named specialized bases for every basis in a cluster.
+transformedAddGeneratedSpecializationEntries = (entries, opts, families) -> (
+    if #families == 0 then return entries;
+    baseSymbols := apply(entries, entry -> (entry#"Basis")#"BasisSymbol");
+    generatedSymbols := flatten apply(families, family -> apply(baseSymbols, s -> s | family#"Suffix"));
+    transformedValidateSymbolsAvailable(baseSymbols | generatedSymbols);
+    resultEntries := entries;
+    generatedEntries := {};
+    sameIndexData := transformedNormalizeSumOver "SameIndex";
+    outputData := hashTable {
+        "PreservesSourceBasis" => false,
+        "OutputBasis" => "p",
+        "UsesMixedBases" => false
+        };
+    scan(families, family -> (
+            suffix := family#"Suffix";
+            substitutions := family#"Substitutions";
+            suffixMap := new MutableHashTable;
+            scan(baseSymbols, s -> suffixMap#s = s | suffix);
+            resultEntries = apply(resultEntries, entry -> (
+                    sourceSymbol := (entry#"Basis")#"BasisSymbol";
+                    generatedSymbol := suffixMap#sourceSymbol;
+                    newRules := {transformedSpecializationRuleFromSubstitutions(generatedSymbol, substitutions)};
+                    hashTable(pairs entry | {"SpecializationRules" => (if entry#?"SpecializationRules" then entry#"SpecializationRules" else {}) | newRules})
+                    ));
+            scan(entries, entry -> (
+                    sourceBasis := entry#"Basis";
+                    sourceSymbol := sourceBasis#"BasisSymbol";
+                    generatedSymbol := suffixMap#sourceSymbol;
+                    generatedOpts := hashTable(pairs opts | {
+                            "Alphabet" => "X",
+                            "SumOver" => "SameIndex",
+                            "DisplayName" => null,
+                            "DisplayOrder" => sourceBasis#"DisplayOrder",
+                            "OnEquivalentBasis" => "RegisterIndependent"
+                            });
+                    generatedMeta := hashTable {
+                        "DisplayName" => null,
+                        "DisplayOrder" => sourceBasis#"DisplayOrder"
+                        };
+                    generatedTransform := transformedSpecializedTermTransform substitutions;
+                    generatedData := transformedMakeData(generatedSymbol, sourceSymbol, generatedOpts, null, sameIndexData, generatedTransform, "UserFunction", outputData, generatedMeta);
+                    generatedOmega := if entry#"Omega" =!= null and suffixMap#?(entry#"Omega") then suffixMap#(entry#"Omega") else entry#"Omega";
+                    generatedInnerData := transformedSpecializedInnerProductData(entry#"InnerProductData", suffixMap);
+                    generatedEntries = append(generatedEntries, hashTable {
+                            "Basis" => makeBasis(generatedSymbol, transformedBasisRegistrationOptionsFromSource(generatedSymbol, generatedOpts, generatedData, generatedOmega, generatedInnerData, sourceBasis)),
+                            "Omega" => generatedOmega,
+                            "InnerProductData" => generatedInnerData
+                            });
+                    ));
+            ));
+    resultEntries | generatedEntries
+    )
+
+-- Snapshots registration state so a failed transformed-basis cluster can roll back.
+transformedRegistrationSnapshot = () -> hashTable {
+    "BasisIndex" => new MutableHashTable from pairs BasisIndex,
+    "BasisAliasIndex" => new MutableHashTable from pairs BasisAliasIndex,
+    "NextBasisId" => NextBasisId,
+    "UserDefinedBases" => userDefinedSymmetricBases,
+    "AvailableBases" => availableSymmetricBases,
+    "OmegaRegistry" => new MutableHashTable from pairs OmegaRegistry,
+    "InnerProductPairingRegistry" => new MutableHashTable from apply(keys InnerProductPairingRegistry, k -> k => new MutableHashTable from pairs InnerProductPairingRegistry#k),
+    "BasisSpecializationRegistry" => new MutableHashTable from pairs BasisSpecializationRegistry,
+    "CurrentRingBases" => if CurrentSymmetricRing === null then null else CurrentSymmetricRing#"Bases",
+    "CurrentRingAliases" => if CurrentSymmetricRing === null or not CurrentSymmetricRing.cache#?"Aliases" then null else new MutableHashTable from pairs CurrentSymmetricRing.cache#"Aliases"
+    }
+
+transformedRestoreRegistrationSnapshot = snapshot -> (
+    BasisIndex = snapshot#"BasisIndex";
+    BasisAliasIndex = snapshot#"BasisAliasIndex";
+    NextBasisId = snapshot#"NextBasisId";
+    userDefinedSymmetricBases = snapshot#"UserDefinedBases";
+    availableSymmetricBases = snapshot#"AvailableBases";
+    OmegaRegistry = snapshot#"OmegaRegistry";
+    InnerProductPairingRegistry = snapshot#"InnerProductPairingRegistry";
+    BasisSpecializationRegistry = snapshot#"BasisSpecializationRegistry";
+    if CurrentSymmetricRing =!= null then (
+        if snapshot#"CurrentRingBases" =!= null then CurrentSymmetricRing#"Bases" = snapshot#"CurrentRingBases";
+        if snapshot#"CurrentRingAliases" =!= null then CurrentSymmetricRing.cache#"Aliases" = snapshot#"CurrentRingAliases";
+        );
+    )
+
+-- Installs a transformed-basis cluster with registry rollback on failure.
+transformedInstallClusterAtomically = entries -> (
+    snapshot := transformedRegistrationSnapshot();
+    symbols := apply(entries, entry -> (entry#"Basis")#"BasisSymbol");
+    oldSymbolValues := apply(symbols, s -> {getSymbol s, value getSymbol s});
+    result := try (
+        primary := null;
+        scan(entries, entry -> (
+                installed := installTransformedBasis(entry#"Basis", entry#"Omega", entry#"InnerProductData");
+                if entry#?"SpecializationRules" then scan(entry#"SpecializationRules", rule -> registerBasisSpecializationRule(installed, rule));
+                if entry#?"Primary" and entry#"Primary" then primary = installed;
+                ));
+        primary
+        ) else (
+        transformedRestoreRegistrationSnapshot snapshot;
+        restoreSymbolValues oldSymbolValues;
+        error "failed to install transformed basis cluster; registration was rolled back"
+        );
+    result
+    )
+
 -- User-facing helper for registering transformed bases and companions
 registerTransformedBasis = args -> (
     L := argumentList args;
-    if #L == 0 then error "expected a basis symbol";
+    if #L < 2 then error "expected a basis symbol and a source basis";
     basisSymbol := toString L#0;
-    opts := parseStringOptions(transformedBasisOptionDefaults, drop(L, 1), "registerTransformedBasis");
-    if opts#"SourceBasis" === null then error "expected option \"SourceBasis\" for registerTransformedBasis";
-    if opts#"Expansion" =!= null or opts#"Triangular" =!= null then error "\"Expansion\" and \"Triangular\" transformed bases are not implemented yet";
-    if opts#"Alphabet" =!= null and opts#"AlphabetScale" =!= null then error "expected only one of \"Alphabet\" and \"AlphabetScale\"";
-    if opts#"Alphabet" =!= null and CurrentSymmetricRing =!= null then transformedAlphabetCoefficient(CurrentSymmetricRing, opts#"Alphabet");
-    transformedValidateSymbolAvailable basisSymbol;
-    source := basis(opts#"SourceBasis");
+    sourceInput := L#1;
+    opts := parseStringOptions(transformedBasisOptionDefaults, drop(L, 2), "registerTransformedBasis");
+    source := basis(sourceInput);
     sourceSymbol := source#"BasisSymbol";
-    companions := opts#"Companions";
-    omegaMeta := transformedCompanionData(transformedCompanionEntry(companions, "Omega"), opts#"DisplayOrder" + 1);
-    if omegaMeta === null then omegaMeta = transformedCompanionData(transformedCompanionEntry(companions, "omega"), opts#"DisplayOrder" + 1);
+    alphabetData := transformedAlphabetData(CurrentSymmetricRing, opts#"Alphabet");
+    sumOverData := transformedNormalizeSumOver opts#"SumOver";
+    termData := transformedTermTransformData opts#"TermTransform";
+    termTransform := termData#0;
+    termTransformKind := termData#1;
+    knownOutcome := transformedKnownOutcome(CurrentSymmetricRing, sourceSymbol, opts, sumOverData, termTransformKind);
+    aliasOutcome := transformedApplyKnownOutcomePolicy(basisSymbol, knownOutcome, opts#"OnEquivalentBasis");
+    if aliasOutcome =!= null then return aliasOutcome;
+    outputData := transformedInspectOutputMetadata(CurrentSymmetricRing, sourceSymbol, alphabetData, termTransform, termTransformKind);
+    specializationFamilies := transformedNormalizeGeneratedSpecializations opts#"RegisterSpecializations";
+    companions := opts#"RegisterCompanions";
+    omegaMeta := transformedCompanionData(transformedCompanionEntry(companions, "OmegaPartner"), opts#"DisplayOrder" + 1);
     innerMeta := transformedCompanionData(transformedCompanionEntry(companions, "InnerProductPartner"), opts#"DisplayOrder" + 2);
-    if innerMeta === null then innerMeta = transformedCompanionData(transformedCompanionEntry(companions, "Dual"), opts#"DisplayOrder" + 2);
     omegaInnerMeta := transformedCompanionData(transformedCompanionEntry(companions, "OmegaInnerProductPartner"), opts#"DisplayOrder" + 3);
-    if omegaInnerMeta === null then omegaInnerMeta = transformedCompanionData(transformedCompanionEntry(companions, "OmegaDual"), opts#"DisplayOrder" + 3);
-    scan(select({omegaMeta, innerMeta, omegaInnerMeta}, x -> x =!= null), meta -> transformedValidateSymbolAvailable meta#"BasisSymbol");
-    if omegaMeta =!= null and source#"Omega" === null then error("cannot register omega companion for ", basisSymbol, ": source basis ", sourceSymbol, " has no omega metadata; omit the \"Omega\" companion");
+    transformedValidateSymbolsAvailable prepend(basisSymbol, apply(select({omegaMeta, innerMeta, omegaInnerMeta}, x -> x =!= null), meta -> meta#"BasisSymbol"));
+    sourceOmegaSymbol := omegaPartnerSymbol source;
+    if omegaMeta =!= null and sourceOmegaSymbol === null then error("cannot register omega companion for ", basisSymbol, ": source basis ", sourceSymbol, " has no omega metadata; omit \"OmegaPartner\"");
     if innerMeta =!= null and transformedSourceDualRule(source, "Ordinary") === null then error("cannot register inner-product companion for ", basisSymbol, ": source basis ", sourceSymbol, " has no ordinary diagonal inner-product metadata; omit \"InnerProductPartner\"");
     if omegaInnerMeta =!= null and innerMeta === null then error "cannot register \"OmegaInnerProductPartner\" without \"InnerProductPartner\"";
-    scale := opts#"Scale";
-    inverseScale := opts#"InverseScale";
-    alphabetScale := if opts#"Alphabet" === null then opts#"AlphabetScale" else hashTable {"Alphabet" => opts#"Alphabet"};
-    inverseAlphabetScale := opts#"InverseAlphabetScale";
-    primaryData := transformedMakeData(basisSymbol, sourceSymbol, opts, scale, inverseScale, alphabetScale, inverseAlphabetScale, null);
-    omegaSymbol := if omegaMeta === null then source#"Omega" else omegaMeta#"BasisSymbol";
+    primaryData := transformedMakeData(basisSymbol, sourceSymbol, opts, alphabetData, sumOverData, termTransform, termTransformKind, outputData, null);
+    if knownOutcome =!= null then primaryData = hashTable(pairs primaryData | {"KnownEquivalentBasis" => knownOutcome#"EquivalentBasis"});
+    if (innerMeta =!= null or omegaInnerMeta =!= null) and not transformedSupportsInnerProductCompanions primaryData then
+        error "inner-product companions are currently only supported for identity or diagonal SameIndex transforms";
+    omegaSymbol := if omegaMeta === null then sourceOmegaSymbol else omegaMeta#"BasisSymbol";
     innerSymbol := if innerMeta === null then null else innerMeta#"BasisSymbol";
     primaryInnerData := if innerSymbol === null then transformedInheritedInnerProductData(primaryData, source)
         else transformedSingleDualInnerProductData(innerSymbol, transformedUnitPairing);
-    primary := installBasis(makeBasis(basisSymbol, transformedBasisRegistrationOptions(basisSymbol, opts, primaryData, omegaSymbol, primaryInnerData)), false);
+    entries := {hashTable {
+            "Basis" => makeBasis(basisSymbol, transformedBasisRegistrationOptions(basisSymbol, opts, primaryData, omegaSymbol, primaryInnerData)),
+            "Omega" => omegaSymbol,
+            "InnerProductData" => primaryInnerData,
+            "SpecializationRules" => {},
+            "Primary" => true
+            }};
     if omegaMeta =!= null then (
-        omegaSource := basis(source#"Omega");
-        omegaData := transformedMakeData(omegaMeta#"BasisSymbol", omegaSource#"BasisSymbol", opts, scale, inverseScale, alphabetScale, inverseAlphabetScale, omegaMeta);
+        omegaSource := basis(sourceOmegaSymbol);
+        omegaOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, omegaSource#"BasisSymbol", alphabetData, termTransform, termTransformKind);
+        omegaData := transformedMakeData(omegaMeta#"BasisSymbol", omegaSource#"BasisSymbol", opts, alphabetData, sumOverData, termTransform, termTransformKind, omegaOutputData, omegaMeta);
         omegaInnerSymbol := if omegaInnerMeta === null then null else omegaInnerMeta#"BasisSymbol";
         omegaInnerData := if omegaInnerSymbol === null then transformedInheritedInnerProductData(omegaData, omegaSource)
             else transformedSingleDualInnerProductData(omegaInnerSymbol, transformedUnitPairing);
-        installBasis(makeBasis(omegaMeta#"BasisSymbol", transformedBasisRegistrationOptions(omegaMeta#"BasisSymbol", opts, omegaData, basisSymbol, omegaInnerData)), false);
+        entries = append(entries, hashTable {
+                "Basis" => makeBasis(omegaMeta#"BasisSymbol", transformedBasisRegistrationOptions(omegaMeta#"BasisSymbol", opts, omegaData, basisSymbol, omegaInnerData)),
+                "Omega" => basisSymbol,
+                "InnerProductData" => omegaInnerData
+                });
         );
     if innerMeta =!= null then (
         dualSourceSymbol := transformedOrdinarySourceDualKey source;
         dualSource := basis(dualSourceSymbol);
-        dualScale := transformedDualScaleFunction(primaryData, source);
-        dualInverseScale := transformedDualInverseScaleFunction(primaryData, source);
-        dualData := transformedMakeData(innerMeta#"BasisSymbol", dualSource#"BasisSymbol", opts, dualScale, dualInverseScale, inverseAlphabetScale, alphabetScale, innerMeta);
-        dualOmegaSymbol := if omegaInnerMeta === null then dualSource#"Omega" else omegaInnerMeta#"BasisSymbol";
-        installBasis(makeBasis(innerMeta#"BasisSymbol", transformedBasisRegistrationOptions(innerMeta#"BasisSymbol", opts, dualData, dualOmegaSymbol, transformedSingleDualInnerProductData(basisSymbol, transformedUnitPairing))), false);
+        dualTermTransform := transformedDualScaleFunction(primaryData, source);
+        dualAlphabetData := transformedInverseAlphabetData alphabetData;
+        dualOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, dualSource#"BasisSymbol", dualAlphabetData, dualTermTransform, "UserFunction");
+        dualData := transformedMakeData(innerMeta#"BasisSymbol", dualSource#"BasisSymbol", opts, dualAlphabetData, sumOverData, dualTermTransform, "UserFunction", dualOutputData, innerMeta);
+        dualSourceOmegaSymbol := omegaPartnerSymbol dualSource;
+        if omegaInnerMeta =!= null and dualSourceOmegaSymbol === null then error("cannot register omega inner-product companion for ", basisSymbol, ": source dual basis ", dualSource#"BasisSymbol", " has no omega metadata");
+        dualOmegaSymbol := if omegaInnerMeta === null then dualSourceOmegaSymbol else omegaInnerMeta#"BasisSymbol";
+        entries = append(entries, hashTable {
+                "Basis" => makeBasis(innerMeta#"BasisSymbol", transformedBasisRegistrationOptions(innerMeta#"BasisSymbol", opts, dualData, dualOmegaSymbol, transformedSingleDualInnerProductData(basisSymbol, transformedUnitPairing))),
+                "Omega" => dualOmegaSymbol,
+                "InnerProductData" => transformedSingleDualInnerProductData(basisSymbol, transformedUnitPairing)
+                });
         if omegaInnerMeta =!= null then (
-            if dualSource#"Omega" === null then error("cannot register omega inner-product companion for ", basisSymbol, ": source dual basis ", dualSource#"BasisSymbol", " has no omega metadata");
-            omegaDualSource := basis(dualSource#"Omega");
-            omegaDualData := transformedMakeData(omegaInnerMeta#"BasisSymbol", omegaDualSource#"BasisSymbol", opts, dualScale, dualInverseScale, inverseAlphabetScale, alphabetScale, omegaInnerMeta);
-            omegaTargetSymbol := if omegaMeta === null then omegaDualSource#"Omega" else omegaMeta#"BasisSymbol";
-            installBasis(makeBasis(omegaInnerMeta#"BasisSymbol", transformedBasisRegistrationOptions(omegaInnerMeta#"BasisSymbol", opts, omegaDualData, innerMeta#"BasisSymbol", transformedSingleDualInnerProductData(omegaTargetSymbol, transformedUnitPairing))), false);
+            omegaDualSource := basis(dualSourceOmegaSymbol);
+            omegaDualOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, omegaDualSource#"BasisSymbol", dualAlphabetData, dualTermTransform, "UserFunction");
+            omegaDualData := transformedMakeData(omegaInnerMeta#"BasisSymbol", omegaDualSource#"BasisSymbol", opts, dualAlphabetData, sumOverData, dualTermTransform, "UserFunction", omegaDualOutputData, omegaInnerMeta);
+            omegaTargetSymbol := if omegaMeta === null then omegaPartnerSymbol omegaDualSource else omegaMeta#"BasisSymbol";
+            entries = append(entries, hashTable {
+                    "Basis" => makeBasis(omegaInnerMeta#"BasisSymbol", transformedBasisRegistrationOptions(omegaInnerMeta#"BasisSymbol", opts, omegaDualData, innerMeta#"BasisSymbol", transformedSingleDualInnerProductData(omegaTargetSymbol, transformedUnitPairing))),
+                    "Omega" => innerMeta#"BasisSymbol",
+                    "InnerProductData" => transformedSingleDualInnerProductData(omegaTargetSymbol, transformedUnitPairing)
+                    });
             );
         );
-    primary
+    entries = transformedAddGeneratedSpecializationEntries(entries, opts, specializationFamilies);
+    transformedInstallClusterAtomically entries
+    )
+
+-- Applies coefficient substitutions to an expression already in power sums.
+specializePowerSumCoefficients = (F, substitutions) -> (
+    R0 := ring F;
+    A := coefficientRing R0;
+    result := 0_R0;
+    scan(rawTerms F, term -> (
+            c := promote(try sub(term#0, substitutions) else term#0, A);
+            if c != 0_A then result = result + promote(c, R0) * monomialAsElement(R0, term#1);
+            ));
+    result
+    )
+
+-- Registers a basis whose elements are defined by specializing a source basis.
+registerSpecializedBasis = args -> (
+    L := argumentList args;
+    if #L < 3 then error "expected a basis symbol, a source basis, and a list of substitutions";
+    basisSymbol := toString L#0;
+    sourceInput := L#1;
+    substitutions := L#2;
+    if not instance(substitutions, List) then error "expected a list of substitutions";
+    extraOptions := drop(L, 3);
+    if any(extraOptions, opt -> class opt === Option and opt#0 == "TermTransform") then
+        error "registerSpecializedBasis sets TermTransform from the substitution list";
+    source := basis(sourceInput);
+    specializedTransform := (lambda, mu, sourceTerm) -> specializePowerSumCoefficients(toBasis(sourceTerm, p), substitutions);
+    result := registerTransformedBasis toSequence ({basisSymbol, sourceInput, "TermTransform" => specializedTransform} | extraOptions);
+    rule := transformedSpecializationRuleFromSubstitutions(result#"BasisSymbol", substitutions);
+    if rule =!= null then registerBasisSpecializationRule(source, rule);
+    result
     )
 
 -- Creates a basis-specialization map to a target basis
@@ -623,3 +1272,19 @@ Q = makeBuiltinBasis("Q", "DisplayName" => "Hall-Littlewood Q basis", "DisplayOr
 B = makeBuiltinBasis("B", "DisplayName" => "Hall-Littlewood B basis", "DisplayOrder" => 73, "CanBeSkew" => true, "Omega" => "Q", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "Somega", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "R"})
 P = makeBuiltinBasis("P", "DisplayName" => "Hall-Littlewood P basis", "DisplayOrder" => 74, "CanBeSkew" => true, "Omega" => "R", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "S", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "Q"})
 R = makeBuiltinBasis("R", "DisplayName" => "omega Hall-Littlewood P basis", "DisplayOrder" => 75, "CanBeSkew" => true, "Omega" => "P", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "Somega", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "B"})
+
+registerKnownTransformedBasisOutcome hashTable {
+    "SourceBasis" => "h",
+    "Alphabet" => "(1-t)*X",
+    "SumOver" => "SameIndex",
+    "TermTransformKind" => "Identity",
+    "EquivalentBasis" => "q"
+    }
+
+registerKnownTransformedBasisOutcome hashTable {
+    "SourceBasis" => "e",
+    "Alphabet" => "(1-t)*X",
+    "SumOver" => "SameIndex",
+    "TermTransformKind" => "Identity",
+    "EquivalentBasis" => "b"
+    }
