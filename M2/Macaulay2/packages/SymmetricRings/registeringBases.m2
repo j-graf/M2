@@ -24,6 +24,9 @@ CurrentSymmetricRing = null
 -- Maps basis symbols to global basis metadata
 BasisIndex = new MutableHashTable
 
+-- Maps default public basis symbols to stable basis keys
+BasisSymbolIndex = new MutableHashTable
+
 -- Maps user-facing basis alias symbols to the canonical basis they share
 BasisAliasIndex = new MutableHashTable
 
@@ -46,14 +49,30 @@ InnerProductPairingRegistry = new MutableHashTable from {
 BasisSpecializationRegistry = new MutableHashTable
 KnownTransformedBasisOutcomes = {}
 
--- Converts basis-like inputs to the canonical string key used by registries
-basisRegistryKey = B -> if instance(B, SymmetricBasis) then B#"BasisSymbol" else toString B
+-- Returns the stable internal key for a basis metadata record.
+basisKey = B -> (
+    if B#?"BasisAliasOf" then B#"BasisAliasOf"
+    else if B#?"BasisKey" then B#"BasisKey"
+    else B#"BasisSymbol"
+    )
+
+-- Returns the default public symbol for a basis metadata record.
+basisDefaultSymbol = B -> if B#?"DefaultSymbol" then B#"DefaultSymbol" else B#"BasisSymbol"
+
+-- Resolves a global basis symbol or alias to a stable internal key.
+globalBasisKey = basisSymbol -> (
+    symbolString := toString basisSymbol;
+    if BasisAliasIndex#?symbolString then BasisAliasIndex#symbolString
+    else if BasisSymbolIndex#?symbolString then BasisSymbolIndex#symbolString
+    else if BasisIndex#?symbolString then basisKey BasisIndex#symbolString
+    else symbolString
+    )
+
+-- Converts basis-like inputs to the canonical key used by registries.
+basisRegistryKey = B -> if instance(B, SymmetricBasis) then basisKey B else globalBasisKey B
 
 -- Returns the canonical basis symbol for a symbol or alias
-canonicalBasisSymbol = basisSymbol -> (
-    symbolString := toString basisSymbol;
-    if BasisAliasIndex#?symbolString then BasisAliasIndex#symbolString else symbolString
-    )
+canonicalBasisSymbol = basisSymbol -> basisDefaultSymbol BasisIndex#(globalBasisKey basisSymbol)
 
 -- Lists registered basis alias metadata records
 registeredBasisAliases = () -> apply(keys BasisAliasIndex, aliasSymbol -> BasisIndex#aliasSymbol)
@@ -63,7 +82,9 @@ registeredAliasTable = () -> (
     H := new MutableHashTable;
     scan(keys BasisAliasIndex, aliasSymbol -> (
             targetSymbol := BasisAliasIndex#aliasSymbol;
-            H#targetSymbol = append(if H#?targetSymbol then H#targetSymbol else {}, aliasSymbol);
+            target := BasisIndex#targetSymbol;
+            targetDisplay := basisDefaultSymbol target;
+            H#targetDisplay = append(if H#?targetDisplay then H#targetDisplay else {}, aliasSymbol);
             ));
     hashTable pairs H
     )
@@ -71,12 +92,14 @@ registeredAliasTable = () -> (
 -- Records a new user-facing symbol for an existing basis without a new basis id
 registerBasisAlias = (aliasSymbol, targetSymbol) -> (
     aliasKey := toString aliasSymbol;
-    targetKey := toString targetSymbol;
-    if BasisIndex#?aliasKey then error("a symmetric function basis with symbol ", aliasKey, " is already registered");
+    targetKey := globalBasisKey targetSymbol;
+    if BasisIndex#?aliasKey or BasisSymbolIndex#?aliasKey or BasisAliasIndex#?aliasKey then error("a symmetric function basis with symbol ", aliasKey, " is already registered");
     if not BasisIndex#?targetKey then error("unknown symmetric function basis: ", targetKey);
     target := BasisIndex#targetKey;
     aliasBasis := new SymmetricBasis from hashTable(pairs target | {
             "BasisSymbol" => aliasKey,
+            "DefaultSymbol" => aliasKey,
+            "BasisKey" => targetKey,
             "DisplayName" => aliasKey | "-alias for " | targetKey,
             "BasisAliasOf" => targetKey,
             "TransformData" => null,
@@ -193,6 +216,8 @@ acceptIntegerIndex = L -> all(L, i -> class i === ZZ)
 
 -- Default metadata for low-level basis registration
 basisOptionDefaults = hashTable {
+    "BasisKey" => null,
+    "DefaultSymbol" => null,
     "DisplayName" => null,
     "DisplayOrder" => 100,
     "CanBeSkew" => false,
@@ -236,11 +261,15 @@ parseStringOptions = (defaults, opts, name) -> (
 -- Creates the metadata record for a basis without installing it
 makeBasis = (basisSymbol, opts) -> (
     symbolString := toString basisSymbol;
+    keyString := if opts#"BasisKey" === null then symbolString else toString opts#"BasisKey";
+    defaultSymbol := if opts#"DefaultSymbol" === null then symbolString else toString opts#"DefaultSymbol";
     NextBasisId = NextBasisId + 1;
-    displayName := if opts#"DisplayName" === null then symbolString | "-basis" else opts#"DisplayName";
+    displayName := if opts#"DisplayName" === null then defaultSymbol | "-basis" else opts#"DisplayName";
     multiplicative := opts#"MultiplicativeIndex" or opts#"IsMultiplicativeIndex";
     new SymmetricBasis from hashTable {
-        "BasisSymbol" => symbolString,
+        "BasisKey" => keyString,
+        "DefaultSymbol" => defaultSymbol,
+        "BasisSymbol" => defaultSymbol,
         "BasisId" => NextBasisId,
         "DisplayName" => displayName,
         "DisplayOrder" => opts#"DisplayOrder",
@@ -283,21 +312,28 @@ stripLegacyBuiltinRegistryFields = B -> new SymmetricBasis from hashTable(pairs 
 
 -- Installs a basis globally and in the current ring when appropriate
 installBasis = (B, builtin) -> (
-    basisSymbol := B#"BasisSymbol";
-    if BasisIndex#?basisSymbol then error("a symmetric function basis with symbol ", basisSymbol, " is already registered");
+    key := basisKey B;
+    basisSymbol := basisDefaultSymbol B;
+    if BasisIndex#?key then error("a symmetric function basis with key ", key, " is already registered");
+    if BasisSymbolIndex#?basisSymbol or BasisAliasIndex#?basisSymbol then error("a symmetric function basis with symbol ", basisSymbol, " is already registered");
     registerBasisMetadataInRegistries B;
     storedBasis := if builtin then stripLegacyBuiltinRegistryFields B else B;
-    BasisIndex#basisSymbol = storedBasis;
+    BasisIndex#key = storedBasis;
+    BasisSymbolIndex#basisSymbol = key;
+    BasisSymbolIndex#key = key;
     if builtin then builtinSymmetricBases = append(builtinSymmetricBases, storedBasis)
     else userDefinedSymmetricBases = append(userDefinedSymmetricBases, storedBasis);
     refreshAvailableBases();
     if CurrentSymmetricRing =!= null then (
+        registerBasisSymbolOnRing(CurrentSymmetricRing, storedBasis);
+        CurrentSymmetricRing#"UsesDefaultBasisSymbols" = all(CurrentSymmetricRing#"Bases", B0 -> basisSymbolForRing(CurrentSymmetricRing, B0) == basisDefaultSymbol B0);
         if basisAvailableForRing(CurrentSymmetricRing, storedBasis) then (
             CurrentSymmetricRing#"Bases" = append(CurrentSymmetricRing#"Bases", storedBasis);
+            CurrentSymmetricRing#"UsesDefaultBasisSymbols" = CurrentSymmetricRing#"UsesDefaultBasisSymbols" and basisSymbolForRing(CurrentSymmetricRing, storedBasis) == basisDefaultSymbol storedBasis;
             rememberBasisInEngine(CurrentSymmetricRing, storedBasis);
-            CurrentSymmetricRing.cache#"Aliases"#(storedBasis#"BasisSymbol") = installBasisAlias(CurrentSymmetricRing, storedBasis);
+            CurrentSymmetricRing.cache#"Aliases"#(basisSymbolForRing(CurrentSymmetricRing, storedBasis)) = installBasisAlias(CurrentSymmetricRing, storedBasis);
             )
-        else CurrentSymmetricRing.cache#"Aliases"#(storedBasis#"BasisSymbol") = installUnavailableBasisAlias(CurrentSymmetricRing, storedBasis);
+        else CurrentSymmetricRing.cache#"Aliases"#(basisSymbolForRing(CurrentSymmetricRing, storedBasis)) = installUnavailableBasisAlias(CurrentSymmetricRing, storedBasis);
         );
     storedBasis
     )
@@ -1114,6 +1150,7 @@ transformedClusterRegistrationReport = entries -> (
 -- Snapshots registration state so a failed transformed-basis cluster can roll back.
 transformedRegistrationSnapshot = () -> hashTable {
     "BasisIndex" => new MutableHashTable from pairs BasisIndex,
+    "BasisSymbolIndex" => new MutableHashTable from pairs BasisSymbolIndex,
     "BasisAliasIndex" => new MutableHashTable from pairs BasisAliasIndex,
     "NextBasisId" => NextBasisId,
     "UserDefinedBases" => userDefinedSymmetricBases,
@@ -1122,11 +1159,14 @@ transformedRegistrationSnapshot = () -> hashTable {
     "InnerProductPairingRegistry" => new MutableHashTable from apply(keys InnerProductPairingRegistry, k -> k => new MutableHashTable from pairs InnerProductPairingRegistry#k),
     "BasisSpecializationRegistry" => new MutableHashTable from pairs BasisSpecializationRegistry,
     "CurrentRingBases" => if CurrentSymmetricRing === null then null else CurrentSymmetricRing#"Bases",
+    "CurrentRingBasisKeyToSymbol" => if CurrentSymmetricRing === null or not CurrentSymmetricRing#?"BasisKeyToSymbol" then null else new MutableHashTable from pairs CurrentSymmetricRing#"BasisKeyToSymbol",
+    "CurrentRingBasisSymbolToKey" => if CurrentSymmetricRing === null or not CurrentSymmetricRing#?"BasisSymbolToKey" then null else new MutableHashTable from pairs CurrentSymmetricRing#"BasisSymbolToKey",
     "CurrentRingAliases" => if CurrentSymmetricRing === null or not CurrentSymmetricRing.cache#?"Aliases" then null else new MutableHashTable from pairs CurrentSymmetricRing.cache#"Aliases"
     }
 
 transformedRestoreRegistrationSnapshot = snapshot -> (
     BasisIndex = snapshot#"BasisIndex";
+    BasisSymbolIndex = snapshot#"BasisSymbolIndex";
     BasisAliasIndex = snapshot#"BasisAliasIndex";
     NextBasisId = snapshot#"NextBasisId";
     userDefinedSymmetricBases = snapshot#"UserDefinedBases";
@@ -1136,6 +1176,8 @@ transformedRestoreRegistrationSnapshot = snapshot -> (
     BasisSpecializationRegistry = snapshot#"BasisSpecializationRegistry";
     if CurrentSymmetricRing =!= null then (
         if snapshot#"CurrentRingBases" =!= null then CurrentSymmetricRing#"Bases" = snapshot#"CurrentRingBases";
+        if snapshot#"CurrentRingBasisKeyToSymbol" =!= null then CurrentSymmetricRing#"BasisKeyToSymbol" = snapshot#"CurrentRingBasisKeyToSymbol";
+        if snapshot#"CurrentRingBasisSymbolToKey" =!= null then CurrentSymmetricRing#"BasisSymbolToKey" = snapshot#"CurrentRingBasisSymbolToKey";
         if snapshot#"CurrentRingAliases" =!= null then CurrentSymmetricRing.cache#"Aliases" = snapshot#"CurrentRingAliases";
         );
     )

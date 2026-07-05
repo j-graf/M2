@@ -13,7 +13,8 @@ newSymmetricEngineRing = Rraw -> (
 
 -- Sends basis metadata to the C++ engine for ordering and multiplication.
 rememberBasisInEngine = (R0, B0) -> (
-    rawSymmetricRingsRememberBasis(raw R0, B0#"BasisId", B0#"BasisSymbol", B0#"DisplayOrder", B0#"MultiplicativeIndex");
+    B := basisOnRing(B0, R0);
+    rawSymmetricRingsRememberBasis(raw R0, B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex");
     )
 
 -- Tests whether a basis should be present over a particular coefficient ring.
@@ -75,7 +76,9 @@ symmetricRingOptionDefaults = hashTable {
     "HallLittlewoodParameter" => null,
     "MacdonaldParameters" => {},
     "DefaultSeriesVariables" => {},
-    "NormalizeSomega" => true
+    "BasisSymbols" => hashTable {},
+    "NormalizeSomega" => true,
+    "CreateConstantQQShadow" => true
     }
 
 -- Finds a coefficient-ring generator with a given displayed name.
@@ -93,6 +96,39 @@ inferMacdonaldParameters = A -> (
     t0 := coefficientRingGeneratorNamed(A, "t");
     q0 := coefficientRingGeneratorNamed(A, "q");
     if t0 =!= null and q0 =!= null then {t0, q0} else {}
+    )
+
+-- Looks up the public symbol for a basis in one ring.
+basisSymbolForRing = (R0, B0) -> (
+    key := basisKey B0;
+    if R0#?"BasisKeyToSymbol" and (R0#"BasisKeyToSymbol")#?key then (R0#"BasisKeyToSymbol")#key
+    else basisDefaultSymbol B0
+    )
+
+-- Adds one basis to the ring-level key/symbol maps.
+registerBasisSymbolOnRing = (R0, B0) -> (
+    key := basisKey B0;
+    symbolOptions := if R0#?"BasisSymbolOptions" then R0#"BasisSymbolOptions" else hashTable {};
+    symbolString := if symbolOptions#?key then toString symbolOptions#key else basisDefaultSymbol B0;
+    if not R0#?"BasisKeyToSymbol" then R0#"BasisKeyToSymbol" = new MutableHashTable;
+    if not R0#?"BasisSymbolToKey" then R0#"BasisSymbolToKey" = new MutableHashTable;
+    if (R0#"BasisSymbolToKey")#?symbolString and (R0#"BasisSymbolToKey")#symbolString =!= key then
+        error("basis symbol ", symbolString, " is already used in this symmetric ring");
+    (R0#"BasisKeyToSymbol")#key = symbolString;
+    (R0#"BasisSymbolToKey")#symbolString = key;
+    (R0#"BasisSymbolToKey")#key = key;
+    symbolString
+    )
+
+-- Builds ring-level key/symbol maps for the available bases.
+initializeBasisSymbolMaps = (R0, symbolOptions) -> (
+    if not instance(symbolOptions, HashTable) then error "expected BasisSymbols to be a hash table";
+    normalizedOptions := hashTable apply(pairs symbolOptions, pair -> globalBasisKey(pair#0) => toString pair#1);
+    R0#"BasisSymbolOptions" = normalizedOptions;
+    R0#"BasisKeyToSymbol" = new MutableHashTable;
+    R0#"BasisSymbolToKey" = new MutableHashTable;
+    scan(availableSymmetricBases, B0 -> registerBasisSymbolOnRing(R0, B0));
+    R0#"UsesDefaultBasisSymbols" = all(R0#"Bases", B0 -> basisSymbolForRing(R0, B0) == basisDefaultSymbol B0);
     )
 
 -- Constructs a symmetric function ring and installs its available bases.
@@ -120,6 +156,7 @@ symmetricRing = args -> (
     R0#"NormalizeSomega" = opts#"NormalizeSomega";
     if class R0#"NormalizeSomega" =!= Boolean then error "expected Boolean value for option NormalizeSomega";
     R0#"Bases" = ringAvailableBases R0;
+    initializeBasisSymbolMaps(R0, opts#"BasisSymbols");
     R0.baseRings = append(A.baseRings, A);
     R0.generators = {};
     R0.degreeLength = 0;
@@ -128,6 +165,19 @@ symmetricRing = args -> (
     CurrentSymmetricRing = R0;
     rememberRingBasisData R0;
     installBasisAliases R0;
+    if opts#"CreateConstantQQShadow" and A =!= QQ then (
+        symbolOptionsForQQ := if R0#?"BasisKeyToSymbol" then hashTable pairs R0#"BasisKeyToSymbol" else hashTable {};
+        Rqq := try symmetricRing(QQ,
+            "BasisSymbols" => symbolOptionsForQQ,
+            "NormalizeSomega" => R0#"NormalizeSomega",
+            "CreateConstantQQShadow" => false) else null;
+        CurrentSymmetricRing = R0;
+        installBasisAliases R0;
+        if Rqq =!= null then (
+            R0.cache#"ConstantQQRing" = Rqq;
+            R0.cache#"ConstantQQBasisCount" = #availableSymmetricBases;
+            );
+        );
     R0
     )
 
@@ -142,12 +192,18 @@ toString SymmetricRing := R0 -> "symmetricRing(" | toString coefficientRing R0 |
 -- ============================================================================
 
 -- Attaches ring-specific data to a global basis metadata record.
-basisOnRing = (B, R0) -> new SymmetricBasis from hashTable(pairs B | {"Ring" => R0})
+basisOnRing = (B, R0) -> new SymmetricBasis from hashTable(pairs B | {
+        "BasisSymbol" => basisSymbolForRing(R0, B),
+        "Ring" => R0
+        })
 
 basis(SymmetricRing, String) := SymmetricBasis => opts -> (R0, basisSymbol) -> (
     symbolString := toString basisSymbol;
-    if not BasisIndex#?symbolString then error("unknown symmetric function basis: ", symbolString);
-    B0 := BasisIndex#(canonicalBasisSymbol symbolString);
+    key := if BasisAliasIndex#?symbolString then BasisAliasIndex#symbolString
+        else if R0#?"BasisSymbolToKey" and (R0#"BasisSymbolToKey")#?symbolString then (R0#"BasisSymbolToKey")#symbolString
+        else globalBasisKey symbolString;
+    if not BasisIndex#?key then error("unknown symmetric function basis: ", symbolString);
+    B0 := BasisIndex#key;
     if not ringHasBasis(R0, B0) then error("basis ", symbolString, " is not available for this symmetric ring");
     basisOnRing(B0, R0)
     )
@@ -178,8 +234,9 @@ basis SymmetricBasis := SymmetricBasis => opts -> B -> (
 
 -- Installs an indexed variable table for an available basis symbol.
 installBasisAlias = (R0, B0) -> (
-    X := getSymbol(B0#"BasisSymbol");
-    B1 := if B0#?"BasisAliasOf" then basis(R0, B0#"BasisAliasOf") else basis(R0, B0);
+    symbolString := if B0#?"BasisAliasOf" then B0#"BasisSymbol" else basisSymbolForRing(R0, B0);
+    X := getSymbol symbolString;
+    B1 := if B0#?"BasisAliasOf" then basis(R0, B0#"BasisAliasOf") else basisOnRing(B0, R0);
     t := new SymmetricRingIndexedVariableTable from X;
     t.SymmetricRing = R0;
     t.SymmetricBasis = B1;
@@ -190,11 +247,12 @@ installBasisAlias = (R0, B0) -> (
 
 -- Installs an indexed variable table that reports a basis is unavailable.
 installUnavailableBasisAlias = (R0, B0) -> (
-    X := getSymbol(B0#"BasisSymbol");
+    symbolString := if B0#?"BasisAliasOf" then B0#"BasisSymbol" else basisSymbolForRing(R0, B0);
+    X := getSymbol symbolString;
     t := new SymmetricRingIndexedVariableTable from X;
     t.SymmetricRing = R0;
     t.SymmetricBasis = null;
-    t#symbol _ = a -> error("basis ", B0#"BasisSymbol", " is not available for this symmetric ring");
+    t#symbol _ = a -> error("basis ", symbolString, " is not available for this symmetric ring");
     globalAssign(X, t);
     t
     )
@@ -203,7 +261,8 @@ installUnavailableBasisAlias = (R0, B0) -> (
 installBasisAliases = R0 -> (
     aliases := new MutableHashTable;
     scan(availableSymmetricBases, B0 -> (
-            aliases#(B0#"BasisSymbol") = if ringHasBasis(R0, B0) then installBasisAlias(R0, B0) else installUnavailableBasisAlias(R0, B0)
+            publicSymbol := basisSymbolForRing(R0, B0);
+            aliases#publicSymbol = if ringHasBasis(R0, B0) then installBasisAlias(R0, B0) else installUnavailableBasisAlias(R0, B0)
             ));
     scan(registeredBasisAliases(), B0 -> aliases#(B0#"BasisSymbol") = if ringHasBasis(R0, BasisIndex#(B0#"BasisAliasOf")) then installBasisAlias(R0, B0) else installUnavailableBasisAlias(R0, B0));
     R0.cache#"Aliases" = aliases;
@@ -214,10 +273,10 @@ installBasisAliases = R0 -> (
 aliasesForRing = R0 -> (
     H := new MutableHashTable;
     scan(keys BasisAliasIndex, aliasSymbol -> (
-            targetSymbol := BasisAliasIndex#aliasSymbol;
-            target := BasisIndex#targetSymbol;
+            targetKey := BasisAliasIndex#aliasSymbol;
+            target := BasisIndex#targetKey;
             if ringHasBasis(R0, target) then
-                H#targetSymbol = append(if H#?targetSymbol then H#targetSymbol else {}, aliasSymbol);
+                H#(basisSymbolForRing(R0, target)) = append(if H#?(basisSymbolForRing(R0, target)) then H#(basisSymbolForRing(R0, target)) else {}, aliasSymbol);
             ));
     hashTable pairs H
     )
@@ -236,9 +295,9 @@ omegaPartners = args -> (
     R0 := L#0;
     H := new MutableHashTable;
     scan(R0#"Bases", B0 -> (
-            omegaSymbol := omegaPartnerSymbol B0;
-            if omegaSymbol =!= null and BasisIndex#?omegaSymbol and ringHasBasis(R0, BasisIndex#omegaSymbol) then
-                H#(B0#"BasisSymbol") = omegaSymbol;
+            omegaKey := omegaPartnerSymbol B0;
+            if omegaKey =!= null and BasisIndex#?omegaKey and ringHasBasis(R0, BasisIndex#omegaKey) then
+                H#(basisSymbolForRing(R0, B0)) = basisSymbolForRing(R0, BasisIndex#omegaKey);
             ));
     hashTable pairs H
     )
@@ -251,7 +310,7 @@ specializations = args -> (
     H := new MutableHashTable;
     scan(R0#"Bases", B0 -> (
             specs := specializationRulesForBasis B0;
-            if #specs > 0 then H#(B0#"BasisSymbol") = specs;
+            if #specs > 0 then H#(basisSymbolForRing(R0, B0)) = specs;
             ));
     hashTable pairs H
     )
@@ -266,7 +325,7 @@ innerProductPairings = args -> (
             contextRules := new MutableHashTable;
             scan(R0#"Bases", B0 -> (
                     rules := innerProductRules(B0, contextName);
-                    if #rules > 0 then contextRules#(B0#"BasisSymbol") = rules;
+                    if #rules > 0 then contextRules#(basisSymbolForRing(R0, B0)) = rules;
                     ));
             if #keys contextRules > 0 then contexts#contextName = hashTable pairs contextRules;
             ));
@@ -282,7 +341,7 @@ basesOutput = (B, verbose) -> if verbose then B else hashTable(B / (B0 -> compac
 -- Lists bases visible to the user, hiding Somega when normalized.
 visibleBasesOnRing = R0 -> (
     B := R0#"Bases" / (B0 -> basisOnRing(B0, R0));
-    if R0#?"NormalizeSomega" and R0#"NormalizeSomega" then select(B, B0 -> B0#"BasisSymbol" =!= "Somega") else B
+    if R0#?"NormalizeSomega" and R0#"NormalizeSomega" then select(B, B0 -> basisKey B0 =!= "Somega") else B
     )
 
 -- Parses the "verbose" option for bases().
@@ -355,7 +414,7 @@ basisData SymmetricBasis := B -> enrichedBasisData B
 -- Returns basis data by basis symbol.
 basisData String := basisSymbol -> (
     symbolString := toString basisSymbol;
-    if BasisIndex#?symbolString and BasisAliasIndex#?symbolString then enrichedBasisData(BasisIndex#symbolString)
+    if BasisAliasIndex#?symbolString then enrichedBasisData(BasisIndex#symbolString)
     else basisData(basis basisSymbol)
     )
 
@@ -408,7 +467,7 @@ somegaAtomAsSchurElement = (R0, atom) -> (
 -- Converts decoded atom data into a user-level symmetric function.
 atomAsElement = (R0, atom) -> (
     B := basisWithId(R0, atom#"BasisId");
-    if B#"BasisSymbol" == "Somega" then somegaAtomAsSchurElement(R0, atom)
+    if basisKey B == "Somega" then somegaAtomAsSchurElement(R0, atom)
     else rawBasisAtomElement(R0, B, atom#"Outer", atom#"Inner")
     )
 
