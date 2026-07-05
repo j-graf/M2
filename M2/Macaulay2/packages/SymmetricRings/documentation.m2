@@ -43,6 +43,9 @@ doc ///
    SymmetricRing
    SymmetricRingElement
    SymmetricBasis
+   applyOperator
+   operatorData
+   raisingOperator
    registerTransformedBasis
    registerSpecializedBasis
    bases
@@ -259,7 +262,7 @@ doc ///
    Text
     The function @TO registerTransformedBasis@ creates a new basis from an
     existing source basis.  The source basis is the second argument.  A
-    "TermTransform" callback changes each source term, while a linear alphabet
+    "TermTransform" callback supplies each summand coefficient, while a linear alphabet
     changes $u_\lambda[X]$ to $u_\lambda[\mathcal A]$.  Companion bases may
     also be registered for omega and inner-product duality.
    Example
@@ -384,6 +387,158 @@ doc ///
 
  Node
   Key
+   SymmetricFunctionOperator
+   (symbol SPACE,SymmetricFunctionOperator,SymmetricRingElement)
+  Headline
+   lightweight operators acting on symmetric functions
+  Description
+   Text
+    A SymmetricFunctionOperator is a lightweight object representing an
+    operation on symmetric functions.  The parent type only assumes that an
+    object knows how to act on a @TO SymmetricRingElement@.  Operators may be
+    applied with @TO applyOperator@, function-call syntax, or juxtaposition.
+   Example
+    A = QQ
+    R = symmetricRing A
+    g = raisingOperator "R_{1,2}"
+    g(h_{2,1})
+    g h_{2,1}
+  SeeAlso
+   RaisingOperator
+   raisingOperator
+   applyOperator
+   operatorData
+   SymmetricRingElement
+
+ Node
+  Key
+   applyOperator
+  Headline
+   apply an operator to a symmetric function
+  Usage
+   applyOperator(g,F)
+   applyOperator(g,F,"SetLimit"=>N)
+  Inputs
+   g:SymmetricFunctionOperator
+    the operator
+   F:SymmetricRingElement
+    the symmetric function
+   N:ZZ
+    a per-computation expansion cap for raising operators
+  Outputs
+   :SymmetricRingElement
+  Description
+   Text
+    The function applyOperator applies a @TO SymmetricFunctionOperator@ to a
+    @TO SymmetricRingElement@.  Function-call syntax @TT "g(F)"@ and
+    juxtaposition @TT "g F"@ call the same operation.
+   Text
+    For raising operators, @TT "\"SetLimit\""@ raises the rational-expansion
+    cap for this one computation.  If the cap is reached, the computation
+    throws an error rather than returning a possibly incomplete answer.
+   Example
+    A = QQ
+    R = symmetricRing A
+    g = raisingOperator "R_{1,2}"
+    applyOperator(g, h_{2,1})
+    g(h_{2,1})
+    g h_{2,1}
+  SeeAlso
+   SymmetricFunctionOperator
+   raisingOperator
+
+ Node
+  Key
+   operatorData
+  Headline
+   inspect stored operator metadata
+  Usage
+   operatorData g
+  Inputs
+   g:SymmetricFunctionOperator
+    the operator
+  Outputs
+   :HashTable
+  Description
+   Text
+    The function operatorData returns the hash table of metadata stored on an
+    operator object.  For a raising operator this includes its expression
+    string and options.
+   Example
+    A = QQ
+    R = symmetricRing A
+    g = raisingOperator "R_{1,2}"
+    operatorData g
+    (operatorData g)#"Expression"
+  SeeAlso
+   SymmetricFunctionOperator
+   applyOperator
+   raisingOperator
+
+ Node
+  Key
+   RaisingOperator
+  Headline
+   raising operators on symmetric functions
+  Description
+   Text
+    A RaisingOperator is a @TO SymmetricFunctionOperator@ built from an
+    expression involving indexed operators $R_{i,j}$.  It acts on indices by
+    total vector shift before the resulting basis element is constructed.
+   Example
+    A = QQ
+    R = symmetricRing A
+    g = raisingOperator "R_{1,2}"
+    instance(g, RaisingOperator)
+    g(h_{2,1})
+  SeeAlso
+   SymmetricFunctionOperator
+   raisingOperator
+   applyOperator
+
+ Node
+  Key
+   raisingOperator
+  Headline
+   construct a raising operator object
+  Usage
+   raisingOperator expression
+  Inputs
+   expression:String
+    an M2 expression involving operators such as @TT "R_{1,2}"@
+  Outputs
+   :RaisingOperator
+  Description
+   Text
+    The function raisingOperator constructs a @TO RaisingOperator@ from an M2
+    expression involving indexed operators such as @TT "R_{1,2}"@.  Only brace
+    notation @TT "R_{i,j}"@ is accepted.  The operators act on the index first:
+    a monomial in the $R_{i,j}$ contributes the total vector shift before any
+    basis element is constructed.
+   Text
+    Rational expressions are expanded only as far as needed by the index-tail
+    cutoff.  The option @TT "\"ExpansionLimit\""@, whose default is 1000, is an
+    emergency cap for expressions whose expansion does not terminate.  Use
+    @TT "applyOperator(g,F,\"SetLimit\"=>N)"@ to raise the cap for one
+    computation.
+   Example
+    A = QQ
+    R = symmetricRing A
+    g = raisingOperator "R_{1,2}"
+    g(h_{2,1})
+    geo = raisingOperator "(1 - 2*R_{1,2})/(1 - R_{1,2})"
+    geo h_{2,1}
+    schurRaise = raisingOperator "product apply(pairs, ij -> 1 - R_{ij#0,ij#1})"
+    schurRaise h_{2,1}
+    schurRaise h_{2,1} == S_{2,1}
+  SeeAlso
+   RaisingOperator
+   SymmetricFunctionOperator
+   applyOperator
+   operatorData
+
+ Node
+  Key
    symmetricRing
   Headline
    create a symmetric function ring
@@ -444,11 +599,25 @@ doc ///
     The command registerTransformedBasis is the preferred user-facing way to
     create a basis obtained from an existing source basis.  The second argument
     names the source basis.  The option "TermTransform" is a function
-    (lambda,mu,sourceTerm)->transformedTerm defining the contribution of
-    $u_\mu[\mathcal A]$ to $A_\lambda$.  The option "Alphabet" accepts a string
+    (lambda,mu)->coefficient defining the coefficient of
+    $u_\mu[\mathcal A]$ in $A_\lambda$.  It may also be a
+    @TO SymmetricFunctionOperator@ object, which is then applied to each source
+    term.  A callback return value must lie in the coefficient ring or be a
+    @TO SymmetricFunctionOperator@.  The option
+    "Alphabet" accepts a string
     such as "(1-t)*X" or "((1-t)/(1-q))*X"; the package parses it in a hidden
     one-variable ring over the coefficient ring and interprets X as the ambient
     alphabet.
+   Text
+    For example, "TermTransform" may be a @TO raisingOperator@ object, or a
+    callback returning one.  The operator is applied to each source term after
+    the alphabet substitution.
+   Example
+    A = QQ
+    R = symmetricRing A
+    registerTransformedBasis("hRaised", "h",
+        "TermTransform" => raisingOperator "product apply(pairs, ij -> 1 - R_{ij#0,ij#1})")
+    hRaised_{3,3,1} == S_{3,3,1}
    Text
     The helper creates the corresponding basis and derives its power-sum
     conversion formulas from the source basis.  Basic index behavior such as
@@ -481,22 +650,24 @@ doc ///
     omega image of that partner.  If the requested companion cannot be derived
     from the source basis, registration throws an error.
    Text
-    After registration, use symbols such as DocH_2 and DocM_2 to form
-    symmetric functions, and use basis symbols such as "DocH" when a method asks
-    for a target basis.
+    After registration, use symbols such as hScaled_2 and mScaled_2 to form
+    symmetric functions, and use basis symbols such as "hScaled" when a method asks
+    for a target basis.  The return value is a compact hash table describing
+    what was registered.
    Example
     A = QQ
     R = symmetricRing A
-    registerTransformedBasis("DocH", "h",
+    registerTransformedBasis("hScaled", "h",
+        "TermTransform" => (lambda, mu) -> 2^(#lambda),
         "RegisterCompanions" => hashTable {
-            "OmegaPartner" => "DocE",
-            "InnerProductPartner" => "DocM",
-            "OmegaInnerProductPartner" => "DocFF"
+            "OmegaPartner" => "eScaled",
+            "InnerProductPartner" => "mScaled",
+            "OmegaInnerProductPartner" => "fScaled"
             })
-    toBasis(DocH_2, p)
-    toBasis(p_2, "DocH")
-    omegaInvolution DocH_2
-    hallInnerProduct(DocH_{2,1}, DocM_{2,1})
+    toBasis(hScaled_2, p)
+    toBasis(p_2, "hScaled")
+    omegaInvolution hScaled_2
+    hallInnerProduct(hScaled_{2,1}, mScaled_{2,1})
    Text
     Alphabet strings currently must define a linear alphabet c*X.  This gives
     the plethystic power-sum rule
@@ -506,21 +677,21 @@ doc ///
    Example
     A = frac(QQ[t])
     R = symmetricRing A
-    registerTransformedBasis("DocAlphaH", "h",
+    registerTransformedBasis("hAlpha", "h",
         "Alphabet" => "(1-t)*X",
         "OnEquivalentBasis" => "RegisterIndependent")
-    toBasis(DocAlphaH_2, p)
-    toBasis(toBasis(DocAlphaH_2, p), "DocAlphaH")
+    toBasis(hAlpha_2, p)
+    toBasis(toBasis(hAlpha_2, p), "hAlpha")
    Text
     This can be used to model the Hall-Littlewood generators
     $q_\lambda=h_\lambda[(1-t)X]$.
    Example
     A = frac(QQ[t])
     R = symmetricRing A
-    registerTransformedBasis("DocQAlias", "h",
+    registerTransformedBasis("qAlias", "h",
         "Alphabet" => "(1-t)*X",
         "OnEquivalentBasis" => "CreateAlias")
-    DocQAlias_2 == q_2
+    qAlias_2 == q_2
    Text
     This can also be used to register an independent basis equivalent to the
     Hall-Littlewood generators $q_\lambda=h_\lambda[(1-t)X]$.
@@ -546,21 +717,21 @@ doc ///
    Example
     A = frac(QQ[t,q])
     R = symmetricRing A
-    registerTransformedBasis("DocMacAlphaH", "h",
+    registerTransformedBasis("macdonaldAlphaH", "h",
         "Alphabet" => "((1-t)/(1-q))*X")
-    toBasis(DocMacAlphaH_1, p)
+    toBasis(macdonaldAlphaH_1, p)
    Text
     A transformed basis can generate named specialization families.  The
     suffix is appended to the main basis and to each registered companion.
    Example
     A = QQ[t]
     R = symmetricRing A
-    registerTransformedBasis("DocSpecDeclared", "h",
-        "TermTransform" => (lambda, mu, sourceTerm) -> (1 + t) * sourceTerm,
+    registerTransformedBasis("hWithParameter", "h",
+        "TermTransform" => (lambda, mu) -> (1 + t),
         "RegisterSpecializations" => {{t => 0}, {t => -1}})
-    toBasis(DocSpecDeclaredt0_2, p)
-    specializeParameters(DocSpecDeclared_2, {t => 0})
-    specializeParameters(DocSpecDeclared_2, {t => -1})
+    toBasis(hWithParametert0_2, p)
+    specializeParameters(hWithParameter_2, {t => 0})
+    specializeParameters(hWithParameter_2, {t => -1})
 
  Node
   Key
@@ -580,7 +751,7 @@ doc ///
     A = QQ[t]
     R = symmetricRing A
     registerTransformedBasis("DocSpecSource", "h",
-        "TermTransform" => (lambda, mu, sourceTerm) -> (1 + t) * sourceTerm)
+        "TermTransform" => (lambda, mu) -> (1 + t))
     registerSpecializedBasis("DocSpecSourceAtZero", "DocSpecSource", {t => 0})
     toBasis(DocSpecSourceAtZero_2, p)
     specializeParameters(DocSpecSource_2, {t => 0})

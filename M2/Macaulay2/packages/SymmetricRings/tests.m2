@@ -15,11 +15,40 @@ TEST ///
     assert(try (Q_2; false) else true)
     assert(instance(first bases(R0, "verbose" => true), SymmetricBasis))
     assert(try (bases("verbose" => true); false) else true)
+    g = raisingOperator "R_{1,2}"
+    assert(instance(g, RaisingOperator))
+    assert(instance(g, SymmetricFunctionOperator))
+    assert((operatorData g)#"Expression" == "R_{1,2}")
+    assert(applyOperator(g, h_{2,1}) == h_3)
+    assert(g(h_{2,1}) == h_3)
+    assert(g h_{2,1} == h_3)
+    assert(try (raisingOperator "R_12"; false) else true)
+    internalListRaisingOperator = value (SymmetricRings#"private dictionary")#"listRaisingOperator"
+    assert((internalListRaisingOperator(g, R0, {2,1}))#{3} == 1)
+    geo = raisingOperator "(1 - 2*R_{1,2})/(1 - R_{1,2})"
+    assert(geo h_{2,1} == h_{2,1} - h_3)
+    limitedGeo = raisingOperator "1/(1 - R_{1,2})"
+    assert(try (applyOperator(limitedGeo, h_{3,1}, "SetLimit" => 1); false) else true)
+    assert(applyOperator(limitedGeo, h_{3,1}, "SetLimit" => 2) == h_{3,1} + h_4)
+    registerTransformedBasis("RaiseHTest", "h", "TermTransform" => raisingOperator "R_{1,2}")
+    assert(toBasis(RaiseHTest_{2,1}, h) == h_3)
+    registerTransformedBasis("RaiseHCallbackTest", "h",
+        "TermTransform" => (lambda, mu) -> raisingOperator "R_{1,2}")
+    assert(toBasis(RaiseHCallbackTest_{2,1}, h) == h_3)
+    registerTransformedBasis("hRaised", "h",
+        "TermTransform" => raisingOperator "product apply(pairs, ij -> 1 - R_{ij#0,ij#1})")
+    assert(hRaised_{3,3,1} == S_{3,3,1})
 ///
 
 TEST ///
     A = frac(QQ[t])
     R0 = symmetricRing A
+    internalListRaisingOperator = value (SymmetricRings#"private dictionary")#"listRaisingOperator"
+    pairProductOperator = raisingOperator "product apply(pairs, ij -> (1 - t*R_{ij#0,ij#1})/(1 - R_{ij#0,ij#1}))"
+    pairProductTerms = internalListRaisingOperator(pairProductOperator, R0, {2,1})
+    assert(pairProductTerms#{2,1} == 1_A)
+    assert(pairProductTerms#{3} == 1-t)
+    assert(pairProductOperator h_{2,1} == h_{2,1} + (1-t)*h_3)
     displayedCoefficient = toString net ((t^2-1)/(t+3)*S_{3,2})
     assert(not match("t2", displayedCoefficient))
     assert(match(" \\* ", displayedCoefficient))
@@ -51,20 +80,24 @@ TEST ///
     R0 = symmetricRing QQ
     registerTransformedBasis("HScaledSolo", "h",
         "DisplayName" => "scaled h test basis without companions",
-        "TermTransform" => (lambda, mu, sourceTerm) -> 2^(#lambda) * sourceTerm)
+        "TermTransform" => (lambda, mu) -> 2^(#lambda))
     assert(HScaledSolo_{2,1} == HScaledSolo_2*HScaledSolo_1)
     assert(toBasis(HScaledSolo_2, p) == 2*toBasis(h_2, p))
     assert(toBasis(p_2, "HScaledSolo") == HScaledSolo_2 - (1/4)*HScaledSolo_{1,1})
     assert(hallInnerProduct(HScaledSolo_{2,1}, m_{2,1}) == 4_QQ)
 
-    registerTransformedBasis("HScaled", "h",
+    HScaledReport = registerTransformedBasis("HScaled", "h",
         "DisplayName" => "scaled h test basis",
-        "TermTransform" => (lambda, mu, sourceTerm) -> 2^(#lambda) * sourceTerm,
+        "TermTransform" => (lambda, mu) -> 2^(#lambda),
         "RegisterCompanions" => hashTable {
             "OmegaPartner" => "EScaled",
             "InnerProductPartner" => "MScaled",
             "OmegaInnerProductPartner" => "FFScaled"
             })
+    assert(HScaledReport#"PrimaryBasis" == "HScaled")
+    assert(HScaledReport#"RegisteredBases" == {"HScaled", "EScaled", "MScaled", "FFScaled"})
+    assert((HScaledReport#"OmegaPartners")#"HScaled" == "EScaled")
+    assert(((HScaledReport#"InnerProductPairings")#"HScaled")#"Ordinary" == "MScaled")
     assert(toBasis(HScaled_2, p) == 2*toBasis(h_2, p))
     assert(toBasis(p_2, "HScaled") == HScaled_2 - (1/4)*HScaled_{1,1})
     assert(toBasis(MScaled_2, p) == (1/2)*toBasis(m_2, p))
@@ -125,14 +158,14 @@ TEST ///
     assert(try (basis "BadRollback"; false) else true)
 
     registerTransformedBasis("ZeroDiag", "h",
-        "TermTransform" => (lambda, mu, sourceTerm) -> if lambda == {2} then 0*sourceTerm else sourceTerm)
+        "TermTransform" => (lambda, mu) -> if lambda == {2} then 0 else 1)
     assert(try (toBasis(p_2, "ZeroDiag"); false) else true)
     registerTransformedBasis("BadTriangularOutput", "S",
         "SumOver" => "DominanceLower",
-        "TermTransform" => (lambda, mu, sourceTerm) -> toBasis(sourceTerm, p))
+        "TermTransform" => (lambda, mu) -> toBasis(S_mu, p))
     assert(try (toBasis(S_2, "BadTriangularOutput"); false) else true)
     assert(try (registerTransformedBasis("MixedCompanion", "h",
-                "TermTransform" => (lambda, mu, sourceTerm) -> sourceTerm + S_mu,
+                "TermTransform" => (lambda, mu) -> h_mu + S_mu,
                 "RegisterCompanions" => hashTable {"InnerProductPartner" => "MixedCompanionDual"}); false) else true)
 ///
 
@@ -144,9 +177,12 @@ TEST ///
     assert((basisData "q")#"Omega" == "b")
     assert(try (registerTransformedBasis("KnownAlphaH", "h",
                 "Alphabet" => "(1-t)*X"); false) else true)
-    registerTransformedBasis("AlphaHAlias", "h",
+    AlphaAliasReport = registerTransformedBasis("AlphaHAlias", "h",
         "Alphabet" => "X-t*X",
         "OnEquivalentBasis" => "CreateAlias")
+    assert(AlphaAliasReport#"PrimaryBasis" == "q")
+    assert(AlphaAliasReport#"RegisteredBases" == {})
+    assert((AlphaAliasReport#"Aliases")#"q" == {"AlphaHAlias"})
     assert(AlphaHAlias_2 == q_2)
     assert(toString AlphaHAlias_2 == "q_2")
     assert((basis "AlphaHAlias")#"BasisSymbol" == "q")
@@ -203,13 +239,17 @@ TEST ///
     A = QQ[t]
     R0 = symmetricRing A
     registerTransformedBasis("SpecSource", "h",
-        "TermTransform" => (lambda, mu, sourceTerm) -> (1 + A_0) * sourceTerm)
+        "TermTransform" => (lambda, mu) -> (1 + A_0))
     registerSpecializedBasis("SpecSourceAtZero", "SpecSource", {A_0 => 0})
     assert(toBasis(SpecSourceAtZero_2, p) == toBasis(h_2, p))
     assert(specializeParameters(SpecSource_2, {A_0 => 0}) == SpecSourceAtZero_2)
-    registerTransformedBasis("SpecDeclared", "h",
-        "TermTransform" => (lambda, mu, sourceTerm) -> (1 + A_0) * sourceTerm,
+    SpecDeclaredReport = registerTransformedBasis("SpecDeclared", "h",
+        "TermTransform" => (lambda, mu) -> (1 + A_0),
         "RegisterSpecializations" => {{A_0 => 0}, {A_0 => -1}})
+    assert(SpecDeclaredReport#"PrimaryBasis" == "SpecDeclared")
+    assert((SpecDeclaredReport#"GeneratedSpecializations")#"t0" == {"SpecDeclaredt0"})
+    assert((SpecDeclaredReport#"GeneratedSpecializations")#"tm1" == {"SpecDeclaredtm1"})
+    assert(((SpecDeclaredReport#"Specializations")#"SpecDeclared")#0#"TargetBasis" == "SpecDeclaredt0")
     assert(toBasis(SpecDeclaredt0_2, p) == toBasis(h_2, p))
     assert(toBasis(SpecDeclaredtm1_2, p) == 0_R0)
     assert(specializeParameters(SpecDeclared_2, {A_0 => 0}) == SpecDeclaredt0_2)
@@ -217,7 +257,7 @@ TEST ///
     C = frac(QQ[u])
     Rfrac = symmetricRing(C, "HallLittlewoodParameter" => null)
     registerTransformedBasis("SpecFam", "h",
-        "TermTransform" => (lambda, mu, sourceTerm) -> (1 + C_0) * sourceTerm,
+        "TermTransform" => (lambda, mu) -> (1 + C_0),
         "RegisterCompanions" => hashTable {
             "OmegaPartner" => "SpecFamOmega",
             "InnerProductPartner" => "SpecFamDual",
@@ -230,12 +270,12 @@ TEST ///
     assert(hallInnerProduct(SpecFamu0_2, SpecFamDualu0_2) == 1_C)
     R0 = symmetricRing A
     registerTransformedBasis("TScaleNonInvertible", "h",
-        "TermTransform" => (lambda, mu, sourceTerm) -> A_0 * sourceTerm)
+        "TermTransform" => (lambda, mu) -> A_0)
     assert(try (toBasis(p_1, "TScaleNonInvertible"); false) else true)
     K = QQ[t,q]
     R1 = symmetricRing K
     registerTransformedBasis("MultiSpec", "h",
-        "TermTransform" => (lambda, mu, sourceTerm) -> (1 + K_0 + K_1) * sourceTerm,
+        "TermTransform" => (lambda, mu) -> (1 + K_0 + K_1),
         "RegisterSpecializations" => {{K_0 => 0, K_1 => 0}})
     assert(specializeParameters(MultiSpec_2, {K_0 => 0}) == MultiSpec_2)
     assert(specializeParameters(MultiSpec_2, {K_0 => 0, K_1 => 0}) == MultiSpect0q0_2)

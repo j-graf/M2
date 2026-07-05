@@ -89,6 +89,22 @@ registerBasisAlias = (aliasSymbol, targetSymbol) -> (
     aliasBasis
     )
 
+-- Normalizes the compact return value for registration helpers.
+registrationReport = args -> (
+    L := argumentList args;
+    if #L != 1 or not instance(L#0, HashTable) then error "expected a hash table";
+    defaults := hashTable {
+        "PrimaryBasis" => null,
+        "RegisteredBases" => {},
+        "GeneratedSpecializations" => hashTable {},
+        "Aliases" => hashTable {},
+        "OmegaPartners" => hashTable {},
+        "InnerProductPairings" => hashTable {},
+        "Specializations" => hashTable {}
+        };
+    hashTable(pairs defaults | pairs L#0)
+    )
+
 -- Records the named omega image of a basis
 registerOmegaLink = (source, target) -> (
     if target =!= null then OmegaRegistry#(basisRegistryKey source) = basisRegistryKey target;
@@ -319,8 +335,8 @@ transformedBasisOptionDefaults = hashTable(pairs basisOptionDefaults | {
         "OnEquivalentBasis" => "Error"
         })
 
--- Default term transform for direct transformed bases
-transformedIdentityTermTransform = (lambda, mu, sourceTerm) -> sourceTerm
+-- Default summand coefficient for direct transformed bases
+transformedIdentityTermTransform = (lambda, mu, sourceTerm) -> 1_(coefficientRing ring sourceTerm)
 
 -- Restores symbols after temporary parsing bindings are used
 restoreSymbolValues = oldValues -> scan(oldValues, pair -> globalAssign(pair#0, pair#1))
@@ -443,14 +459,27 @@ transformedCoefficientsInBasis = (F, B) -> (
     )
 
 -- Computes the forward expansion of one transformed atom in the source basis
+transformedEvaluateTermTransform = (R0, data, lambda, mu, sourceTerm) -> (
+    transformValue := (data#"TermTransform")(lambda, mu, sourceTerm);
+    if data#"TermTransformMode" == "Element" then (
+        if not instance(transformValue, SymmetricRingElement) or ring transformValue =!= R0 then
+            error("internal TermTransform for transformed basis ", data#"BasisSymbol", " must return an element of the same symmetric ring");
+        transformValue
+        )
+    else if instance(transformValue, SymmetricFunctionOperator) then applyOperator(transformValue, sourceTerm)
+    else (
+        A := coefficientRing R0;
+        coefficient := try promote(transformValue, A) else error("TermTransform for transformed basis ", data#"BasisSymbol", " must return a coefficient in the coefficient ring or a SymmetricFunctionOperator");
+        promote(coefficient, R0) * sourceTerm
+        )
+    )
+
 transformedAtomToSourceBasis = (R0, data, lambda) -> (
     source := basis(R0, data#"SourceBasis");
     result := 0_R0;
     scan(transformedSumOverIndices(data, lambda), mu -> (
             sourceTerm := transformedSourceTerm(R0, data, mu);
-            transformedTerm := (data#"TermTransform")(lambda, mu, sourceTerm);
-            if not instance(transformedTerm, SymmetricRingElement) or ring transformedTerm =!= R0 then
-                error("TermTransform for transformed basis ", data#"BasisSymbol", " must return an element of the same symmetric ring");
+            transformedTerm := transformedEvaluateTermTransform(R0, data, lambda, mu, sourceTerm);
             result = result + toBasis(transformedTerm, source);
             ));
     result
@@ -512,9 +541,7 @@ transformedBasisAtomToPowerSums = (R0, data, atom) -> (
     result := 0_R0;
     scan(transformedSumOverIndices(data, lambda), mu -> (
             sourceTerm := transformedSourceTerm(R0, data, mu);
-            transformedTerm := (data#"TermTransform")(lambda, mu, sourceTerm);
-            if not instance(transformedTerm, SymmetricRingElement) or ring transformedTerm =!= R0 then
-                error("TermTransform for transformed basis ", data#"BasisSymbol", " must return an element of the same symmetric ring");
+            transformedTerm := transformedEvaluateTermTransform(R0, data, lambda, mu, sourceTerm);
             result = result + toBasis(transformedTerm, p);
             ));
     result
@@ -650,9 +677,10 @@ transformedInverseAlphabetData = alphabetData -> (
 
 -- Normalizes the TermTransform option
 transformedTermTransformData = phi -> (
-    if phi === null then {transformedIdentityTermTransform, "Identity"}
-    else if instance(phi, Function) then {phi, "UserFunction"}
-    else error "expected TermTransform to be a function"
+    if phi === null then {transformedIdentityTermTransform, "Identity", "Coefficient"}
+    else if instance(phi, Function) then {(lambda, mu, sourceTerm) -> phi(lambda, mu), "UserFunction", "Coefficient"}
+    else if instance(phi, SymmetricFunctionOperator) then {(lambda, mu, sourceTerm) -> phi, "Operator", "Coefficient"}
+    else error "expected TermTransform to be a function (lambda, mu) -> coefficient or operator, or a SymmetricFunctionOperator"
     )
 
 -- Tests whether two alphabet strings define the same linear alphabet.
@@ -675,9 +703,7 @@ transformedDiagonalScaleValue = (R0, data, lambda) -> (
     if cache#?lambda then return cache#lambda;
     source := basis(R0, data#"SourceBasis");
     sourceTerm := source_lambda;
-    transformedTerm := (data#"TermTransform")(lambda, lambda, sourceTerm);
-    if not instance(transformedTerm, SymmetricRingElement) or ring transformedTerm =!= R0 then
-        error("TermTransform for transformed basis ", data#"BasisSymbol", " must return an element of the same symmetric ring");
+    transformedTerm := transformedEvaluateTermTransform(R0, data, lambda, lambda, sourceTerm);
     coeffs := transformedCoefficientsInBasis(toBasis(transformedTerm, source), source);
     A := coefficientRing R0;
     if coeffs === null then error("transformed basis ", data#"BasisSymbol", " is not diagonal in source basis ", data#"SourceBasis");
@@ -769,7 +795,7 @@ transformedDualScaleFunction = (data, source) -> (
         R0 := ring sourceTerm;
         A := coefficientRing R0;
         diagonalScale := if data#?"DiagonalSourceTransform" and data#"DiagonalSourceTransform" then transformedDiagonalScaleValue(R0, data, lambda) else 1_A;
-        promote(1_A / (promote(pairing(R0, lambda), A) * promote(diagonalScale, A)), R0) * sourceTerm
+        promote(1_A / (promote(pairing(R0, lambda), A) * promote(diagonalScale, A)), A)
         )
     )
 
@@ -810,7 +836,7 @@ transformedSupportsInnerProductCompanions = data -> (
     )
 
 -- Inspects a sample transformed term to record output-basis metadata
-transformedInspectOutputMetadata = (R0, sourceSymbol, alphabetData, termTransform, termTransformKind) -> (
+transformedInspectOutputMetadata = (R0, sourceSymbol, alphabetData, termTransform, termTransformKind, termTransformMode) -> (
     if termTransformKind == "Identity" and alphabetData === null then return hashTable {
         "PreservesSourceBasis" => true,
         "OutputBasis" => sourceSymbol,
@@ -828,7 +854,12 @@ transformedInspectOutputMetadata = (R0, sourceSymbol, alphabetData, termTransfor
         };
     source := basis(R0, sourceSymbol);
     sampleSourceTerm := if alphabetData === null then source_1 else transformedPowerSumScale(toBasis(source_1, p), (R1, n) -> transformedApplyAlphabetScale(alphabetData, R1, n));
-    sample := try termTransform({1}, {1}, sampleSourceTerm) else null;
+    sampleData := hashTable {
+        "BasisSymbol" => "<sample>",
+        "TermTransform" => termTransform,
+        "TermTransformMode" => termTransformMode
+        };
+    sample := try transformedEvaluateTermTransform(R0, sampleData, {1}, {1}, sampleSourceTerm) else null;
     if sample === null or not instance(sample, SymmetricRingElement) or ring sample =!= R0 then return hashTable {
         "PreservesSourceBasis" => false,
         "OutputBasis" => null,
@@ -844,7 +875,7 @@ transformedInspectOutputMetadata = (R0, sourceSymbol, alphabetData, termTransfor
     )
 
 -- Records the source, alphabet, summation, transform, and display data for a transformed basis
-transformedMakeData = (basisSymbol, sourceSymbol, opts, alphabetData, sumOverData, termTransform, termTransformKind, outputData, companionMeta) -> hashTable {
+transformedMakeData = (basisSymbol, sourceSymbol, opts, alphabetData, sumOverData, termTransform, termTransformKind, termTransformMode, outputData, companionMeta) -> hashTable {
     "BasisSymbol" => basisSymbol,
     "SourceBasis" => sourceSymbol,
     "Alphabet" => opts#"Alphabet",
@@ -852,6 +883,7 @@ transformedMakeData = (basisSymbol, sourceSymbol, opts, alphabetData, sumOverDat
     "SumOver" => sumOverData,
     "TermTransform" => termTransform,
     "TermTransformKind" => termTransformKind,
+    "TermTransformMode" => termTransformMode,
     "InverseConversionAvailable" => (termTransformKind == "Identity" and (sumOverData#"Kind") == "SameIndex") or transformedDiagonalSourceTransform(alphabetData, sumOverData, outputData) or (sumOverData#"Triangular" and sumOverData#"TriangularOrder" =!= null and alphabetData === null and outputData#"PreservesSourceBasis"),
     "DiagonalSourceTransform" => transformedDiagonalSourceTransform(alphabetData, sumOverData, outputData),
     "DiagonalScaleCache" => new MutableHashTable,
@@ -894,7 +926,13 @@ transformedApplyKnownOutcomePolicy = (basisSymbol, outcome, policy) -> (
     policyString := toString policy;
     if policyString == "RegisterIndependent" then null
     else if policyString == "Error" then error("transformed basis ", basisSymbol, " is known to agree with existing basis ", outcome#"EquivalentBasis", "; use \"OnEquivalentBasis\" => \"RegisterIndependent\" to register it anyway")
-    else if policyString == "CreateAlias" then registerBasisAlias(basisSymbol, outcome#"EquivalentBasis")
+    else if policyString == "CreateAlias" then (
+        aliasBasis := registerBasisAlias(basisSymbol, outcome#"EquivalentBasis");
+        registrationReport(hashTable {
+            "PrimaryBasis" => outcome#"EquivalentBasis",
+            "Aliases" => hashTable {(outcome#"EquivalentBasis") => {aliasBasis#"BasisSymbol"}}
+            })
+        )
     else error("unknown OnEquivalentBasis policy: ", policyString)
     )
 
@@ -945,6 +983,7 @@ transformedSpecializationRuleFromSubstitutions = (targetSymbol, substitutions) -
     if #substitutions == 0 or not all(substitutions, opt -> class opt === Option) then null
     else hashTable {
         "Substitutions" => substitutions,
+        "TargetBasis" => targetSymbol,
         "Map" => basisSpecializationMap targetSymbol
         }
     )
@@ -1004,17 +1043,72 @@ transformedAddGeneratedSpecializationEntries = (entries, opts, families) -> (
                         "DisplayOrder" => sourceBasis#"DisplayOrder"
                         };
                     generatedTransform := transformedSpecializedTermTransform substitutions;
-                    generatedData := transformedMakeData(generatedSymbol, sourceSymbol, generatedOpts, null, sameIndexData, generatedTransform, "UserFunction", outputData, generatedMeta);
+                    generatedData := transformedMakeData(generatedSymbol, sourceSymbol, generatedOpts, null, sameIndexData, generatedTransform, "UserFunction", "Element", outputData, generatedMeta);
                     generatedOmega := if entry#"Omega" =!= null and suffixMap#?(entry#"Omega") then suffixMap#(entry#"Omega") else entry#"Omega";
                     generatedInnerData := transformedSpecializedInnerProductData(entry#"InnerProductData", suffixMap);
                     generatedEntries = append(generatedEntries, hashTable {
                             "Basis" => makeBasis(generatedSymbol, transformedBasisRegistrationOptionsFromSource(generatedSymbol, generatedOpts, generatedData, generatedOmega, generatedInnerData, sourceBasis)),
                             "Omega" => generatedOmega,
-                            "InnerProductData" => generatedInnerData
+                            "InnerProductData" => generatedInnerData,
+                            "GeneratedSpecializationSuffix" => suffix,
+                            "GeneratedFrom" => sourceSymbol
                             });
                     ));
             ));
     resultEntries | generatedEntries
+    )
+
+-- Removes implementation functions from specialization rules shown in reports.
+compactSpecializationRule = rule -> hashTable(select(pairs rule, pair -> pair#0 =!= "Map"))
+
+-- Summarizes inner-product partner data for reports.
+compactInnerProductData = innerProductData -> (
+    if innerProductData === null or not instance(innerProductData, HashTable) then null
+    else (
+        H := new MutableHashTable;
+        scan(keys innerProductData, contextName -> (
+                rule := innerProductData#contextName;
+                if instance(rule, HashTable) and rule#?"DualBasis" then H#contextName = rule#"DualBasis";
+                ));
+        if #keys H == 0 then null else hashTable(pairs H)
+        )
+    )
+
+-- Builds a compact report for an atomically installed transformed-basis cluster.
+transformedClusterRegistrationReport = entries -> (
+    primaryEntries := select(entries, entry -> entry#?"Primary" and entry#"Primary");
+    primarySymbol := if #primaryEntries > 0 then ((primaryEntries#0)#"Basis")#"BasisSymbol" else null;
+    generated := new MutableHashTable;
+    omega := new MutableHashTable;
+    pairings := new MutableHashTable;
+    specs := new MutableHashTable;
+    scan(entries, entry -> (
+            B := entry#"Basis";
+            basisSymbol := B#"BasisSymbol";
+            if entry#?"GeneratedSpecializationSuffix" then (
+                suffix := entry#"GeneratedSpecializationSuffix";
+                generated#suffix = append(if generated#?suffix then generated#suffix else {}, basisSymbol);
+                );
+            if entry#"Omega" =!= null then omega#basisSymbol = entry#"Omega";
+            compactIP := compactInnerProductData entry#"InnerProductData";
+            if compactIP =!= null then pairings#basisSymbol = compactIP;
+            if entry#?"SpecializationRules" and #(entry#"SpecializationRules") > 0 then
+                specs#basisSymbol = apply(entry#"SpecializationRules", compactSpecializationRule);
+            ));
+    registeredSymbols := apply(entries, entry -> (entry#"Basis")#"BasisSymbol");
+    generatedTable := hashTable(pairs generated);
+    omegaTable := hashTable(pairs omega);
+    pairingTable := hashTable(pairs pairings);
+    specTable := hashTable(pairs specs);
+    H := hashTable {
+        "PrimaryBasis" => primarySymbol,
+        "RegisteredBases" => registeredSymbols,
+        "GeneratedSpecializations" => generatedTable,
+        "OmegaPartners" => omegaTable,
+        "InnerProductPairings" => pairingTable,
+        "Specializations" => specTable
+        };
+    registrationReport(H)
     )
 
 -- Snapshots registration state so a failed transformed-basis cluster can roll back.
@@ -1052,13 +1146,11 @@ transformedInstallClusterAtomically = entries -> (
     symbols := apply(entries, entry -> (entry#"Basis")#"BasisSymbol");
     oldSymbolValues := apply(symbols, s -> {getSymbol s, value getSymbol s});
     result := try (
-        primary := null;
         scan(entries, entry -> (
                 installed := installTransformedBasis(entry#"Basis", entry#"Omega", entry#"InnerProductData");
                 if entry#?"SpecializationRules" then scan(entry#"SpecializationRules", rule -> registerBasisSpecializationRule(installed, rule));
-                if entry#?"Primary" and entry#"Primary" then primary = installed;
                 ));
-        primary
+        transformedClusterRegistrationReport entries
         ) else (
         transformedRestoreRegistrationSnapshot snapshot;
         restoreSymbolValues oldSymbolValues;
@@ -1067,24 +1159,18 @@ transformedInstallClusterAtomically = entries -> (
     result
     )
 
--- User-facing helper for registering transformed bases and companions
-registerTransformedBasis = args -> (
-    L := argumentList args;
-    if #L < 2 then error "expected a basis symbol and a source basis";
-    basisSymbol := toString L#0;
-    sourceInput := L#1;
-    opts := parseStringOptions(transformedBasisOptionDefaults, drop(L, 2), "registerTransformedBasis");
+transformedRegisterWithTermData = (basisSymbol, sourceInput, opts, termData) -> (
     source := basis(sourceInput);
     sourceSymbol := source#"BasisSymbol";
     alphabetData := transformedAlphabetData(CurrentSymmetricRing, opts#"Alphabet");
     sumOverData := transformedNormalizeSumOver opts#"SumOver";
-    termData := transformedTermTransformData opts#"TermTransform";
     termTransform := termData#0;
     termTransformKind := termData#1;
+    termTransformMode := termData#2;
     knownOutcome := transformedKnownOutcome(CurrentSymmetricRing, sourceSymbol, opts, sumOverData, termTransformKind);
     aliasOutcome := transformedApplyKnownOutcomePolicy(basisSymbol, knownOutcome, opts#"OnEquivalentBasis");
     if aliasOutcome =!= null then return aliasOutcome;
-    outputData := transformedInspectOutputMetadata(CurrentSymmetricRing, sourceSymbol, alphabetData, termTransform, termTransformKind);
+    outputData := transformedInspectOutputMetadata(CurrentSymmetricRing, sourceSymbol, alphabetData, termTransform, termTransformKind, termTransformMode);
     specializationFamilies := transformedNormalizeGeneratedSpecializations opts#"RegisterSpecializations";
     companions := opts#"RegisterCompanions";
     omegaMeta := transformedCompanionData(transformedCompanionEntry(companions, "OmegaPartner"), opts#"DisplayOrder" + 1);
@@ -1095,7 +1181,7 @@ registerTransformedBasis = args -> (
     if omegaMeta =!= null and sourceOmegaSymbol === null then error("cannot register omega companion for ", basisSymbol, ": source basis ", sourceSymbol, " has no omega metadata; omit \"OmegaPartner\"");
     if innerMeta =!= null and transformedSourceDualRule(source, "Ordinary") === null then error("cannot register inner-product companion for ", basisSymbol, ": source basis ", sourceSymbol, " has no ordinary diagonal inner-product metadata; omit \"InnerProductPartner\"");
     if omegaInnerMeta =!= null and innerMeta === null then error "cannot register \"OmegaInnerProductPartner\" without \"InnerProductPartner\"";
-    primaryData := transformedMakeData(basisSymbol, sourceSymbol, opts, alphabetData, sumOverData, termTransform, termTransformKind, outputData, null);
+    primaryData := transformedMakeData(basisSymbol, sourceSymbol, opts, alphabetData, sumOverData, termTransform, termTransformKind, termTransformMode, outputData, null);
     if knownOutcome =!= null then primaryData = hashTable(pairs primaryData | {"KnownEquivalentBasis" => knownOutcome#"EquivalentBasis"});
     if (innerMeta =!= null or omegaInnerMeta =!= null) and not transformedSupportsInnerProductCompanions primaryData then
         error "inner-product companions are currently only supported for identity or diagonal SameIndex transforms";
@@ -1112,8 +1198,8 @@ registerTransformedBasis = args -> (
             }};
     if omegaMeta =!= null then (
         omegaSource := basis(sourceOmegaSymbol);
-        omegaOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, omegaSource#"BasisSymbol", alphabetData, termTransform, termTransformKind);
-        omegaData := transformedMakeData(omegaMeta#"BasisSymbol", omegaSource#"BasisSymbol", opts, alphabetData, sumOverData, termTransform, termTransformKind, omegaOutputData, omegaMeta);
+        omegaOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, omegaSource#"BasisSymbol", alphabetData, termTransform, termTransformKind, termTransformMode);
+        omegaData := transformedMakeData(omegaMeta#"BasisSymbol", omegaSource#"BasisSymbol", opts, alphabetData, sumOverData, termTransform, termTransformKind, termTransformMode, omegaOutputData, omegaMeta);
         omegaInnerSymbol := if omegaInnerMeta === null then null else omegaInnerMeta#"BasisSymbol";
         omegaInnerData := if omegaInnerSymbol === null then transformedInheritedInnerProductData(omegaData, omegaSource)
             else transformedSingleDualInnerProductData(omegaInnerSymbol, transformedUnitPairing);
@@ -1128,8 +1214,8 @@ registerTransformedBasis = args -> (
         dualSource := basis(dualSourceSymbol);
         dualTermTransform := transformedDualScaleFunction(primaryData, source);
         dualAlphabetData := transformedInverseAlphabetData alphabetData;
-        dualOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, dualSource#"BasisSymbol", dualAlphabetData, dualTermTransform, "UserFunction");
-        dualData := transformedMakeData(innerMeta#"BasisSymbol", dualSource#"BasisSymbol", opts, dualAlphabetData, sumOverData, dualTermTransform, "UserFunction", dualOutputData, innerMeta);
+        dualOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, dualSource#"BasisSymbol", dualAlphabetData, dualTermTransform, "UserFunction", "Coefficient");
+        dualData := transformedMakeData(innerMeta#"BasisSymbol", dualSource#"BasisSymbol", opts, dualAlphabetData, sumOverData, dualTermTransform, "UserFunction", "Coefficient", dualOutputData, innerMeta);
         dualSourceOmegaSymbol := omegaPartnerSymbol dualSource;
         if omegaInnerMeta =!= null and dualSourceOmegaSymbol === null then error("cannot register omega inner-product companion for ", basisSymbol, ": source dual basis ", dualSource#"BasisSymbol", " has no omega metadata");
         dualOmegaSymbol := if omegaInnerMeta === null then dualSourceOmegaSymbol else omegaInnerMeta#"BasisSymbol";
@@ -1140,8 +1226,8 @@ registerTransformedBasis = args -> (
                 });
         if omegaInnerMeta =!= null then (
             omegaDualSource := basis(dualSourceOmegaSymbol);
-            omegaDualOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, omegaDualSource#"BasisSymbol", dualAlphabetData, dualTermTransform, "UserFunction");
-            omegaDualData := transformedMakeData(omegaInnerMeta#"BasisSymbol", omegaDualSource#"BasisSymbol", opts, dualAlphabetData, sumOverData, dualTermTransform, "UserFunction", omegaDualOutputData, omegaInnerMeta);
+            omegaDualOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, omegaDualSource#"BasisSymbol", dualAlphabetData, dualTermTransform, "UserFunction", "Coefficient");
+            omegaDualData := transformedMakeData(omegaInnerMeta#"BasisSymbol", omegaDualSource#"BasisSymbol", opts, dualAlphabetData, sumOverData, dualTermTransform, "UserFunction", "Coefficient", omegaDualOutputData, omegaInnerMeta);
             omegaTargetSymbol := if omegaMeta === null then omegaPartnerSymbol omegaDualSource else omegaMeta#"BasisSymbol";
             entries = append(entries, hashTable {
                     "Basis" => makeBasis(omegaInnerMeta#"BasisSymbol", transformedBasisRegistrationOptions(omegaInnerMeta#"BasisSymbol", opts, omegaDualData, innerMeta#"BasisSymbol", transformedSingleDualInnerProductData(omegaTargetSymbol, transformedUnitPairing))),
@@ -1152,6 +1238,17 @@ registerTransformedBasis = args -> (
         );
     entries = transformedAddGeneratedSpecializationEntries(entries, opts, specializationFamilies);
     transformedInstallClusterAtomically entries
+    )
+
+-- User-facing helper for registering transformed bases and companions
+registerTransformedBasis = args -> (
+    L := argumentList args;
+    if #L < 2 then error "expected a basis symbol and a source basis";
+    basisSymbol := toString L#0;
+    sourceInput := L#1;
+    opts := parseStringOptions(transformedBasisOptionDefaults, drop(L, 2), "registerTransformedBasis");
+    termData := transformedTermTransformData opts#"TermTransform";
+    transformedRegisterWithTermData(basisSymbol, sourceInput, opts, termData)
     )
 
 -- Applies coefficient substitutions to an expression already in power sums.
@@ -1179,10 +1276,15 @@ registerSpecializedBasis = args -> (
         error "registerSpecializedBasis sets TermTransform from the substitution list";
     source := basis(sourceInput);
     specializedTransform := (lambda, mu, sourceTerm) -> specializePowerSumCoefficients(toBasis(sourceTerm, p), substitutions);
-    result := registerTransformedBasis toSequence ({basisSymbol, sourceInput, "TermTransform" => specializedTransform} | extraOptions);
-    rule := transformedSpecializationRuleFromSubstitutions(result#"BasisSymbol", substitutions);
+    opts := parseStringOptions(transformedBasisOptionDefaults, extraOptions, "registerSpecializedBasis");
+    result := transformedRegisterWithTermData(basisSymbol, sourceInput, opts, {specializedTransform, "Specialization", "Element"});
+    targetSymbol := result#"PrimaryBasis";
+    rule := transformedSpecializationRuleFromSubstitutions(targetSymbol, substitutions);
     if rule =!= null then registerBasisSpecializationRule(source, rule);
-    result
+    if rule === null then result
+    else registrationReport(hashTable(pairs result | {
+            "Specializations" => hashTable {(source#"BasisSymbol") => {compactSpecializationRule rule}}
+            }))
     )
 
 -- Creates a basis-specialization map to a target basis

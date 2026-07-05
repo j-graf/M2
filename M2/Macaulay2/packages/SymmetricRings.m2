@@ -16,9 +16,14 @@ export {
     "SymmetricRing",
     "SymmetricRingElement",
     "SymmetricBasis",
+    "SymmetricFunctionOperator",
+    "RaisingOperator",
     "symmetricRing",
     "registerTransformedBasis",
     "registerSpecializedBasis",
+    "applyOperator",
+    "operatorData",
+    "raisingOperator",
     "basisData",
     "bases",
     "aliases",
@@ -76,8 +81,9 @@ importFrom(Core, {
     })
 
 load "SymmetricRings/registeringBases.m2"
+load "SymmetricRings/operators.m2"
 load "SymmetricRings/symmetricRingsAndElements.m2"
-load "SymmetricRings/operations.m2"
+load "SymmetricRings/computations.m2"
 
 beginDocumentation()
 
