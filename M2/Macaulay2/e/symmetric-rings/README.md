@@ -17,9 +17,12 @@ declarations in `../interface/symmetric-rings.h`.
   interface in `../interface`.
 - `arithmetic.cpp/.hpp`: ring arithmetic, comparison, hashing, printing, term
   extraction, degree/weight helpers, and basic element constructors.
-- `basis-conversion.cpp/.hpp`: basis conversion, Jacobi-Trudi conversion, Schur
-  character tables, Hall-Littlewood/power-sum conversion, and cached conversion
-  recipes.
+- `schur-conversion.cpp/.hpp`: Jacobi-Trudi conversion, Littlewood-Richardson
+  products, Schur character recipes, and Schur product helpers.
+- `hall-classical-conversion.cpp/.hpp`: complete, elementary, monomial,
+  forgotten, power-sum, and Hall-Littlewood conversion helpers.
+- `basis-conversion.cpp/.hpp`: top-level atom/element conversion dispatch and
+  direct fast paths for converting products to a target basis.
 - `inner-product.cpp/.hpp`: Hall inner products and skew Hall-Littlewood helper
   functions.
 - `plethysm.cpp/.hpp`: plethysm and plethysm-to-basis helpers.

@@ -172,6 +172,8 @@ set(SRCLIST
   symmetric-rings/storage
   symmetric-rings/symmetric-engine-ring
   symmetric-rings/arithmetic
+  symmetric-rings/schur-conversion
+  symmetric-rings/hall-classical-conversion
   symmetric-rings/basis-conversion
   symmetric-rings/inner-product
   symmetric-rings/plethysm
