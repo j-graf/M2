@@ -2,6 +2,11 @@
 -- Core Types And Global Registries
 -- ============================================================================
 
+-- These mutable tables are the package-level source of truth. Ring-local alias
+-- tables and engine-side basis metadata are derived from them, so registration
+-- code must update the global tables, current-ring caches, and engine metadata
+-- as one coherent operation.
+
 -- Engine-backed parent ring for symmetric functions
 SymmetricRing = new Type of EngineRing
 SymmetricRing.synonym = "symmetric function ring"
@@ -49,17 +54,17 @@ InnerProductPairingRegistry = new MutableHashTable from {
 BasisSpecializationRegistry = new MutableHashTable
 KnownTransformedBasisOutcomes = {}
 
--- Returns the stable internal key for a basis metadata record.
+-- Returns the stable internal key for a basis metadata record
 basisKey = B -> (
     if B#?"BasisAliasOf" then B#"BasisAliasOf"
     else if B#?"BasisKey" then B#"BasisKey"
     else B#"BasisSymbol"
     )
 
--- Returns the default public symbol for a basis metadata record.
+-- Returns the default public symbol for a basis metadata record
 basisDefaultSymbol = B -> if B#?"DefaultSymbol" then B#"DefaultSymbol" else B#"BasisSymbol"
 
--- Resolves a global basis symbol or alias to a stable internal key.
+-- Resolves a global basis symbol or alias to a stable internal key
 globalBasisKey = basisSymbol -> (
     symbolString := toString basisSymbol;
     if BasisAliasIndex#?symbolString then BasisAliasIndex#symbolString
@@ -68,7 +73,7 @@ globalBasisKey = basisSymbol -> (
     else symbolString
     )
 
--- Converts basis-like inputs to the canonical key used by registries.
+-- Converts basis-like inputs to the canonical key used by registries
 basisRegistryKey = B -> if instance(B, SymmetricBasis) then basisKey B else globalBasisKey B
 
 -- Returns the canonical basis symbol for a symbol or alias
@@ -90,6 +95,9 @@ registeredAliasTable = () -> (
     )
 
 -- Records a new user-facing symbol for an existing basis without a new basis id
+-- Aliases deliberately share the target basis key and engine id. They should
+-- not be appended to availableSymmetricBases or remembered in the engine as
+-- independent bases; they are only alternate syntax for an existing basis.
 registerBasisAlias = (aliasSymbol, targetSymbol) -> (
     aliasKey := toString aliasSymbol;
     targetKey := globalBasisKey targetSymbol;
@@ -113,6 +121,9 @@ registerBasisAlias = (aliasSymbol, targetSymbol) -> (
     )
 
 -- Normalizes the compact return value for registration helpers.
+-- Public registration helpers use this fixed shape so callers can inspect
+-- absent categories as empty lists/tables instead of checking whether keys
+-- exist before reading report data.
 registrationReport = args -> (
     L := argumentList args;
     if #L != 1 or not instance(L#0, HashTable) then error "expected a hash table";
@@ -186,6 +197,7 @@ specializationRulesForBasis = B -> (
     )
 
 -- Registers legacy per-basis metadata into the centralized registries
+-- TODO: Can be removed?
 registerBasisMetadataInRegistries = B -> (
     registerOmegaLink(B, B#"Omega");
     if B#"InnerProductData" =!= null and instance(B#"InnerProductData", HashTable) then
@@ -201,6 +213,7 @@ registerKnownTransformedBasisOutcome = data -> (
     )
 
 -- Normalizes partition-like indices by removing trailing zeroes
+-- TODO: Should this be done in engine?
 trimTrailingZeros = L -> (
     n := #L;
     while n > 0 and L#(n - 1) == 0 do n = n - 1;
@@ -215,6 +228,7 @@ acceptIntegerIndex = L -> all(L, i -> class i === ZZ)
 -- ============================================================================
 
 -- Default metadata for low-level basis registration
+-- TODO: Remove unused metadata
 basisOptionDefaults = hashTable {
     "BasisKey" => null,
     "DefaultSymbol" => null,
@@ -259,6 +273,8 @@ parseStringOptions = (defaults, opts, name) -> (
     )
 
 -- Creates the metadata record for a basis without installing it
+-- This allocates the engine basis id immediately. Any registration path that
+-- may fail after makeBasis must restore NextBasisId along with the registries.
 makeBasis = (basisSymbol, opts) -> (
     symbolString := toString basisSymbol;
     keyString := if opts#"BasisKey" === null then symbolString else toString opts#"BasisKey";
@@ -303,7 +319,8 @@ refreshAvailableBases = () -> (
     )
 
 -- Built-ins seed the registries from legacy option fields, then store a
--- registry-first record so cross-basis metadata has one authoritative home.
+-- registry-first record so cross-basis metadata has one authoritative home
+-- TODO: Can be removed?
 stripLegacyBuiltinRegistryFields = B -> new SymmetricBasis from hashTable(pairs B | {
         "Omega" => null,
         "InnerProductData" => null,
@@ -311,6 +328,9 @@ stripLegacyBuiltinRegistryFields = B -> new SymmetricBasis from hashTable(pairs 
         })
 
 -- Installs a basis globally and in the current ring when appropriate
+-- This is the primitive that makes a real basis visible. It records global
+-- metadata first, then mirrors availability, symbol maps, aliases, and engine
+-- basis metadata into CurrentSymmetricRing when one is active.
 installBasis = (B, builtin) -> (
     key := basisKey B;
     basisSymbol := basisDefaultSymbol B;
@@ -356,6 +376,10 @@ makeBuiltinBasis = args -> (
 -- Transformed Basis Registration
 -- ============================================================================
 
+-- A transformed basis is stored as ordinary basis metadata plus conversion
+-- hooks through power sums. Inverse conversion is enabled only when the
+-- structural data below proves a diagonal or triangular inverse is available.
+
 -- Options accepted by the transformed-basis helper
 transformedBasisOptionDefaults = hashTable(pairs basisOptionDefaults | {
         "CanBeSkew" => null,
@@ -378,6 +402,9 @@ transformedIdentityTermTransform = (lambda, mu, sourceTerm) -> 1_(coefficientRin
 restoreSymbolValues = oldValues -> scan(oldValues, pair -> globalAssign(pair#0, pair#1))
 
 -- Temporarily binds symbols, runs a thunk, and restores the old values
+-- This is used while parsing user alphabet strings. Always restore symbols on
+-- both success and failure; otherwise package helpers can silently overwrite
+-- user globals such as X or coefficient-ring generator names.
 withTemporarySymbolValues = (bindings, thunk, message) -> (
     oldValues := apply(bindings, pair -> {pair#0, value pair#0});
     scan(bindings, pair -> globalAssign(pair#0, pair#1));
@@ -396,6 +423,10 @@ transformedAdamsCoefficient = (c, A, n) -> (
     )
 
 -- Parses a linear alphabet string and returns its coefficient of X
+-- The parser binds X to a hidden one-variable monoid over the coefficient ring
+-- and rebinds coefficient generators by their displayed names. The accepted
+-- contract is exactly a linear alphabet c*X; constants or nonlinear terms are
+-- rejected so later Adams scaling is well-defined.
 transformedAlphabetCoefficient = (R0, alphabetString) -> (
     if class alphabetString =!= String then error "expected \"Alphabet\" to be a string";
     A := coefficientRing R0;
@@ -459,6 +490,9 @@ dominatesPartition = (lambda, mu) -> (
 partitionsOfWeight = n -> apply(partitions n, p0 -> toList p0)
 
 -- Multiplies every power-sum monomial by a scale depending on its parts
+-- Contract: F must already be expressed purely in the p basis. Each part n in
+-- each p-index receives scaleFunction(R0,n), matching plethystic Adams
+-- behavior for alphabets such as c*X.
 transformedPowerSumScale = (F, scaleFunction) -> (
     R0 := ring F;
     A := coefficientRing R0;
@@ -478,6 +512,9 @@ transformedPowerSumScale = (F, scaleFunction) -> (
     )
 
 -- Extracts coefficients from a linear expression in one basis
+-- Returns null rather than throwing when F contains products, skew atoms, or
+-- another basis. Callers use null as a conservative signal that triangular
+-- inversion or direct coefficient pairing is not justified.
 transformedCoefficientsInBasis = (F, B) -> (
     A := coefficientRing ring F;
     result := new MutableHashTable;
@@ -495,6 +532,7 @@ transformedCoefficientsInBasis = (F, B) -> (
     )
 
 -- Computes the forward expansion of one transformed atom in the source basis
+-- TODO: Implement in engine?
 transformedEvaluateTermTransform = (R0, data, lambda, mu, sourceTerm) -> (
     transformValue := (data#"TermTransform")(lambda, mu, sourceTerm);
     if data#"TermTransformMode" == "Element" then (
@@ -510,6 +548,8 @@ transformedEvaluateTermTransform = (R0, data, lambda, mu, sourceTerm) -> (
         )
     )
 
+-- Expands one transformed-basis atom into the source basis
+-- TODO: Implement in engine?
 transformedAtomToSourceBasis = (R0, data, lambda) -> (
     source := basis(R0, data#"SourceBasis");
     result := 0_R0;
@@ -522,6 +562,10 @@ transformedAtomToSourceBasis = (R0, data, lambda) -> (
     )
 
 -- Builds and caches triangular inverse data for one degree
+-- TODO: Implement in engine?
+-- The progress test is the triangularity check: an index can be inverted only
+-- after every nonzero off-diagonal index in its expansion has already been
+-- solved. If no index progresses, the claimed triangular structure is invalid.
 transformedTriangularInverseData = (R0, data, target, n) -> (
     cache := data#"TransitionCache";
     if cache#?n then return cache#n;
@@ -555,6 +599,7 @@ transformedTriangularInverseData = (R0, data, target, n) -> (
     )
 
 -- Converts a source-basis expression to a triangular transformed basis
+-- TODO: Implement in engine?
 transformedTriangularSourceToTarget = (F, target, data) -> (
     R0 := ring F;
     A := coefficientRing R0;
@@ -571,6 +616,7 @@ transformedTriangularSourceToTarget = (F, target, data) -> (
     )
 
 -- Converts one transformed-basis basis element to the power-sum basis
+-- TODO: Implement in engine?
 transformedBasisAtomToPowerSums = (R0, data, atom) -> (
     if #atom#"Inner" != 0 then error("transformed basis ", data#"BasisSymbol", " does not currently support skew atoms");
     lambda := atom#"Outer";
@@ -584,6 +630,7 @@ transformedBasisAtomToPowerSums = (R0, data, atom) -> (
     )
 
 -- Converts an expression in one transformed basis to power sums
+-- TODO: Implement in engine?
 transformedBasisToPowerSums = (F, B) -> (
     R0 := ring F;
     A := coefficientRing R0;
@@ -624,6 +671,10 @@ transformedRelabelSourceToTarget = (F, source, target, data) -> (
     )
 
 -- Converts power sums to a transformed basis through the source basis
+-- TODO: Implement in engine?
+-- The inverse route first removes any alphabet scaling in the p basis, then
+-- converts to the source basis. The final step is either triangular inversion
+-- or diagonal relabeling, depending on the transform metadata.
 transformedBasisFromPowerSums = (FP, B) -> (
     R0 := ring FP;
     data := B#"TransformData";
@@ -645,6 +696,10 @@ transformedSourceTerm = (R0, data, mu) -> (
     )
 
 -- Normalizes the SumOver option and records useful structural metadata
+-- TODO: Add more options?
+-- The Triangular and TriangularOrder fields are proof obligations for inverse
+-- conversion. New SumOver modes should mark themselves triangular only when
+-- transformedTriangularInverseData can solve them degree by degree.
 transformedNormalizeSumOver = sumOver -> (
     if sumOver === null or sumOver === "SameIndex" or toString sumOver == "SameIndex" then hashTable {
         "Kind" => "SameIndex",
@@ -712,6 +767,9 @@ transformedInverseAlphabetData = alphabetData -> (
     )
 
 -- Normalizes the TermTransform option
+-- User-facing functions intentionally see only (lambda, mu) and return a
+-- coefficient or operator. Internal callers can pass termData directly with
+-- mode "Element" when the transform must depend on the sourceTerm itself.
 transformedTermTransformData = phi -> (
     if phi === null then {transformedIdentityTermTransform, "Identity", "Coefficient"}
     else if instance(phi, Function) then {(lambda, mu, sourceTerm) -> phi(lambda, mu), "UserFunction", "Coefficient"}
@@ -719,7 +777,7 @@ transformedTermTransformData = phi -> (
     else error "expected TermTransform to be a function (lambda, mu) -> coefficient or operator, or a SymmetricFunctionOperator"
     )
 
--- Tests whether two alphabet strings define the same linear alphabet.
+-- Tests whether two alphabet strings define the same linear alphabet
 transformedAlphabetEquivalent = (R0, leftAlphabet, rightAlphabet) -> (
     if leftAlphabet === rightAlphabet then return true;
     if (leftAlphabet === null or toString leftAlphabet == "X") and (rightAlphabet === null or toString rightAlphabet == "X") then return true;
@@ -727,12 +785,13 @@ transformedAlphabetEquivalent = (R0, leftAlphabet, rightAlphabet) -> (
     try transformedAlphabetCoefficient(R0, leftAlphabet) == transformedAlphabetCoefficient(R0, rightAlphabet) else false
     )
 
--- Detects whether a transformed definition is diagonal in its source basis.
+-- Detects whether a transformed definition is diagonal in its source basis
 transformedDiagonalSourceTransform = (alphabetData, sumOverData, outputData) -> (
     alphabetData === null and (sumOverData#"Kind") == "SameIndex" and outputData#"PreservesSourceBasis"
     )
 
--- Computes the diagonal source-basis coefficient for one transformed atom.
+-- Computes the diagonal source-basis coefficient for one transformed atom
+-- TODO: Implement in engine?
 transformedDiagonalScaleValue = (R0, data, lambda) -> (
     if data#"TermTransformKind" == "Identity" then return 1_(coefficientRing R0);
     cache := data#"DiagonalScaleCache";
@@ -752,7 +811,7 @@ transformedDiagonalScaleValue = (R0, data, lambda) -> (
     )
 
 -- Builds the low-level option table for a transformed basis, inheriting index
--- behavior from a known source basis.
+-- behavior from a known source basis
 transformedBasisRegistrationOptionsFromSource = (basisSymbol, opts, data, omegaSymbol, innerProductData, sourceForOptions) -> (
     H := new MutableHashTable from pairs basisOptionDefaults;
     scan(keys basisOptionDefaults, optKey -> if opts#?optKey then H#optKey = opts#optKey);
@@ -771,11 +830,11 @@ transformedBasisRegistrationOptionsFromSource = (basisSymbol, opts, data, omegaS
     hashTable pairs H
     )
 
--- Builds the low-level option table for a transformed basis.
+-- Builds the low-level option table for a transformed basis
 transformedBasisRegistrationOptions = (basisSymbol, opts, data, omegaSymbol, innerProductData) ->
     transformedBasisRegistrationOptionsFromSource(basisSymbol, opts, data, omegaSymbol, innerProductData, basis(data#"SourceBasis"))
 
--- Installs a transformed basis and records its cross-basis links in registries.
+-- Installs a transformed basis and records its cross-basis links in registries
 installTransformedBasis = (B, omegaSymbol, innerProductData) -> (
     installed := installBasis(B, false);
     registerOmegaLink(installed, omegaSymbol);
@@ -866,12 +925,15 @@ transformedInheritedInnerProductData = (data, source) -> (
         )
     )
 
--- Tests whether the transform has enough structure for automatic dual companions.
+-- Tests whether the transform has enough structure for automatic dual companions
 transformedSupportsInnerProductCompanions = data -> (
     ((data#"SumOver")#"Kind") == "SameIndex" and (data#"TermTransformKind" == "Identity" or (data#?"DiagonalSourceTransform" and data#"DiagonalSourceTransform"))
     )
 
 -- Inspects a sample transformed term to record output-basis metadata
+-- This is a conservative capability probe, not a proof of all degrees. If the
+-- degree-one sample is mixed, unavailable, or outside R0, the transform is
+-- treated as mixed so automatic inverses and companions stay disabled.
 transformedInspectOutputMetadata = (R0, sourceSymbol, alphabetData, termTransform, termTransformKind, termTransformMode) -> (
     if termTransformKind == "Identity" and alphabetData === null then return hashTable {
         "PreservesSourceBasis" => true,
@@ -911,6 +973,9 @@ transformedInspectOutputMetadata = (R0, sourceSymbol, alphabetData, termTransfor
     )
 
 -- Records the source, alphabet, summation, transform, and display data for a transformed basis
+-- InverseConversionAvailable is the main safety gate used by toBasis from
+-- power sums. Keep this condition conservative: false only disables a shortcut,
+-- but true lets arbitrary elements convert into the transformed basis.
 transformedMakeData = (basisSymbol, sourceSymbol, opts, alphabetData, sumOverData, termTransform, termTransformKind, termTransformMode, outputData, companionMeta) -> hashTable {
     "BasisSymbol" => basisSymbol,
     "SourceBasis" => sourceSymbol,
@@ -939,7 +1004,7 @@ transformedValidateSymbolAvailable = basisSymbol -> (
     if BasisIndex#?basisSymbol then error("a symmetric function basis with symbol ", basisSymbol, " is already registered")
     )
 
--- Ensures a cluster of transformed-basis symbols is collision-free before install.
+-- Ensures a cluster of transformed-basis symbols is collision-free before install
 transformedValidateSymbolsAvailable = symbols -> (
     if #unique symbols != #symbols then error "transformed basis companion symbols must be distinct";
     scan(symbols, transformedValidateSymbolAvailable)
@@ -957,6 +1022,9 @@ transformedKnownOutcome = (R0, sourceSymbol, opts, sumOverData, termTransformKin
     )
 
 -- Applies the policy for transformed bases known to equal an existing built-in basis.
+-- Known outcomes prevent accidental duplicate definitions of standard bases.
+-- "CreateAlias" preserves user syntax while routing all algebra through the
+-- existing basis id; "RegisterIndependent" is the explicit escape hatch.
 transformedApplyKnownOutcomePolicy = (basisSymbol, outcome, policy) -> (
     if outcome === null then return null;
     policyString := toString policy;
@@ -1039,6 +1107,9 @@ transformedSpecializedInnerProductData = (innerProductData, suffixMap) -> (
     )
 
 -- Adds automatically named specialized bases for every basis in a cluster.
+-- Generated specializations are added to the same install cluster as their
+-- source companions so specialization rules never point at bases that failed
+-- to register. Suffix maps also keep omega/duality links inside the family.
 transformedAddGeneratedSpecializationEntries = (entries, opts, families) -> (
     if #families == 0 then return entries;
     baseSymbols := apply(entries, entry -> (entry#"Basis")#"BasisSymbol");
@@ -1148,6 +1219,9 @@ transformedClusterRegistrationReport = entries -> (
     )
 
 -- Snapshots registration state so a failed transformed-basis cluster can roll back.
+-- The snapshot covers M2 registries and current-ring caches. Validation should
+-- happen before installation because engine-side rememberBasis calls are not
+-- fully undone by this M2-level rollback.
 transformedRegistrationSnapshot = () -> hashTable {
     "BasisIndex" => new MutableHashTable from pairs BasisIndex,
     "BasisSymbolIndex" => new MutableHashTable from pairs BasisSymbolIndex,
@@ -1164,6 +1238,7 @@ transformedRegistrationSnapshot = () -> hashTable {
     "CurrentRingAliases" => if CurrentSymmetricRing === null or not CurrentSymmetricRing.cache#?"Aliases" then null else new MutableHashTable from pairs CurrentSymmetricRing.cache#"Aliases"
     }
 
+-- Restores registration state captured before a failed transformed-basis install.
 transformedRestoreRegistrationSnapshot = snapshot -> (
     BasisIndex = snapshot#"BasisIndex";
     BasisSymbolIndex = snapshot#"BasisSymbolIndex";
@@ -1183,6 +1258,9 @@ transformedRestoreRegistrationSnapshot = snapshot -> (
     )
 
 -- Installs a transformed-basis cluster with registry rollback on failure.
+-- Companions, omega links, duality links, and generated specialization bases
+-- are installed as one unit. A partial cluster would leave global syntax and
+-- metadata inconsistent, so failures restore the pre-install M2 state.
 transformedInstallClusterAtomically = entries -> (
     snapshot := transformedRegistrationSnapshot();
     symbols := apply(entries, entry -> (entry#"Basis")#"BasisSymbol");
@@ -1201,6 +1279,11 @@ transformedInstallClusterAtomically = entries -> (
     result
     )
 
+-- Builds and installs a transformed-basis cluster from normalized term data.
+-- This is the orchestration point for registerTransformedBasis and
+-- registerSpecializedBasis: it decides aliases for known bases, validates the
+-- requested companion cluster, derives omega/dual companions, adds generated
+-- specializations, and finally performs the atomic install.
 transformedRegisterWithTermData = (basisSymbol, sourceInput, opts, termData) -> (
     source := basis(sourceInput);
     sourceSymbol := source#"BasisSymbol";
@@ -1394,6 +1477,9 @@ hallLittlewoodDualData = ordinaryDualData
 -- ============================================================================
 
 -- Built-in basis registrations and their standard metadata.
+-- DisplayOrder fixes presentation order; declaration order fixes the engine
+-- basis ids assigned by makeBasis. Reordering or inserting built-ins here can
+-- change id-based dispatch assumptions and tests that compare basis metadata.
 p = makeBuiltinBasis("p", "DisplayName" => "power sum basis", "DisplayOrder" => 10, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "Omega" => "p", "InnerProductData" => hashTable {
         "Ordinary" => hashTable {"DualBasis" => "p", "Pairing" => ordinaryPowerSumPairing, "EngineKind" => "PowerSum"},
         "HallLittlewood" => hashTable {"DualBasis" => "p", "Pairing" => hallLittlewoodPowerSumPairing, "EngineKind" => "PowerSum"}

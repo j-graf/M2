@@ -2,6 +2,10 @@
 -- Ring Construction And Metadata
 -- ============================================================================
 
+-- This file is the boundary between global package metadata and one concrete
+-- SymmetricRing. Global basis records are cloned onto a ring with ring-local
+-- symbols before any value is sent to the engine or installed as M2 syntax.
+
 -- Wraps a raw engine ring in the SymmetricRing type.
 newSymmetricEngineRing = Rraw -> (
     R0 := new SymmetricRing of SymmetricRingElement;
@@ -12,6 +16,9 @@ newSymmetricEngineRing = Rraw -> (
     )
 
 -- Sends basis metadata to the C++ engine for ordering and multiplication.
+-- Use the ring-attached basis symbol here, not the global default symbol.
+-- Optimized conversion paths may temporarily switch back to default symbols,
+-- but ordinary construction should preserve user-chosen BasisSymbols.
 rememberBasisInEngine = (R0, B0) -> (
     B := basisOnRing(B0, R0);
     rawSymmetricRingsRememberBasis(raw R0, B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex");
@@ -37,6 +44,9 @@ ringHasBasis = (R0, B0) -> any(R0#"Bases", C -> C#"BasisId" == B0#"BasisId")
 rememberRingBasisData = R0 -> scan(R0#"Bases", B0 -> rememberBasisInEngine(R0, B0))
 
 -- Builds the compact omega map consumed by the C++ engine.
+-- Each entry is source id, target id, target display order, and target
+-- multiplicativity. The engine only sees ids and display metadata, so missing
+-- or unavailable omega partners must be filtered out before this map is built.
 omegaMapData = R0 -> flatten apply(select(R0#"Bases", B0 -> omegaPartnerSymbol B0 =!= null), B0 -> (
         target := basis(R0, omegaPartnerSymbol B0);
         {B0#"BasisId", target#"BasisId", target#"DisplayOrder", if target#"MultiplicativeIndex" then 1 else 0}
@@ -57,6 +67,9 @@ innerProductRule = (B0, contextName) -> (
     )
 
 -- Builds the compact inner-product map consumed by the C++ engine.
+-- Only rules with an EngineKind are sent to C++. Rules without EngineKind are
+-- still meaningful to the M2 direct-pairing fallback, but the engine cannot
+-- interpret arbitrary M2 pairing functions.
 innerProductMapData = (R0, contextName) -> flatten flatten apply(R0#"Bases", B0 -> apply(select(innerProductRules(B0, contextName), rule -> (
                 rule =!= null and rule#?"DualBasis" and rule#?"EngineKind" and rule#"EngineKind" =!= null
                 )), rule -> (
@@ -132,6 +145,9 @@ initializeBasisSymbolMaps = (R0, symbolOptions) -> (
     )
 
 -- Constructs a symmetric function ring and installs its available bases.
+-- Constructing a ring has global side effects: it sets CurrentSymmetricRing and
+-- installs global indexed tables such as S, h, and p. The optional QQ shadow
+-- temporarily creates another ring, then restores the user's active ring.
 symmetricRing = args -> (
     L := argumentList args;
     if #L == 0 then error "expected a coefficient ring";
@@ -192,6 +208,9 @@ toString SymmetricRing := R0 -> "symmetricRing(" | toString coefficientRing R0 |
 -- ============================================================================
 
 -- Attaches ring-specific data to a global basis metadata record.
+-- A SymmetricBasis should be treated as immutable metadata plus a ring pointer.
+-- Ring-local cloning is what lets two rings use different public symbols for
+-- the same global basis key.
 basisOnRing = (B, R0) -> new SymmetricBasis from hashTable(pairs B | {
         "BasisSymbol" => basisSymbolForRing(R0, B),
         "Ring" => R0
@@ -233,6 +252,9 @@ basis SymmetricBasis := SymmetricBasis => opts -> B -> (
     )
 
 -- Installs an indexed variable table for an available basis symbol.
+-- This mutates the global M2 symbol named by the basis. Callers must reinstall
+-- aliases whenever CurrentSymmetricRing changes so S_2, h_1, etc. point at the
+-- active ring rather than a stale one.
 installBasisAlias = (R0, B0) -> (
     symbolString := if B0#?"BasisAliasOf" then B0#"BasisSymbol" else basisSymbolForRing(R0, B0);
     X := getSymbol symbolString;
@@ -246,6 +268,8 @@ installBasisAlias = (R0, B0) -> (
     )
 
 -- Installs an indexed variable table that reports a basis is unavailable.
+-- Unavailable bases still get a global table so users receive a ring-specific
+-- error from Q_2 instead of accidentally using a table left by an older ring.
 installUnavailableBasisAlias = (R0, B0) -> (
     symbolString := if B0#?"BasisAliasOf" then B0#"BasisSymbol" else basisSymbolForRing(R0, B0);
     X := getSymbol symbolString;
@@ -339,6 +363,9 @@ compactBasisData = B -> B#"BasisSymbol" => B#"DisplayName"
 basesOutput = (B, verbose) -> if verbose then B else hashTable(B / (B0 -> compactBasisData B0))
 
 -- Lists bases visible to the user, hiding Somega when normalized.
+-- Somega remains registered internally because the engine and omega map need
+-- it, but normalized rings display Schur omega images through S instead of
+-- advertising Somega as a public basis.
 visibleBasesOnRing = R0 -> (
     B := R0#"Bases" / (B0 -> basisOnRing(B0, R0));
     if R0#?"NormalizeSomega" and R0#"NormalizeSomega" then select(B, B0 -> basisKey B0 =!= "Somega") else B
@@ -376,6 +403,9 @@ bases(SymmetricRing, Boolean) := (R0, verbose) -> (
 basisData = method()
 
 -- Returns basis data enriched with the centralized registry view.
+-- Stored built-in basis records intentionally have some legacy metadata fields
+-- stripped. This recombines the basis record with the central omega, pairing,
+-- specialization, and transformed-basis registries for public inspection.
 enrichedBasisData = B -> (
     H := new MutableHashTable from pairs B;
     omegaSymbol := omegaPartnerSymbol B;
@@ -458,6 +488,9 @@ rawBasisAtomElement = (R0, B, outer, inner) -> (
     )
 
 -- Rewrites a Somega basis element as its Schur omega image.
+-- NormalizeSomega is a display/user-experience policy, not an engine basis
+-- removal. Raw Somega atoms may appear from engine calls and are rewritten here
+-- so ordinary users see the canonical Schur-style form.
 somegaAtomAsSchurElement = (R0, atom) -> (
     Sbasis := basis(R0, "S");
     sAtom := rawBasisAtomElement(R0, Sbasis, atom#"Outer", atom#"Inner");
@@ -479,6 +512,9 @@ monomialAsElement = (R0, atoms) -> (
     )
 
 -- Rewrites all Somega factors when the ring normalizes Somega.
+-- This rebuilds through rawTerms instead of asking the engine for a global
+-- simplification because only atoms involving Somega need the special policy;
+-- other mixed-basis factors should remain exactly as the engine returned them.
 normalizeSomegaElement = f -> (
     R0 := ring f;
     if not (R0#?"NormalizeSomega") or not R0#"NormalizeSomega" then return f;
@@ -537,6 +573,9 @@ SymmetricBasis _ Sequence := (B, s) -> (
     )
 
 -- Builds an indexed basis element, including multiplicative indices.
+-- Multiplicative bases interpret a multi-part index as a product of one-part
+-- generators. Nonmultiplicative bases send the whole index to the engine as a
+-- single atom, which is essential for Schur, monomial, and skew behavior.
 SymmetricBasis _ List := (B, L) -> (
     if #L == 2 and instance(L#0, List) and instance(L#1, List) then return makeSkewElement(B, L#0, L#1);
     R0 := B#"Ring";
@@ -765,6 +804,9 @@ net SymmetricRingElement := f -> symmetricElementNet(f, displayTermLimit)
 toExternalString SymmetricRingElement := toString
 
 -- Decodes one flattened engine monomial into atom hash tables.
+-- The flattened format is [displayOrder, basisId, outerLength, innerLength,
+-- payload...]. displayOrder is used only for engine ordering, so rawTerms
+-- exposes basis id plus outer/inner indices for M2-level reconstruction.
 decodeSymmetricMonomialData = data0 -> (
     data := toList data0;
     atoms := {};
@@ -791,6 +833,9 @@ decodeSymmetricMonomialData = data0 -> (
 rawTerms = method()
 
 -- Extracts raw term data from a symmetric function.
+-- Coefficients are wrapped in the coefficient ring before returning. Monomials
+-- stay decoded as atom metadata so higher-level code can rebuild elements in a
+-- different ring, basis, or display policy without reparsing strings.
 rawTerms SymmetricRingElement := f -> (
     A := coefficientRing ring f;
     n := rawSymmetricRingsTermCount raw f;

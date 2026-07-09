@@ -40,30 +40,9 @@ doc ///
    "SymmetricRings Guide"
    "Advanced SymmetricRings Guide"
    symmetricRing
-   SymmetricRing
-   SymmetricRingElement
-   SymmetricBasis
-   applyOperator
-   operatorData
-   raisingOperator
    registerTransformedBasis
-   registerSpecializedBasis
-   bases
-   aliases
-   omegaPartners
-   specializations
-   innerProductPairings
-   basisData
-   toBasis
-   toS
-   specializeParameters
    plethysm
-   hJacobiTrudi
-   omegaInvolution
-   hallInnerProduct
-   straighten
-   weight
-   rawTerms
+   toBasis
 
  Node
   Key

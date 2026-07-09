@@ -2,6 +2,10 @@
 -- Straightening And Equality
 -- ============================================================================
 
+-- This file chooses between optimized engine paths and metadata-driven M2
+-- fallbacks. The guiding invariant is correctness first: custom bases and
+-- transformed bases use M2 hooks whenever the engine cannot know their rules.
+
 -- Public method for straightening composition-indexed expressions.
 straighten = method()
 
@@ -13,6 +17,9 @@ straighten SymmetricRingElement := f -> (
     )
 
 -- Falls back to power-sum comparison when raw straightened forms differ.
+-- Raw equality can miss identities whose bases have different straightened
+-- representatives. The p-basis fallback is slower but gives a common semantic
+-- comparison when conversion is available.
 powerSumEqualityFallback = (f, g) -> (
     R0 := ring f;
     diffP := try toBasis(f - g, p) else null;
@@ -63,6 +70,9 @@ eJacobiTrudi List := lambda -> eJacobiTrudi(lambda, {})
 eJacobiTrudi(List, List) := (lambda, mu) -> jacobiTrudiInBasis("e", lambda, mu)
 
 -- Asks the C++ engine to convert between built-in bases.
+-- This path assumes the engine understands the source atoms. Callers must route
+-- elements containing M2-level ToPowerSums hooks through elementToPowerSumsM2
+-- before asking the engine for a final target basis.
 engineToBasis = (F, B) -> (
     R0 := ring F;
     P := basis(R0, p);
@@ -95,6 +105,9 @@ atomToPowerSums = (R0, atom) -> (
     )
 
 -- Converts an element to power sums by expanding atoms at the M2 level.
+-- This deliberately expands monomials atom by atom. It preserves custom basis
+-- hooks for transformed/user bases, then relies on ordinary multiplication to
+-- rebuild the product in the ambient symmetric ring.
 elementToPowerSumsM2 = F -> (
     R0 := ring F;
     A := coefficientRing R0;
@@ -119,6 +132,9 @@ toPowerSumsForConversion = F -> (
 toBasis = method()
 toBasisFallback = method()
 
+-- Accepts either a basis object, symbol/string, or indexed variable table.
+-- Unavailable tables carry SymmetricBasis === null so an expression like Q can
+-- report the same availability error as Q_2.
 targetBasisOnRing = (R0, target) -> (
     if class target === SymmetricRingIndexedVariableTable then (
         if target.SymmetricBasis === null then error("basis ", toString target, " is not available for this symmetric ring");
@@ -129,6 +145,9 @@ targetBasisOnRing = (R0, target) -> (
 
 -- A cached QQ shadow ring lets coefficient-independent algorithms run over QQ
 -- when all input coefficients are rational constants, then promote back.
+-- Creating the shadow ring temporarily changes CurrentSymmetricRing and global
+-- basis aliases. Always restore the old ring and reinstall aliases before
+-- returning, even if QQ-ring construction fails.
 constantQQRingFor = R0 -> (
     if coefficientRing R0 === QQ then return R0;
     if R0.cache#?"ConstantQQRing" and R0.cache#?"ConstantQQBasisCount" and R0.cache#"ConstantQQBasisCount" == #availableSymmetricBases then
@@ -157,6 +176,9 @@ constantQQMonomialOnShadow = (Rqq, atoms) -> (
     result
     )
 
+-- Lifting to the QQ shadow is intentionally all-or-nothing. If any coefficient
+-- or atom is not representable over QQ, the caller falls back to the original
+-- coefficient ring rather than doing a partial mixed-ring computation.
 constantQQLiftElement = (F, Rqq) -> (
     Aqq := coefficientRing Rqq;
     result := 0_Rqq;
@@ -224,6 +246,9 @@ multiplyToBasis = method()
 multiplyToBasisLegacy = method()
 multiplyToBasisFast = method()
 
+-- The fast engine product path is used only when both inputs and the target are
+-- engine-understood. Custom ToPowerSums/FromPowerSums hooks force the conservative
+-- fallback so user-registered bases keep their M2-defined semantics.
 multiplyToBasis(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, target) -> (
     R0 := ring f;
     if ring g =!= R0 then error "expected elements in the same symmetric ring";
@@ -256,6 +281,9 @@ multiplyToBasisFast(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g,
     multiplyToBasis(f, g, target)
     )
 
+-- Converts a product monomial one atom at a time. This lets target-basis
+-- multiplication shortcuts apply incrementally instead of first expanding the
+-- whole product into p and then converting back.
 multiplyToMonomialTarget = (R0, atoms, B) -> (
     if #atoms == 0 then return 1_R0;
     if #atoms == 1 then return toBasisFallback(atomAsElement(R0, atoms#0), B);
@@ -277,6 +305,9 @@ toBasisProductAware = (f, B) -> (
     result
     )
 
+-- Schur conversion has specialized engine support. If any M2-level basis hook
+-- is present, the generic fallback wins because the engine cannot expand that
+-- atom by itself.
 toSchurFastConversion = f -> (
     R0 := ring f;
     rememberRingBasisData R0;
@@ -292,6 +323,9 @@ toSchurFastConversion = f -> (
 
 -- Converts a symmetric function to the requested basis using product-aware
 -- dispatch before falling back to the standard conversion route.
+-- Dispatch order matters: product-aware conversion preserves useful factors,
+-- the QQ shadow handles constant rational coefficients faster, Schur has its
+-- own engine path, and the final fallback handles every metadata-driven case.
 toBasis(SymmetricRingElement, Thing) := (f, target) -> (
     R0 := ring f;
     rememberRingBasisData R0;
@@ -337,6 +371,9 @@ monomialAsDefaultSymbolElement = (R0, atoms) -> (
     )
 
 -- Gives optimized engine calls an input view with default built-in names.
+-- Some engine shortcuts are keyed by built-in display names. Rings with renamed
+-- basis symbols are rebuilt using default names before the call, then rebuilt
+-- again with ring-local symbols on output.
 elementWithDefaultBasisSymbols = f -> (
     R0 := ring f;
     if ringUsesDefaultBasisSymbols R0 then return f;
@@ -458,6 +495,11 @@ basisWithId = (R0, basisId) -> (
 -- Parameter Specialization
 -- ============================================================================
 
+-- Parameter specialization can either stay in the original ring or promote to a
+-- new coefficient ring. Basis atoms are rebuilt through specialization metadata
+-- so bases like Hall-Littlewood Q can become Schur at t=0 instead of merely
+-- substituting coefficients.
+
 -- Applies a coefficient substitution when possible.
 substituteIfPossible = (x, substitutions) -> try sub(x, substitutions) else x
 
@@ -568,6 +610,9 @@ specializedMacdonaldParameters = (R0, substitutions, A) -> (
     )
 
 -- Chooses the target ring for a parameter specialization.
+-- When the Hall-Littlewood parameter specializes to zero, the target ring is an
+-- ordinary symmetric ring. That removes Hall-Littlewood-only bases from the new
+-- ring and lets registered specialization maps replace those atoms.
 specializationTargetRing = (R0, substitutions, promoteSpecializedRing) -> (
     if not promoteSpecializedRing then R0
     else (
@@ -614,6 +659,11 @@ specializeParameters = args -> (
 -- ============================================================================
 -- Plethysm And Omega
 -- ============================================================================
+
+-- Plain plethysm returns a p-basis expression. The @ operator adds a user-facing
+-- policy layer: when the left argument is in one visible basis, try to return
+-- the result in that same basis unless hooks or performance heuristics say not
+-- to use the combined engine path.
 
 -- Public method for plethysm.
 plethysm = method()
@@ -667,6 +717,8 @@ useCombinedPlethysmToBasis = (f, g, B) -> (
 
 -- Chooses the output basis for @.  Return null to leave the p-basis plethysm
 -- unchanged.
+-- Only a uniform single-basis left input chooses an output basis. Mixed-basis
+-- inputs stay in power sums so @ does not pretend there is a canonical target.
 chooseOutputBasisPlethysm = (f, g) -> (
     if ring f =!= ring g then error "expected elements in the same symmetric ring";
     R0 := ring f;
@@ -676,6 +728,9 @@ chooseOutputBasisPlethysm = (f, g) -> (
     )
 
 -- Installs the @ operator for plethysm followed by a basis return when possible.
+-- The fallback order mirrors toBasis: QQ shadow first when possible, M2 hooks
+-- next, then the combined engine path for supported cases, and finally plain
+-- plethysm followed by conversion.
 installMethod(symbol @, SymmetricRingElement, SymmetricRingElement, (f, g) -> (
         B := chooseOutputBasisPlethysm(f, g);
         if B === null then plethysm(f, g)
@@ -703,6 +758,9 @@ installMethod(symbol @, SymmetricRingElement, SymmetricRingElement, (f, g) -> (
 omegaInvolutionOptionDefaults = hashTable {"useSomega" => false}
 
 -- Public wrapper for the omega involution.
+-- useSomega controls only the Schur/omega-Schur display policy. The omega map
+-- still comes from basis metadata, so user-created omega companions participate
+-- without adding special cases here.
 omegaInvolution = args -> (
     L := argumentList args;
     if #L == 0 then error "expected a symmetric function";
@@ -719,6 +777,10 @@ omegaInvolution = args -> (
 -- ============================================================================
 -- Hall Inner Product
 -- ============================================================================
+
+-- Inner products first try diagonal metadata in the current basis pair. If no
+-- direct pairing applies, both arguments are converted to p and paired there.
+-- This keeps custom dual bases fast while preserving a broad fallback.
 
 -- Chooses ordinary or Hall-Littlewood inner product context.
 innerProductContextName = (sourceRing, Rtarget, substitutions) -> (
@@ -738,6 +800,9 @@ addCoefficientToMutableHash = (H, idx, c, A) -> (
     )
 
 -- Extracts coefficients when an expression is already in one basis.
+-- This intentionally refuses products and mixed bases. Returning null tells the
+-- caller to use a safer fallback instead of silently applying diagonal pairing
+-- metadata outside its valid form.
 coefficientsInBasisIfPossibleM2 = (F, B) -> (
     A := coefficientRing ring F;
     result := new MutableHashTable;
@@ -757,6 +822,9 @@ coefficientsInBasisIfPossibleM2 = (F, B) -> (
     )
 
 -- Computes a diagonal inner product directly for one pairing rule.
+-- A direct rule is valid only when F is linear in the source basis and G is
+-- linear in the declared dual basis with matching indices. Otherwise null
+-- signals that the caller should try another rule or fall back to p.
 directInnerProductForRule = (F, G, B0, rule) -> (
     if rule === null or not rule#?"DualBasis" or not rule#?"Pairing" then return null;
     R0 := ring F;
@@ -800,6 +868,8 @@ powerSumFallbackInnerProduct = (F, G, contextName) -> (
     )
 
 -- Specializes inner-product arguments and determines the pairing context.
+-- The context is chosen after specialization because a Hall-Littlewood pairing
+-- at t=0 should use ordinary pairing data, not the deformed p-pairing.
 prepareInnerProductArguments = (f, g, substitutions, promoteSpecializedRing) -> (
     if ring f =!= ring g then error "expected elements in the same symmetric ring";
     sourceRing := ring f;

@@ -2,6 +2,10 @@
 -- Symmetric Function Operators
 -- ============================================================================
 
+-- Operators are lightweight hash-table objects with an "Apply" callback. This
+-- keeps user-defined operator syntax independent from the engine while still
+-- allowing transformed-basis registration to treat operators as term transforms.
+
 -- Lightweight parent type for operators acting on symmetric functions.
 SymmetricFunctionOperator = new Type of HashTable
 SymmetricFunctionOperator.synonym = "symmetric function operator"
@@ -29,6 +33,9 @@ newSymmetricFunctionOperator = (T, data) -> (
 -- Applies an operator to a symmetric function.
 applyOperator = method(Options => {"SetLimit" => null})
 
+-- SetLimit is a call-site override for rational raising-operator expansions.
+-- It returns a copied operator with updated options so existing operator
+-- objects remain immutable from the user's point of view.
 operatorWithSetLimit = (g, setLimit) -> (
     if setLimit === null then return g;
     if class setLimit =!= ZZ or setLimit < 0 then error "expected \"SetLimit\" to be a nonnegative integer";
@@ -56,11 +63,16 @@ operatorData SymmetricFunctionOperator := g -> hashTable pairs g
 
 raisingOperatorOptionDefaults = hashTable {
     "ExpansionLimit" => 1000,
-    "Rank" => null
+    "Rank" => null,
+    "MaintainsBasis" => null
     }
 
 raisingBadSubscriptPattern = "R_[^\\{]"
 raisingLiteralPattern = "R_\\{([0-9]+),[ ]*([0-9]+)\\}"
+
+-- Raising-operator expressions are parsed as strings so users can write
+-- formulas involving R_{i,j} and pairs. The parser below temporarily binds
+-- those names globally, so every failure path must restore prior values.
 
 raisingNormalizeExpression = x -> if instance(x, RaisingOperator) then x#"Expression" else toString x
 
@@ -94,6 +106,9 @@ raisingDefaultPairs = n -> flatten apply(toList(1..n), i -> apply(toList(i+1..n)
 
 raisingVariableSymbol = ij -> (getSymbol "SymmetricRingsRaisingOperatorHidden")_(ij#0, ij#1)
 
+-- Fraction fields should parse over their base ring, then promote into the
+-- coefficient ring with operator variables. This avoids nested fraction-field
+-- operator rings for expressions involving coefficients such as t.
 raisingOperatorParseBaseRing = A -> (
     G := try gens A else {};
     if #G == 0 then return A;
@@ -110,8 +125,10 @@ raisingOperatorIndexKey = a -> (
     L
     )
 
-raisingOperatorPolynomialOverCoefficientRing = (f, parseRing, ORing) -> sub(promote(f, parseRing), ORing)
+raisingOperatorPolynomialOverCoefficientRing = (f, parserRing, ORing) -> sub(promote(f, parserRing), ORing)
 
+-- Rational raising operators are expanded as numerator/(d0 + positive part).
+-- The constant term d0 must be invertible so the geometric recurrence is valid.
 raisingConstantTerm = (f, A) -> (
     c := 0_A;
     scan(terms f, term -> (
@@ -121,6 +138,9 @@ raisingConstantTerm = (f, A) -> (
     c
     )
 
+-- Applies a monomial in the operator variables to an index. R_{i,j} raises the
+-- i-th component and lowers the j-th component; trailing zeroes are trimmed so
+-- equivalent indices share a table key.
 raisingIndexShift = (lambda, operatorPairs, exponentVector) -> (
     n := #lambda;
     scan(toList(0..#operatorPairs-1), k -> if exponentVector#k != 0 then (
@@ -138,6 +158,8 @@ raisingIndexShift = (lambda, operatorPairs, exponentVector) -> (
             ))
     )
 
+-- Detects shifts that have moved too much weight out of a suffix. Such terms
+-- cannot contribute to the symmetric-function expansion and are discarded.
 raisingIndexOverpowered = mu -> (
     tail := 0;
     overpowered := false;
@@ -157,6 +179,9 @@ raisingPolynomialUsesOnlyRaisingPairs = (f, operatorPairs) -> (
     ok
     )
 
+-- Adds all terms from an operator polynomial to H. The Boolean return value is
+-- used as a convergence signal for rational expansions whose remaining terms
+-- can only move farther into the noncontributing tail.
 raisingAddPolynomialTerms = (H, initialCoefficient, lambda, operatorPairs, f) -> (
     A := ring initialCoefficient;
     anyContributing := false;
@@ -174,6 +199,9 @@ raisingAddPolynomialTerms = (H, initialCoefficient, lambda, operatorPairs, f) ->
     anyContributing
     )
 
+-- Parses a raising-operator expression into either a polynomial or rational
+-- expression over hidden operator variables. The only public binding exposed
+-- during parsing is R_{i,j}; hidden variables keep the user's namespace clean.
 raisingParseExpression = (R0, lambda, expressionString, opts) -> (
     if match(raisingBadSubscriptPattern, expressionString) then error "raising operators must use notation R_{i,j}, not R_ij";
     A := coefficientRing R0;
@@ -184,11 +212,11 @@ raisingParseExpression = (R0, lambda, expressionString, opts) -> (
     savedSymbols := unique({getSymbol "R", getSymbol "pairs"} | apply(try gens A else {}, g -> getSymbol toString g));
     oldValues := apply(savedSymbols, s -> {s, value s});
     parseBase := raisingOperatorParseBaseRing A;
-    parseRing := null;
+    parserRing := null;
     ORing := A[operatorSymbols];
     parsed := try (
-        parseRing = parseBase[operatorSymbols];
-        operatorVariableValues := hashTable apply(toList(0..#operatorPairs-1), k -> operatorPairs#k => parseRing_k);
+        parserRing = parseBase[operatorSymbols];
+        operatorVariableValues := hashTable apply(toList(0..#operatorPairs-1), k -> operatorPairs#k => parserRing_k);
         operatorTable := new RaisingOperatorIndexedVariableTable from getSymbol "R";
         operatorTable#symbol _ = a -> (
             ij := raisingOperatorIndexKey a;
@@ -204,15 +232,15 @@ raisingParseExpression = (R0, lambda, expressionString, opts) -> (
         error("could not parse raising operator expression \"", expressionString, "\"")
         );
     restoreSymbolValues oldValues;
-    polynomial := try raisingOperatorPolynomialOverCoefficientRing(parsed, parseRing, ORing) else null;
+    polynomial := try raisingOperatorPolynomialOverCoefficientRing(parsed, parserRing, ORing) else null;
     if polynomial =!= null then return hashTable {
         "Kind" => "Polynomial",
         "Ring" => ORing,
         "OperatorPairs" => operatorPairs,
         "Numerator" => polynomial
         };
-    numeratorPolynomial := try raisingOperatorPolynomialOverCoefficientRing(numerator parsed, parseRing, ORing) else error("raising operator expression \"", expressionString, "\" is not an expression over the operator ring");
-    denominatorPolynomial := try raisingOperatorPolynomialOverCoefficientRing(denominator parsed, parseRing, ORing) else error("raising operator expression \"", expressionString, "\" has an unsupported denominator");
+    numeratorPolynomial := try raisingOperatorPolynomialOverCoefficientRing(numerator parsed, parserRing, ORing) else error("raising operator expression \"", expressionString, "\" is not an expression over the operator ring");
+    denominatorPolynomial := try raisingOperatorPolynomialOverCoefficientRing(denominator parsed, parserRing, ORing) else error("raising operator expression \"", expressionString, "\" has an unsupported denominator");
     hashTable {
         "Kind" => "Rational",
         "Ring" => ORing,
@@ -222,6 +250,9 @@ raisingParseExpression = (R0, lambda, expressionString, opts) -> (
         }
     )
 
+-- Expands a parsed raising operator on one coefficient/index pair. Polynomial
+-- operators are finite; rational operators use a geometric recurrence capped by
+-- ExpansionLimit unless the tail test proves no further terms can contribute.
 raisingOperatorTermTable = (g, R0, initialCoefficient, lambda) -> (
     A := coefficientRing R0;
     c0 := promote(initialCoefficient, A);
@@ -262,6 +293,8 @@ raisingOperatorTermTable = (g, R0, initialCoefficient, lambda) -> (
     hashTable pairs H
     )
 
+-- Internal inspection helper used by tests and benchmarks. It returns the raw
+-- coefficient table before converting the result back to basis elements.
 listRaisingOperator = args -> (
     L := argumentList args;
     opts := parseStringOptions(raisingOperatorOptionDefaults, select(L, x -> class x === Option), "listRaisingOperator");
@@ -285,6 +318,9 @@ raisingTermTableToElement = (R0, B, H) -> (
     result
     )
 
+-- Raising operators act on one indexed atom at a time. Multiplicative bases can
+-- flatten products into one index; nonmultiplicative bases require a single
+-- atom so the resulting index shift is mathematically unambiguous.
 raisingAtomData = (R0, atoms) -> (
     if #atoms == 0 then return null;
     if any(atoms, atom -> #(atom#"Inner") != 0) then error "raising operators do not currently support skew basis atoms";
@@ -310,6 +346,8 @@ applyRaisingOperator = (g, F) -> (
     )
 
 -- Constructor for a raising operator.
+-- The expression string is intentionally not parsed here. Rank depends on the
+-- input index, so parsing is deferred until application time.
 raisingOperator = args -> (
     L := argumentList args;
     opts := parseStringOptions(raisingOperatorOptionDefaults, select(L, x -> class x === Option), "raisingOperator");
