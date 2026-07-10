@@ -176,10 +176,14 @@ constantQQMonomialOnShadow = (Rqq, atoms) -> (
     result
     )
 
+hasPlethysmConversionProvenance = F -> rawSymmetricRingsHasPlethysmProvenance raw F
+
 -- Lifting to the QQ shadow is intentionally all-or-nothing. If any coefficient
 -- or atom is not representable over QQ, the caller falls back to the original
 -- coefficient ring rather than doing a partial mixed-ring computation.
 constantQQLiftElement = (F, Rqq) -> (
+    rawResult := try rawSymmetricRingsLiftCollected(raw Rqq, raw F) else null;
+    if rawResult =!= null then return engineResultWithRingBasisSymbols(Rqq, rawResult);
     Aqq := coefficientRing Rqq;
     result := 0_Rqq;
     ok := true;
@@ -191,10 +195,15 @@ constantQQLiftElement = (F, Rqq) -> (
                 else if c != 0_Aqq then result = result + promote(c, Rqq) * monomial;
                 )
             ));
-    if ok then result else null
+    if ok then (
+        rawSymmetricRingsCopyConversionMetadata(raw F, raw result);
+        result
+        ) else null
     )
 
 constantQQPromoteElement = (Fqq, R0) -> (
+    rawResult := try rawSymmetricRingsPromoteCollected(raw R0, raw Fqq) else null;
+    if rawResult =!= null then return engineResultWithRingBasisSymbols(R0, rawResult);
     A0 := coefficientRing R0;
     result := 0_R0;
     ok := true;
@@ -243,10 +252,8 @@ toBasisFallback(SymmetricRingElement, Thing) := (f, target) -> (
 
 -- Product-aware multiplication followed by conversion to a target basis.
 multiplyToBasis = method()
-multiplyToBasisLegacy = method()
-multiplyToBasisFast = method()
 
--- The fast engine product path is used only when both inputs and the target are
+-- The engine product pipeline is used only when both inputs and the target are
 -- engine-understood. Custom ToPowerSums/FromPowerSums hooks force the conservative
 -- fallback so user-registered bases keep their M2-defined semantics.
 multiplyToBasis(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, target) -> (
@@ -263,90 +270,41 @@ multiplyToBasis(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, tar
         if rightBasisId == targetId then return toBasis(f, B) * g;
         );
     if needsM2PowerSumConversion f or needsM2PowerSumConversion g or B#"FromPowerSums" =!= null then return toBasisFallback(f*g, B);
-    engineResultWithRingBasisSymbols(R0, rawSymmetricRingsMultiplyToBasisFast(
+    engineResultWithRingBasisSymbols(R0, rawSymmetricRingsProductToBasisDispatch(
         raw(elementWithDefaultBasisSymbols f),
         raw(elementWithDefaultBasisSymbols g),
         P#"BasisId", basisDefaultSymbol P, P#"DisplayOrder", P#"MultiplicativeIndex",
         B#"BasisId", basisDefaultSymbol B, B#"DisplayOrder", B#"MultiplicativeIndex"))
     )
 
--- Legacy product conversion route: form the product, then use legacy conversion.
-multiplyToBasisLegacy(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, target) -> (
-    if ring f =!= ring g then error "expected elements in the same symmetric ring";
-    toBasisFallback(f*g, target)
-    )
+tryConstantQQBasisConversion = (R0, f, B) -> tryConstantQQOperation(R0, {f}, (Rqq, inputsQQ) -> (
+        Bqq := constantQQBasisOnShadow(Rqq, B);
+        if Bqq === null then error "target basis is not available over QQ";
+        toBasis(inputsQQ#0, Bqq)
+        ))
 
--- Compatibility alias for benchmark scripts that still mention the old name.
-multiplyToBasisFast(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, target) -> (
-    multiplyToBasis(f, g, target)
-    )
-
--- Converts a product monomial one atom at a time. This lets target-basis
--- multiplication shortcuts apply incrementally instead of first expanding the
--- whole product into p and then converting back.
-multiplyToMonomialTarget = (R0, atoms, B) -> (
-    if #atoms == 0 then return 1_R0;
-    if #atoms == 1 then return toBasisFallback(atomAsElement(R0, atoms#0), B);
-    result := atomAsElement(R0, atoms#0);
-    for i from 1 to (#atoms - 1) do result = multiplyToBasis(result, atomAsElement(R0, atoms#i), B);
-    result
-    )
-
-toBasisProductAware = (f, B) -> (
-    termsData := rawTerms f;
-    if not any(termsData, term -> #(term#1) > 1) then return null;
-    R0 := ring f;
-    A := coefficientRing R0;
-    result := 0_R0;
-    scan(termsData, term -> (
-            c := promote(term#0, A);
-            if c != 0_A then result = result + promote(c, R0) * multiplyToMonomialTarget(R0, term#1, B);
-            ));
-    result
-    )
-
--- Schur conversion has specialized engine support. If any M2-level basis hook
--- is present, the generic fallback wins because the engine cannot expand that
--- atom by itself.
-toSchurFastConversion = f -> (
-    R0 := ring f;
-    rememberRingBasisData R0;
-    P := basis(R0, p);
-    Sbasis := basis(R0, S);
-    if needsM2PowerSumConversion f then return toBasisFallback(f, Sbasis);
-    if rawSymmetricRingsSingleBasisId raw f == P#"BasisId" then return engineToBasis(f, Sbasis);
-    engineResultWithRingBasisSymbols(R0, rawSymmetricRingsToSchurFast(
-        raw(elementWithDefaultBasisSymbols f),
-        P#"BasisId", P#"BasisSymbol", P#"DisplayOrder", P#"MultiplicativeIndex",
-        Sbasis#"BasisId", basisDefaultSymbol Sbasis, Sbasis#"DisplayOrder"))
-    )
-
--- Converts a symmetric function to the requested basis using product-aware
--- dispatch before falling back to the standard conversion route.
--- Dispatch order matters: product-aware conversion preserves useful factors,
--- the QQ shadow handles constant rational coefficients faster, Schur has its
--- own engine path, and the final fallback handles every metadata-driven case.
+-- Converts a symmetric function to the requested basis. Plethysm provenance
+-- makes the constant-QQ shadow the first choice; other inputs remain
+-- native-first and use the shadow only when native conversion fails.
 toBasis(SymmetricRingElement, Thing) := (f, target) -> (
     R0 := ring f;
     rememberRingBasisData R0;
     B := targetBasisOnRing(R0, target);
-    productAware := toBasisProductAware(f, B);
-    if productAware =!= null then return productAware;
-    constantQQ := tryConstantQQOperation(R0, {f}, (Rqq, inputsQQ) -> (
-            Bqq := constantQQBasisOnShadow(Rqq, B);
-            if Bqq === null then error "target basis is not available over QQ";
-            toBasis(inputsQQ#0, Bqq)
-            ));
+    preferConstantQQ := coefficientRing R0 =!= QQ and hasPlethysmConversionProvenance f;
+    if preferConstantQQ then (
+        preferredQQ := tryConstantQQBasisConversion(R0, f, B);
+        if preferredQQ =!= null then return preferredQQ;
+        );
+    native := try toBasisFallback(f, B) else null;
+    if native =!= null then return native;
+    if debugLevel > 0 then stderr << "SymmetricRings conversion: native route failed; trying QQ shadow" << endl;
+    constantQQ := if preferConstantQQ then null else tryConstantQQBasisConversion(R0, f, B);
     if constantQQ =!= null then return constantQQ;
-    Sbasis := basis(R0, S);
-    if B#"BasisId" == Sbasis#"BasisId" then return toSchurFastConversion f;
     toBasisFallback(f, B)
     )
 
 -- Shortcut methods for conversion to the Schur basis.
 toS = method()
-toSLegacy = method()
-toSFast = method()
 
 -- Tests whether all bases on a ring use their default symbols.
 ringUsesDefaultBasisSymbols = R0 -> if R0#?"UsesDefaultBasisSymbols" then R0#"UsesDefaultBasisSymbols" else all(R0#"Bases", B0 -> basisSymbolForRing(R0, B0) == basisDefaultSymbol B0)
@@ -383,6 +341,7 @@ elementWithDefaultBasisSymbols = f -> (
             c := promote(term#0, A);
             if c != 0_A then result = result + promote(c, R0) * monomialAsDefaultSymbolElement(R0, term#1)
             ));
+    rawSymmetricRingsCopyConversionMetadata(raw f, raw result);
     result
     )
 
@@ -395,6 +354,7 @@ rebuildWithRingBasisSymbols = (R0, rawValue) -> (
             c := promote(term#0, A);
             if c != 0_A then result = result + promote(c, R0) * monomialAsElement(R0, term#1)
             ));
+    rawSymmetricRingsCopyConversionMetadata(rawValue, raw result);
     result
     )
 
@@ -408,45 +368,10 @@ engineResultWithRingBasisSymbols = (R0, rawValue) -> (
 -- Converts to Schur functions through the ordinary basis-conversion entry point.
 toS SymmetricRingElement := f -> toBasis(f, S)
 
--- Legacy Schur conversion route kept for benchmarks.
-toSLegacy SymmetricRingElement := f -> toBasisFallback(f, S)
-
--- Compatibility alias for benchmark scripts that still mention the old name.
-toSFast SymmetricRingElement := f -> toS f
-
 multiplyToS = method()
-multiplyToSLegacy = method()
-multiplyToSFast = method()
 
 multiplyToS(SymmetricRingElement, SymmetricRingElement) := (f, g) -> (
     multiplyToBasis(f, g, S)
-    )
-
-multiplyToSLegacy(SymmetricRingElement, SymmetricRingElement) := (f, g) -> (
-    multiplyToBasisLegacy(f, g, S)
-    )
-
--- Compatibility alias for benchmark scripts that still mention the old name.
-multiplyToSFast(SymmetricRingElement, SymmetricRingElement) := (f, g) -> (
-    multiplyToS(f, g)
-    )
-
--- Legacy h-to-Schur conversion wrapper.  This is currently unused by toS/toBasis;
--- the engine now calls the recursive h-to-Schur implementation directly as a
--- fallback.  Keep temporarily for benchmarking; likely remove if no longer needed.
-toSViaHRecursive = method()
-
--- Converts through h and then recursively to Schur.
-toSViaHRecursive SymmetricRingElement := f -> (
-    R0 := ring f;
-    rememberRingBasisData R0;
-    Hbasis := basis(R0, h);
-    Sbasis := basis(R0, S);
-    H := if rawSymmetricRingsSingleBasisId raw f == h#"BasisId" then f else toH f;
-    engineResultWithRingBasisSymbols(R0, rawSymmetricRingsToSchurViaHRecursive(
-        raw(elementWithDefaultBasisSymbols H),
-        Hbasis#"BasisId", basisDefaultSymbol Hbasis, Hbasis#"DisplayOrder", Hbasis#"MultiplicativeIndex",
-        Sbasis#"BasisId", basisDefaultSymbol Sbasis, Sbasis#"DisplayOrder"))
     )
 
 -- Shortcut method for conversion to the h basis.
@@ -682,7 +607,7 @@ plethysm(SymmetricRingElement, SymmetricRingElement) := (f, g) -> (
 
 -- Computes plethysm and converts to a target basis using the combined engine
 -- path.  This keeps the hot @ path out of M2 when no M2 conversion hooks apply.
-plethysmToBasisFast = (f, g, B) -> (
+plethysmToBasisDispatch = (f, g, B) -> (
     R0 := ring f;
     P := basis(R0, p);
     engineResultWithRingBasisSymbols(R0, rawSymmetricRingsPlethysmToBasis(
@@ -692,34 +617,11 @@ plethysmToBasisFast = (f, g, B) -> (
         B#"BasisId", basisDefaultSymbol B, B#"DisplayOrder", B#"MultiplicativeIndex"))
     )
 
--- Returns the index of a single atom in basis B, or null for anything else.
-singleBasisAtomIndex = (F, B) -> (
-    T := rawTerms F;
-    if #T != 1 then return null;
-    A := coefficientRing ring F;
-    term := T#0;
-    if promote(term#0, A) != 1_A then return null;
-    atoms := term#1;
-    if #atoms != 1 then return null;
-    atom := atoms#0;
-    if atom#"BasisId" =!= B#"BasisId" or #(atom#"Inner") != 0 then return null;
-    atom#"Outer"
-    )
-
--- The engine's combined Schur-plethysm path is excellent for one-row inner
--- Schur functions, but can be slower than p-basis plethysm otherwise.
-useCombinedPlethysmToBasis = (f, g, B) -> (
-    if basisKey B =!= "S" then return true;
-    outer := singleBasisAtomIndex(f, B);
-    inner := singleBasisAtomIndex(g, B);
-    outer =!= null and inner =!= null and #inner == 1
-    )
-
 -- Chooses the output basis for @.  Return null to leave the p-basis plethysm
 -- unchanged.
 -- Only a uniform single-basis left input chooses an output basis. Mixed-basis
 -- inputs stay in power sums so @ does not pretend there is a canonical target.
-chooseOutputBasisPlethysm = (f, g) -> (
+selectPlethysmOutputBasis = (f, g) -> (
     if ring f =!= ring g then error "expected elements in the same symmetric ring";
     R0 := ring f;
     rememberRingBasisData R0;
@@ -728,28 +630,30 @@ chooseOutputBasisPlethysm = (f, g) -> (
     )
 
 -- Installs the @ operator for plethysm followed by a basis return when possible.
--- The fallback order mirrors toBasis: QQ shadow first when possible, M2 hooks
--- next, then the combined engine path for supported cases, and finally plain
--- plethysm followed by conversion.
+-- M2 hooks remain outside the engine.  For engine-native plethysm, a constant-QQ
+-- shadow is still tried before the original coefficient ring: only two compact
+-- inputs are lifted, and benchmarks show the complete plethysm is substantially
+-- faster over QQ.  Either engine route supplies conversion guarantees internally.
 installMethod(symbol @, SymmetricRingElement, SymmetricRingElement, (f, g) -> (
-        B := chooseOutputBasisPlethysm(f, g);
+        B := selectPlethysmOutputBasis(f, g);
         if B === null then plethysm(f, g)
         else (
             R0 := ring f;
-            constantQQ := tryConstantQQOperation(R0, {f, g}, (Rqq, inputsQQ) -> (
-                    Bqq := constantQQBasisOnShadow(Rqq, B);
-                    if Bqq === null then error "target basis is not available over QQ";
-                    inputsQQ#0 @ inputsQQ#1
-                    ));
-            if constantQQ =!= null then constantQQ
-            else if needsM2PowerSumConversion f or needsM2PowerSumConversion g or B#"FromPowerSums" =!= null then (
+            if needsM2PowerSumConversion f or needsM2PowerSumConversion g or B#"FromPowerSums" =!= null then (
                 hookPlethysmResult := plethysm(f, g);
                 toBasis(hookPlethysmResult, B)
                 )
-            else if useCombinedPlethysmToBasis(f, g, B) then plethysmToBasisFast(f, g, B)
             else (
-                fallbackPlethysmResult := plethysm(f, g);
-                toBasis(fallbackPlethysmResult, B)
+                constantQQ := tryConstantQQOperation(R0, {f, g}, (Rqq, inputsQQ) -> (
+                        Bqq := constantQQBasisOnShadow(Rqq, B);
+                        if Bqq === null then error "target basis is not available over QQ";
+                        inputsQQ#0 @ inputsQQ#1
+                        ));
+                if constantQQ =!= null then (
+                    if debugLevel > 0 then stderr << "SymmetricRings plethysm conversion: used QQ shadow" << endl;
+                    constantQQ
+                    )
+                else plethysmToBasisDispatch(f, g, B)
                 )
             )
         ))

@@ -34,6 +34,10 @@ const RingElement *rawSymmetricRingsBasisElement(const Ring *R,
                                                 M2_arrayint index);
 const RingElement *rawSymmetricRingsSum(const Ring *R,
                                         engine_RawRingElementArray elements);
+const RingElement *rawSymmetricRingsPromoteCollected(const Ring *R,
+                                                     const RingElement *f);
+const RingElement *rawSymmetricRingsLiftCollected(const Ring *R,
+                                                  const RingElement *f);
 const RingElement *rawSymmetricRingsProduct(const Ring *R,
                                             engine_RawRingElementArray elements);
 const RingElement *rawSymmetricRingsJacobiTrudi(const Ring *R,
@@ -52,33 +56,7 @@ const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
                                             M2_string targetDisplaySymbol,
                                             int targetDisplayOrder,
                                             bool targetIsMultiplicative);
-const RingElement *rawSymmetricRingsToSchurViaHRecursive(const RingElement *f,
-                                                         int hBasisId,
-                                                         M2_string hDisplaySymbol,
-                                                         int hDisplayOrder,
-                                                         bool hIsMultiplicative,
-                                                         int schurBasisId,
-                                                         M2_string schurDisplaySymbol,
-                                                         int schurDisplayOrder);
-const RingElement *rawSymmetricRingsToSchurFast(const RingElement *f,
-                                                int powerSumBasisId,
-                                                M2_string powerSumDisplaySymbol,
-                                                int powerSumDisplayOrder,
-                                                bool powerSumIsMultiplicative,
-                                                int schurBasisId,
-                                                M2_string schurDisplaySymbol,
-                                                int schurDisplayOrder);
-const RingElement *rawSymmetricRingsMultiplyToSchurFast(
-    const RingElement *f,
-    const RingElement *g,
-    int powerSumBasisId,
-    M2_string powerSumDisplaySymbol,
-    int powerSumDisplayOrder,
-    bool powerSumIsMultiplicative,
-    int schurBasisId,
-    M2_string schurDisplaySymbol,
-    int schurDisplayOrder);
-const RingElement *rawSymmetricRingsMultiplyToBasisFast(
+const RingElement *rawSymmetricRingsProductToBasisDispatch(
     const RingElement *f,
     const RingElement *g,
     int powerSumBasisId,
@@ -106,6 +84,9 @@ const RingElement *rawSymmetricRingsPlethysmToBasis(const RingElement *f,
                                                     int targetDisplayOrder,
                                                     bool targetIsMultiplicative);
 int rawSymmetricRingsSingleBasisId(const RingElement *f);
+bool rawSymmetricRingsHasPlethysmProvenance(const RingElement *f);
+bool rawSymmetricRingsCopyConversionMetadata(const RingElement *source,
+                                             const RingElement *target);
 const RingElement *rawSymmetricRingsOmega(const RingElement *f,
                                           M2_arrayint omegaMap,
                                           bool useSomega);

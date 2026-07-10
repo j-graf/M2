@@ -359,6 +359,33 @@ TEST ///
 
 TEST ///
     R0 = symmetricRing QQ
+    fP = p_3 + 2*p_{2,1}
+    assert(toBasis(fP, S) == toBasis(toBasis(fP, p), S))
+    assert(toBasis(fP, Somega) == toBasis(toBasis(fP, p), Somega))
+    assert(toBasis(fP, h) == toBasis(toBasis(fP, p), h))
+    assert(toBasis(fP, e) == toBasis(toBasis(fP, p), e))
+    assert(toBasis(h_{2,1}, S) == toBasis(toBasis(h_{2,1}, p), S))
+    assert(toBasis(S_3*S_{2,1}, S) == toBasis(toBasis(S_3*S_{2,1}, p), S))
+    assert(toBasis(S_{1,3}, S) == -S_{2,2})
+    assert(omegaInvolution omegaInvolution(S_3 + h_2) == S_3 + h_2)
+    assert(S_2 @ S_2 == toBasis(plethysm(S_2, S_2), S))
+    assert(S_2 @ S_{1,1} == toBasis(plethysm(S_2, S_{1,1}), S))
+    assert(S_{5,1} @ S_{3,1} == toBasis(plethysm(S_{5,1}, S_{3,1}), S))
+
+    A = frac(QQ[t])
+    R1 = symmetricRing A
+    plethysmResult = plethysm(S_2, S_2)
+    assert(toS plethysmResult == S_2 @ S_2)
+    mixedInnerPlethysmResult = plethysm(S_2, S_{1,1})
+    assert(toS mixedInnerPlethysmResult == S_2 @ S_{1,1})
+    assert(toBasis(toBasis(p_2, Q), p) == p_2)
+    assert(toBasis(toBasis(p_2, B), p) == p_2)
+    assert(toBasis(toBasis(p_2, P), p) == p_2)
+    assert(toBasis(toBasis(p_2, R), p) == p_2)
+///
+
+TEST ///
+    R0 = symmetricRing QQ
     assert(plethysm(1_R0, h_2) == 1_R0)
     assert(plethysm(p_2, p_1 + p_2) == p_2 + p_4)
     assert(plethysm(p_{2,1}, p_1 + p_2) == p_{2,1} + p_{2,2} + p_{4,1} + p_{4,2})
@@ -443,7 +470,11 @@ TEST ///
     assert(toBasis(q_1, p) == (1-D_0)*p_1)
 
     E = frac(QQ[t])
+    debug needsPackage "SymmetricRings"
     R4 = symmetricRing E
+    Rqq = constantQQRingFor R4
+    assert(constantQQLiftElement(promote(1/24, E)*p_1, Rqq) =!= null)
+    assert(constantQQLiftElement(E_0*p_1, Rqq) === null)
     assert(toBasis(toBasis(p_1, q), p) == p_1)
     assert(toBasis(toBasis(p_2, b), p) == p_2)
     assert(toBasis(Q_{2,1}, q) == q_{2,1} + (E_0 - 1)*q_3)
@@ -476,6 +507,8 @@ TEST ///
     assert(toBasis(R_{{2}, {1}}, p) == p_1)
     assert(Q_{{8,2}, {6}} == Q_2*Q_2)
     assert(Q_{{8,2}, {6}} - Q_2*Q_2 == 0_R4)
+    assert(toS(Q_2*S_2) == toS(toP(Q_2*S_2)))
+    assert(multiplyToS(Q_2, S_2) == toS(Q_2*S_2))
 
     FipSpecial1 = Q_2
     GipSpecial1 = P_2
@@ -517,7 +550,15 @@ TEST ///
 ///
 
 TEST ///
+    debug needsPackage "SymmetricRings"
     R0 = symmetricRing QQ
+    purePowerSums = p_{6,3} + 2*p_{5,2,1} - 3*p_{4,3,2}
+    assert(toBasis(purePowerSums, p) == purePowerSums)
+    assert(toBasis(toBasis(purePowerSums, S), p) == purePowerSums)
+    assert(toBasis(toBasis(purePowerSums, h), p) == purePowerSums)
+    assert(toBasis(toBasis(purePowerSums, e), p) == purePowerSums)
+    assert(toBasis(toBasis(purePowerSums, m), p) == purePowerSums)
+    assert(toBasis(toBasis(purePowerSums, ff), p) == purePowerSums)
     assert(toBasis(S_{5,3,2}*S_{4,3,1}, S) == toBasis(toBasis(S_{5,3,2}*S_{4,3,1}, p), S))
     assert(toBasis(S_{5,3,2}*S_{4,3,1}*h_1, S) == toBasis(toBasis(S_{5,3,2}*S_{4,3,1}*h_1, p), S))
     assert(toBasis(S_{3,2}*h_{3,2}, S) == toBasis(toBasis(S_{3,2}*h_{3,2}, p), S))
@@ -528,6 +569,13 @@ TEST ///
     assert(toS(S_{3,2}*S_{2,1} + e_4 + p_{3,1}) == toBasis(toP(S_{3,2}*S_{2,1} + e_4 + p_{3,1}), S))
     assert(toS(S_{2,1}*S_{1,3}) == toS(S_{2,1}*straighten S_{1,3}))
     assert(toS(S_{2,1}*S_{1,2}) == 0_R0)
+    assert(toS(S_{1,3}*p_2) == toBasis(toP(S_{1,3}*p_2), S))
+    assert(toS(S_{1,3}*h_2) == toBasis(toP(S_{1,3}*h_2), S))
+    assert(toS(S_{1,3}*e_2) == toBasis(toP(S_{1,3}*e_2), S))
+    assert(multiplyToS(S_2*h_2*e_1, p_2) == toS(S_2*h_2*e_1*p_2))
+    assert(multiplyToBasis(m_2, p_1, m) == toBasis(m_2*p_1, m))
+    assert(S_{3,1}@S_2 == toS plethysm(S_{3,1}, S_2))
+    assert(S_{3,1}@S_{2,1} == toS plethysm(S_{3,1}, S_{2,1}))
     assert(toS(S_{3,1}*p_2) == toBasis(toP(S_{3,1}*p_2), S))
     assert(toS(S_{3,1}*p_{3,2}) == toBasis(toP(S_{3,1}*p_{3,2}), S))
     assert(toS(p_{3,2}) == toBasis(toP(p_{3,2}), S))

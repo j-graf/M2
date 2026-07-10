@@ -37,6 +37,11 @@ const SymmetricRingPoly *polyValue(ring_elem f)
   return reinterpret_cast<const SymmetricRingPoly *>(f.get_Poly());
 }
 
+SymmetricRingPoly *mutablePolyValue(ring_elem f)
+{
+  return const_cast<SymmetricRingPoly *>(polyValue(f));
+}
+
 ring_elem makePolyValue(SymmetricRingPoly *f)
 {
   return ring_elem(reinterpret_cast<const void *>(f));

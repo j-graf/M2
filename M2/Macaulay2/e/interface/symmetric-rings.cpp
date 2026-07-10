@@ -51,6 +51,18 @@ const RingElement *rawSymmetricRingsSum(const Ring *R,
   return symmetric_rings::rawSymmetricRingsSum(R, elements);
 }
 
+const RingElement *rawSymmetricRingsPromoteCollected(const Ring *R,
+                                                     const RingElement *f)
+{
+  return symmetric_rings::rawSymmetricRingsPromoteCollected(R, f);
+}
+
+const RingElement *rawSymmetricRingsLiftCollected(const Ring *R,
+                                                  const RingElement *f)
+{
+  return symmetric_rings::rawSymmetricRingsLiftCollected(R, f);
+}
+
 const RingElement *rawSymmetricRingsProduct(const Ring *R,
                                             engine_RawRingElementArray elements)
 {
@@ -95,70 +107,7 @@ const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
                                                    targetIsMultiplicative);
 }
 
-const RingElement *rawSymmetricRingsToSchurViaHRecursive(
-    const RingElement *f,
-    int hBasisId,
-    M2_string hDisplaySymbol,
-    int hDisplayOrder,
-    bool hIsMultiplicative,
-    int schurBasisId,
-    M2_string schurDisplaySymbol,
-    int schurDisplayOrder)
-{
-  return symmetric_rings::rawSymmetricRingsToSchurViaHRecursive(f,
-                                                                hBasisId,
-                                                                hDisplaySymbol,
-                                                                hDisplayOrder,
-                                                                hIsMultiplicative,
-                                                                schurBasisId,
-                                                            schurDisplaySymbol,
-                                                            schurDisplayOrder);
-}
-
-const RingElement *rawSymmetricRingsToSchurFast(
-    const RingElement *f,
-    int powerSumBasisId,
-    M2_string powerSumDisplaySymbol,
-    int powerSumDisplayOrder,
-    bool powerSumIsMultiplicative,
-    int schurBasisId,
-    M2_string schurDisplaySymbol,
-    int schurDisplayOrder)
-{
-  return symmetric_rings::rawSymmetricRingsToSchurFast(f,
-                                                       powerSumBasisId,
-                                                       powerSumDisplaySymbol,
-                                                       powerSumDisplayOrder,
-                                                       powerSumIsMultiplicative,
-                                                       schurBasisId,
-                                                       schurDisplaySymbol,
-                                                       schurDisplayOrder);
-}
-
-const RingElement *rawSymmetricRingsMultiplyToSchurFast(
-    const RingElement *f,
-    const RingElement *g,
-    int powerSumBasisId,
-    M2_string powerSumDisplaySymbol,
-    int powerSumDisplayOrder,
-    bool powerSumIsMultiplicative,
-    int schurBasisId,
-    M2_string schurDisplaySymbol,
-    int schurDisplayOrder)
-{
-  return symmetric_rings::rawSymmetricRingsMultiplyToSchurFast(
-      f,
-      g,
-      powerSumBasisId,
-      powerSumDisplaySymbol,
-      powerSumDisplayOrder,
-      powerSumIsMultiplicative,
-      schurBasisId,
-      schurDisplaySymbol,
-      schurDisplayOrder);
-}
-
-const RingElement *rawSymmetricRingsMultiplyToBasisFast(
+const RingElement *rawSymmetricRingsProductToBasisDispatch(
     const RingElement *f,
     const RingElement *g,
     int powerSumBasisId,
@@ -170,7 +119,7 @@ const RingElement *rawSymmetricRingsMultiplyToBasisFast(
     int targetDisplayOrder,
     bool targetIsMultiplicative)
 {
-  return symmetric_rings::rawSymmetricRingsMultiplyToBasisFast(
+  return symmetric_rings::rawSymmetricRingsProductToBasisDispatch(
       f,
       g,
       powerSumBasisId,
@@ -224,6 +173,17 @@ const RingElement *rawSymmetricRingsPlethysmToBasis(const RingElement *f,
 int rawSymmetricRingsSingleBasisId(const RingElement *f)
 {
   return symmetric_rings::rawSymmetricRingsSingleBasisId(f);
+}
+
+bool rawSymmetricRingsHasPlethysmProvenance(const RingElement *f)
+{
+  return symmetric_rings::rawSymmetricRingsHasPlethysmProvenance(f);
+}
+
+bool rawSymmetricRingsCopyConversionMetadata(const RingElement *source,
+                                             const RingElement *target)
+{
+  return symmetric_rings::rawSymmetricRingsCopyConversionMetadata(source, target);
 }
 
 const RingElement *rawSymmetricRingsOmega(const RingElement *f,

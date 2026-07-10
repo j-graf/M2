@@ -800,6 +800,10 @@ symmetricElementNet = (f, maxTerms) -> (
 -- Displays a symmetric function with a term limit.
 net SymmetricRingElement := f -> symmetricElementNet(f, displayTermLimit)
 
+-- HTML frontends should use the stable net display instead of generic
+-- expression conversion, which can recurse on product expressions.
+html SymmetricRingElement := f -> html net f
+
 -- External string form agrees with the ordinary string form.
 toExternalString SymmetricRingElement := toString
 

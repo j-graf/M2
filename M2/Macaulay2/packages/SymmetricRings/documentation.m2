@@ -308,6 +308,7 @@ doc ///
   Key
    SymmetricRingElement
    (coefficientRing,SymmetricRingElement)
+   (html,SymmetricRingElement)
    (net,SymmetricRingElement)
    (terms,SymmetricRingElement)
    (toExternalString,SymmetricRingElement)

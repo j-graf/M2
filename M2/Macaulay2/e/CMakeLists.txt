@@ -172,12 +172,12 @@ set(SRCLIST
   symmetric-rings/storage
   symmetric-rings/symmetric-engine-ring
   symmetric-rings/arithmetic
-  symmetric-rings/schur-conversion
-  symmetric-rings/hall-classical-conversion
-  symmetric-rings/basis-conversion
+  symmetric-rings/basis-conversion-dispatch
+  symmetric-rings/basis-conversion-kernels
+  symmetric-rings/basis-conversion-products
   symmetric-rings/inner-product
+  symmetric-rings/omega
   symmetric-rings/plethysm
-  symmetric-rings/straightening-omega
   symmetric-rings/raw-interface
   NCAlgebras/Word
   NCAlgebras/NCReduction

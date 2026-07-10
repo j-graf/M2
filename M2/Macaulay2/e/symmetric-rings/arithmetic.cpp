@@ -2,10 +2,12 @@
 
 #include "symmetric-rings/symmetric-engine-ring.hpp"
 
+#include "basic-rings/aring-glue.hpp"
 #include "error.h"
 #include "exceptions.hpp"
 #include "ring-elements/ring-element.hpp"
 #include "rings/ZZ.hpp"
+#include "rings/frac.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -101,6 +103,7 @@ SymmetricMonomial SymmetricEngineRing::multiplyMonomials(const SymmetricMonomial
 ring_elem SymmetricEngineRing::copyPolyValue(const SymmetricRingPoly *poly) const
 {
     auto result = new SymmetricRingPoly;
+    result->conversionMetadata = poly->conversionMetadata;
     result->terms.reserve(poly->terms.size());
     for (const auto& term : poly->terms)
       result->terms.push_back({coefficientRing->copy(term.coeff), term.monomial});
@@ -608,6 +611,92 @@ ring_elem SymmetricEngineRing::mult(const ring_elem f, const ring_elem g) const
                 {coeff, multiplyMonomials(lt.monomial, rt.monomial)});
         }
     return fromTermVector(products, false);
+  }
+
+bool SymmetricEngineRing::promoteCollectedExpansion(
+    const RingElement *input,
+    ring_elem& result) const
+{
+    const auto *sourceRing =
+        dynamic_cast<const SymmetricEngineRing *>(input->get_ring());
+    if (sourceRing == nullptr) return false;
+    if (sourceRing == this)
+      {
+        result = copyPolyValue(polyValue(input->get_value()));
+        return true;
+      }
+
+    rememberBasesFrom(sourceRing);
+    const auto *source = polyValue(input->get_value());
+    auto target = new SymmetricRingPoly;
+    // Coefficient promotion cannot disturb an already collected monomial order.
+    target->terms.reserve(source->terms.size());
+    target->conversionMetadata = source->conversionMetadata;
+    for (const auto& term : source->terms)
+      {
+        ring_elem coeff;
+        const Ring *sourceCoefficients = sourceRing->getCoefficientRing();
+        bool promoted = sourceCoefficients == globalQQ
+            ? coefficientRing->from_rational(term.coeff.get_mpq(), coeff)
+            : coefficientRing->promote(sourceCoefficients, term.coeff, coeff);
+        if (!promoted) return false;
+        if (!coefficientRing->is_zero(coeff))
+          target->terms.push_back({coeff, term.monomial});
+      }
+    result = makePolyValue(target);
+    return true;
+  }
+
+bool SymmetricEngineRing::liftCollectedExpansion(
+    const RingElement *input,
+    ring_elem& result) const
+{
+    const auto *sourceRing =
+        dynamic_cast<const SymmetricEngineRing *>(input->get_ring());
+    if (sourceRing == nullptr) return false;
+    if (sourceRing == this)
+      {
+        result = copyPolyValue(polyValue(input->get_value()));
+        return true;
+      }
+
+    rememberBasesFrom(sourceRing);
+    const auto *source = polyValue(input->get_value());
+    const Ring *sourceCoefficients = sourceRing->getCoefficientRing();
+    auto target = new SymmetricRingPoly;
+    target->terms.reserve(source->terms.size());
+    target->conversionMetadata = source->conversionMetadata;
+    for (const auto& term : source->terms)
+      {
+        ring_elem coeff;
+        bool lifted = sourceCoefficients == coefficientRing
+            ? (coeff = coefficientRing->copy(term.coeff), true)
+            : sourceCoefficients->lift(coefficientRing, term.coeff, coeff);
+        if (!lifted && coefficientRing == globalQQ)
+          {
+            const auto *fractionSource =
+                dynamic_cast<const FractionField *>(sourceCoefficients);
+            if (fractionSource != nullptr)
+              {
+                const Ring *baseRing = fractionSource->get_ring();
+                ring_elem numerator = fractionSource->numerator(term.coeff);
+                ring_elem denominator = fractionSource->denominator(term.coeff);
+                ring_elem numeratorQQ;
+                ring_elem denominatorQQ;
+                if (baseRing->lift(globalQQ, numerator, numeratorQQ) &&
+                    baseRing->lift(globalQQ, denominator, denominatorQQ))
+                  {
+                    coeff = globalQQ->divide(numeratorQQ, denominatorQQ);
+                    lifted = true;
+                  }
+              }
+          }
+        if (!lifted) return false;
+        if (!coefficientRing->is_zero(coeff))
+          target->terms.push_back({coeff, term.monomial});
+      }
+    result = makePolyValue(target);
+    return true;
   }
 
 ring_elem SymmetricEngineRing::batchSum(engine_RawRingElementArray elements) const

@@ -125,8 +125,8 @@ ring_elem SymmetricEngineRing::rationalCoefficient(long numerator, long denomina
 
 void SymmetricEngineRing::clearHallLittlewoodCaches() const
 {
-    qToPowerSumCache.clear();
-    bToPowerSumCache.clear();
+    hallLittlewoodQGeneratorToPowerSumsCache.clear();
+    hallLittlewoodBGeneratorToPowerSumsCache.clear();
     powerSumToQGeneratorCache.clear();
     powerSumToBGeneratorCache.clear();
   }

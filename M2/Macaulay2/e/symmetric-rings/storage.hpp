@@ -11,6 +11,7 @@
 
 #include <functional>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -36,10 +37,34 @@ struct SymmetricTerm
   SymmetricMonomial monomial;
 };
 
+enum class SymmetricConversionOrigin
+{
+  Unknown,
+  Plethysm
+};
+
+struct SymmetricConversionMetadata
+{
+  std::optional<int> pureBasis;
+  std::optional<int> expandedBasis;
+  std::optional<int> homogeneousWeight;
+  std::optional<size_t> termCount;
+  std::optional<size_t> maximumPartitionLength;
+  std::optional<std::vector<int>> factorBases;
+  std::optional<bool> singleAtom;
+  std::optional<bool> singleTerm;
+  std::optional<bool> noProducts;
+  bool normalized = false;
+  bool skewFree = false;
+  bool collected = false;
+  SymmetricConversionOrigin origin = SymmetricConversionOrigin::Unknown;
+};
+
 class SymmetricRingPoly : public our_new_delete
 {
  public:
   VECTOR(SymmetricTerm) terms;
+  std::optional<SymmetricConversionMetadata> conversionMetadata;
 };
 
 struct BasisIndexKey
@@ -91,6 +116,7 @@ M2_string toM2String(const std::string& s);
 std::string join(const std::vector<std::string>& parts,
                  const std::string& delimiter);
 const SymmetricRingPoly *polyValue(ring_elem f);
+SymmetricRingPoly *mutablePolyValue(ring_elem f);
 ring_elem makePolyValue(SymmetricRingPoly *f);
 
 template <typename T>
