@@ -18,6 +18,11 @@
 
 namespace symmetric_rings {
 
+// ============================================================================
+// Littlewood-Richardson And Skew Schur Rules
+// ============================================================================
+// Tableau and coefficient enumeration for Schur products and skew expansion.
+
 long SymmetricEngineRing::littlewoodRichardsonCoefficientViaTableaux(const Partition& lambda,
                      const Partition& content,
                      const Partition& nu) const
@@ -342,6 +347,54 @@ const std::vector<LRProductTerm>& SymmetricEngineRing::skewSchurToSchurViaLittle
     return inserted.first->second;
   }
 
+// ============================================================================
+// Pieri Rules
+// ============================================================================
+// Horizontal and vertical strips implement multiplication by h_n and e_n.
+
+std::vector<Partition> SymmetricEngineRing::schurTimesCompleteViaHorizontalPieri(
+    const Partition& lambda,
+    int row) const
+{
+    std::vector<Partition> result;
+    if (row < 0) return result;
+    if (row == 0)
+      {
+        result.push_back(normalizePartition(lambda));
+        return result;
+      }
+    Partition base = normalizePartition(lambda);
+    for (const auto& nu : partitionsContaining(base, row))
+      {
+        bool horizontal = true;
+        for (size_t i = 0; i + 1 < nu.size(); ++i)
+          if (partitionPart(nu, i + 1) > partitionPart(base, i))
+            {
+              horizontal = false;
+              break;
+            }
+        if (horizontal) result.push_back(nu);
+      }
+    return result;
+  }
+
+std::vector<Partition> SymmetricEngineRing::schurTimesElementaryViaVerticalPieri(
+    const Partition& lambda,
+    int col) const
+{
+    std::vector<Partition> result;
+    if (col < 0) return result;
+    Partition conjugate = conjugatePartition(lambda);
+    for (const auto& nu : schurTimesCompleteViaHorizontalPieri(conjugate, col))
+      result.push_back(conjugatePartition(nu));
+    return result;
+  }
+
+// ============================================================================
+// Border Strips And Murnaghan-Nakayama
+// ============================================================================
+// Border-strip validation and Schur multiplication by power sums.
+
 bool SymmetricEngineRing::addedBorderStripCell(const Partition& lambda,
                                                const Partition& nu,
                                                int row,
@@ -447,141 +500,50 @@ const std::vector<LRProductTerm>& SymmetricEngineRing::schurTimesPowerSumViaBord
     return inserted.first->second;
   }
 
-long SymmetricEngineRing::monomialProductCoefficientViaExponentSplittings(
-    const Partition& lambda0,
-    const Partition& mu0,
-    const Partition& nu0) const
+ring_elem SymmetricEngineRing::powerSumsToSchurViaBorderStrips(
+                          ring_elem f,
+                          int targetBasisId,
+                          const std::string& targetDisplay,
+                          int targetDisplayOrder) const
 {
-    Partition lambda = normalizePartition(lambda0);
-    Partition mu = normalizePartition(mu0);
-    Partition nu = normalizePartition(nu0);
-    if (partitionWeight(lambda) + partitionWeight(mu) != partitionWeight(nu))
-      return 0;
-
-    std::map<int, int> lambdaCounts;
-    std::map<int, int> muCounts;
-    for (int part : lambda) ++lambdaCounts[part];
-    for (int part : mu) ++muCounts[part];
-
-    auto allUsed = [](const std::map<int, int>& counts) {
-      for (const auto& item : counts)
-        if (item.second != 0) return false;
-      return true;
-    };
-
-    long total = 0;
-    std::function<void(size_t)> split = [&](size_t pos) {
-      if (pos == nu.size())
-        {
-          if (allUsed(lambdaCounts) && allUsed(muCounts)) ++total;
-          return;
-        }
-
-      int part = nu[pos];
-      for (int left = 0; left <= part; ++left)
-        {
-          int right = part - left;
-          if (left > 0)
-            {
-              auto found = lambdaCounts.find(left);
-              if (found == lambdaCounts.end() || found->second == 0) continue;
-              --found->second;
-            }
-          if (right > 0)
-            {
-              auto found = muCounts.find(right);
-              if (found == muCounts.end() || found->second == 0)
-                {
-                  if (left > 0) ++lambdaCounts[left];
-                  continue;
-                }
-              --found->second;
-            }
-
-          split(pos + 1);
-
-          if (right > 0) ++muCounts[right];
-          if (left > 0) ++lambdaCounts[left];
-        }
-    };
-
-    split(0);
-    return total;
-  }
-
-const std::vector<LRProductTerm>& SymmetricEngineRing::monomialProductViaExponentSplittings(
-    const Partition& a,
-    const Partition& b) const
-{
-    Partition first = normalizePartition(a);
-    Partition second = normalizePartition(b);
-    if (lexLessPartition(second, first)) std::swap(first, second);
-    std::pair<Partition, Partition> key{first, second};
-    auto cached = monomialProductViaExponentSplittingsCache.find(key);
-    if (cached != monomialProductViaExponentSplittingsCache.end()) return cached->second;
-
-    std::vector<LRProductTerm> result;
-    if (first.empty())
+    const auto *poly = polyValue(f);
+    VECTOR(SymmetricTerm) terms;
+    for (const auto& term : poly->terms)
       {
-        result.push_back({second, 1});
-      }
-    else if (second.empty())
-      {
-        result.push_back({first, 1});
-      }
-    else
-      {
-        int totalWeight = partitionWeight(first) + partitionWeight(second);
-        for (const auto& nu : partitionsOf(totalWeight))
+        std::vector<SchurCompatibleFactor> factors;
+        if (!term.monomial.data.empty())
           {
-            if (partitionLength(nu) > partitionLength(first) + partitionLength(second))
-              continue;
-            long coefficient = monomialProductCoefficientViaExponentSplittings(first, second, nu);
-            if (coefficient != 0) result.push_back({nu, coefficient});
+            Partition index = basisElementIndex(term.monomial, 0);
+            factors.reserve(index.size());
+            for (int part : index)
+              if (part > 0)
+                factors.push_back({SchurCompatibleFactor::PowerSum,
+                                   Partition{part},
+                                   CoeffMap{},
+                                   part});
           }
-      }
 
-    auto inserted = monomialProductViaExponentSplittingsCache.emplace(key, std::move(result));
-    return inserted.first->second;
+        ring_elem converted;
+        if (!schurCompatibleFactorsToSchurDispatch(std::move(factors),
+                                                    targetBasisId,
+                                                    targetDisplay,
+                                                    targetDisplayOrder,
+                                                    converted))
+          return zero();
+        const auto *convertedPoly = polyValue(converted);
+        terms.reserve(terms.size() + convertedPoly->terms.size());
+        for (const auto& convertedTerm : convertedPoly->terms)
+          terms.push_back({coefficientRing->mult(term.coeff,
+                                                 convertedTerm.coeff),
+                           convertedTerm.monomial});
+      }
+    return fromTermVector(terms, false);
   }
 
-std::vector<Partition> SymmetricEngineRing::schurTimesCompleteViaHorizontalPieri(
-    const Partition& lambda,
-    int row) const
-{
-    std::vector<Partition> result;
-    if (row < 0) return result;
-    if (row == 0)
-      {
-        result.push_back(normalizePartition(lambda));
-        return result;
-      }
-    Partition base = normalizePartition(lambda);
-    for (const auto& nu : partitionsContaining(base, row))
-      {
-        bool horizontal = true;
-        for (size_t i = 0; i + 1 < nu.size(); ++i)
-          if (partitionPart(nu, i + 1) > partitionPart(base, i))
-            {
-              horizontal = false;
-              break;
-            }
-        if (horizontal) result.push_back(nu);
-      }
-    return result;
-  }
-
-std::vector<Partition> SymmetricEngineRing::schurTimesElementaryViaVerticalPieri(
-    const Partition& lambda,
-    int col) const
-{
-    std::vector<Partition> result;
-    if (col < 0) return result;
-    Partition conjugate = conjugatePartition(lambda);
-    for (const auto& nu : schurTimesCompleteViaHorizontalPieri(conjugate, col))
-      result.push_back(conjugatePartition(nu));
-    return result;
-  }
+// ============================================================================
+// Schur Product Planning And Execution
+// ============================================================================
+// Factor classification selects LR, Pieri, border-strip, or converted-factor methods.
 
 ring_elem SymmetricEngineRing::multiplySchurExpansionsViaLittlewoodRichardson(ring_elem f,
                                   ring_elem g,
@@ -1007,46 +969,6 @@ bool SymmetricEngineRing::trySchurCompatibleExpressionToSchur(ring_elem f,
     return true;
   }
 
-ring_elem SymmetricEngineRing::powerSumsToSchurViaBorderStrips(
-                          ring_elem f,
-                          int targetBasisId,
-                          const std::string& targetDisplay,
-                          int targetDisplayOrder) const
-{
-    const auto *poly = polyValue(f);
-    VECTOR(SymmetricTerm) terms;
-    for (const auto& term : poly->terms)
-      {
-        std::vector<SchurCompatibleFactor> factors;
-        if (!term.monomial.data.empty())
-          {
-            Partition index = basisElementIndex(term.monomial, 0);
-            factors.reserve(index.size());
-            for (int part : index)
-              if (part > 0)
-                factors.push_back({SchurCompatibleFactor::PowerSum,
-                                   Partition{part},
-                                   CoeffMap{},
-                                   part});
-          }
-
-        ring_elem converted;
-        if (!schurCompatibleFactorsToSchurDispatch(std::move(factors),
-                                                    targetBasisId,
-                                                    targetDisplay,
-                                                    targetDisplayOrder,
-                                                    converted))
-          return zero();
-        const auto *convertedPoly = polyValue(converted);
-        terms.reserve(terms.size() + convertedPoly->terms.size());
-        for (const auto& convertedTerm : convertedPoly->terms)
-          terms.push_back({coefficientRing->mult(term.coeff,
-                                                 convertedTerm.coeff),
-                           convertedTerm.monomial});
-      }
-    return fromTermVector(terms, false);
-  }
-
 bool SymmetricEngineRing::tryProductToSchurViaCompatibleFactors(ring_elem f,
                           ring_elem g,
                           int targetBasisId,
@@ -1085,6 +1007,109 @@ bool SymmetricEngineRing::tryProductToSchurViaCompatibleFactors(ring_elem f,
 
     result = fromTermVector(terms, false);
     return true;
+  }
+
+// ============================================================================
+// Monomial And Forgotten Products
+// ============================================================================
+// Exponent splittings and retained-product routes for m and ff.
+
+long SymmetricEngineRing::monomialProductCoefficientViaExponentSplittings(
+    const Partition& lambda0,
+    const Partition& mu0,
+    const Partition& nu0) const
+{
+    Partition lambda = normalizePartition(lambda0);
+    Partition mu = normalizePartition(mu0);
+    Partition nu = normalizePartition(nu0);
+    if (partitionWeight(lambda) + partitionWeight(mu) != partitionWeight(nu))
+      return 0;
+
+    std::map<int, int> lambdaCounts;
+    std::map<int, int> muCounts;
+    for (int part : lambda) ++lambdaCounts[part];
+    for (int part : mu) ++muCounts[part];
+
+    auto allUsed = [](const std::map<int, int>& counts) {
+      for (const auto& item : counts)
+        if (item.second != 0) return false;
+      return true;
+    };
+
+    long total = 0;
+    std::function<void(size_t)> split = [&](size_t pos) {
+      if (pos == nu.size())
+        {
+          if (allUsed(lambdaCounts) && allUsed(muCounts)) ++total;
+          return;
+        }
+
+      int part = nu[pos];
+      for (int left = 0; left <= part; ++left)
+        {
+          int right = part - left;
+          if (left > 0)
+            {
+              auto found = lambdaCounts.find(left);
+              if (found == lambdaCounts.end() || found->second == 0) continue;
+              --found->second;
+            }
+          if (right > 0)
+            {
+              auto found = muCounts.find(right);
+              if (found == muCounts.end() || found->second == 0)
+                {
+                  if (left > 0) ++lambdaCounts[left];
+                  continue;
+                }
+              --found->second;
+            }
+
+          split(pos + 1);
+
+          if (right > 0) ++muCounts[right];
+          if (left > 0) ++lambdaCounts[left];
+        }
+    };
+
+    split(0);
+    return total;
+  }
+
+const std::vector<LRProductTerm>& SymmetricEngineRing::monomialProductViaExponentSplittings(
+    const Partition& a,
+    const Partition& b) const
+{
+    Partition first = normalizePartition(a);
+    Partition second = normalizePartition(b);
+    if (lexLessPartition(second, first)) std::swap(first, second);
+    std::pair<Partition, Partition> key{first, second};
+    auto cached = monomialProductViaExponentSplittingsCache.find(key);
+    if (cached != monomialProductViaExponentSplittingsCache.end()) return cached->second;
+
+    std::vector<LRProductTerm> result;
+    if (first.empty())
+      {
+        result.push_back({second, 1});
+      }
+    else if (second.empty())
+      {
+        result.push_back({first, 1});
+      }
+    else
+      {
+        int totalWeight = partitionWeight(first) + partitionWeight(second);
+        for (const auto& nu : partitionsOf(totalWeight))
+          {
+            if (partitionLength(nu) > partitionLength(first) + partitionLength(second))
+              continue;
+            long coefficient = monomialProductCoefficientViaExponentSplittings(first, second, nu);
+            if (coefficient != 0) result.push_back({nu, coefficient});
+          }
+      }
+
+    auto inserted = monomialProductViaExponentSplittingsCache.emplace(key, std::move(result));
+    return inserted.first->second;
   }
 
 bool SymmetricEngineRing::tryMonomialLikeBasisElementToCoeffMap(
@@ -1243,6 +1268,11 @@ bool SymmetricEngineRing::tryProductToMonomialLikeTarget(
     return true;
   }
 
+// ============================================================================
+// Hall-Littlewood Products
+// ============================================================================
+// Hall-Littlewood products are evaluated through multiplicative generator bases.
+
 bool SymmetricEngineRing::tryProductToHallLittlewoodViaGenerators(
     ring_elem f,
     ring_elem g,
@@ -1276,6 +1306,11 @@ bool SymmetricEngineRing::tryProductToHallLittlewoodViaGenerators(
         targetDisplayOrder, result);
   }
 
+// ============================================================================
+// Product-To-Target Dispatch
+// ============================================================================
+// The product dispatcher chooses and executes one visible retained-operand route.
+
 SymmetricEngineRing::ProductToTargetRoute
 SymmetricEngineRing::selectProductToTargetRoute(
     ring_elem f,
@@ -1306,6 +1341,40 @@ SymmetricEngineRing::selectProductToTargetRoute(
     if (leftNative && rightNative)
       return ProductToTargetRoute::AlreadyInTarget;
     return ProductToTargetRoute::NoApplicableRoute;
+  }
+
+const char *SymmetricEngineRing::productToTargetRouteName(
+    ProductToTargetRoute route) const
+{
+    switch (route)
+      {
+        case ProductToTargetRoute::ViaSchurCompatibleFactors:
+          return "Schur-compatible-factors";
+        case ProductToTargetRoute::ViaMonomialLikeExpansion:
+          return "monomial-like-expansion";
+        case ProductToTargetRoute::ViaHallLittlewoodGenerators:
+          return "Hall-Littlewood-generators";
+        case ProductToTargetRoute::ViaConvertRightFactor:
+          return "convert-right-factor";
+        case ProductToTargetRoute::ViaConvertLeftFactor:
+          return "convert-left-factor";
+        case ProductToTargetRoute::AlreadyInTarget:
+          return "already-in-target";
+        case ProductToTargetRoute::NoApplicableRoute:
+          return "ordinary-product-fallback";
+      }
+    return "unknown";
+  }
+
+void SymmetricEngineRing::traceProductToTargetSelection(
+    ProductToTargetRoute route,
+    const std::string& targetDisplay) const
+{
+    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
+    std::fprintf(stderr,
+                 "SymmetricRings product-target: target=%s route=%s\n",
+                 targetDisplay.c_str(),
+                 productToTargetRouteName(route));
   }
 
 bool SymmetricEngineRing::executeProductToTargetRoute(
@@ -1354,40 +1423,6 @@ bool SymmetricEngineRing::executeProductToTargetRoute(
         return !error();
       }
     return false;
-  }
-
-const char *SymmetricEngineRing::productToTargetRouteName(
-    ProductToTargetRoute route) const
-{
-    switch (route)
-      {
-        case ProductToTargetRoute::ViaSchurCompatibleFactors:
-          return "Schur-compatible-factors";
-        case ProductToTargetRoute::ViaMonomialLikeExpansion:
-          return "monomial-like-expansion";
-        case ProductToTargetRoute::ViaHallLittlewoodGenerators:
-          return "Hall-Littlewood-generators";
-        case ProductToTargetRoute::ViaConvertRightFactor:
-          return "convert-right-factor";
-        case ProductToTargetRoute::ViaConvertLeftFactor:
-          return "convert-left-factor";
-        case ProductToTargetRoute::AlreadyInTarget:
-          return "already-in-target";
-        case ProductToTargetRoute::NoApplicableRoute:
-          return "ordinary-product-fallback";
-      }
-    return "unknown";
-  }
-
-void SymmetricEngineRing::traceProductToTargetSelection(
-    ProductToTargetRoute route,
-    const std::string& targetDisplay) const
-{
-    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
-    std::fprintf(stderr,
-                 "SymmetricRings product-target: target=%s route=%s\n",
-                 targetDisplay.c_str(),
-                 productToTargetRouteName(route));
   }
 
 bool SymmetricEngineRing::tryProductToTarget(ring_elem f,

@@ -691,6 +691,32 @@ innerProductContextName = (sourceRing, Rtarget, substitutions) -> (
     else "HallLittlewood"
     )
 
+-- Resolves an explicit scalar-product request after parameter specialization.
+resolveInnerProductContextName = (sourceRing, Rtarget, substitutions, requested) -> (
+    requestedName := toString requested;
+    if requestedName == "Automatic" then
+        innerProductContextName(sourceRing, Rtarget, substitutions)
+    else if requestedName == "Ordinary" then "Ordinary"
+    else if requestedName == "HallLittlewood" then (
+        if sourceRing#"HallLittlewoodParameter" === null and
+            Rtarget#"HallLittlewoodParameter" === null then
+            error "the HallLittlewood inner product requires a Hall-Littlewood parameter";
+        "HallLittlewood"
+        )
+    else if requestedName == "SchurQ" then
+        error "the SchurQ inner product is not yet implemented"
+    else if requestedName == "Macdonald" then
+        error "the Macdonald inner product is not yet implemented"
+    else error "expected \"InnerProduct\" to be \"Automatic\", \"Ordinary\", \"HallLittlewood\", \"SchurQ\", or \"Macdonald\""
+    )
+
+-- Encodes the resolved built-in scalar product for the C++ engine.
+innerProductContextCode = contextName -> (
+    if contextName == "Ordinary" then 0
+    else if contextName == "HallLittlewood" then 1
+    else error("unknown built-in inner-product context: ", contextName)
+    )
+
 -- Adds a coefficient to an accumulator hash table.
 addCoefficientToMutableHash = (H, idx, c, A) -> (
     H#idx = (if H#?idx then H#idx else 0_A) + c;
@@ -764,20 +790,73 @@ powerSumFallbackInnerProduct = (F, G, contextName) -> (
     result
     )
 
+-- Tests whether every basis element in an expression belongs to a built-in
+-- basis understood by the C++ engine.
+usesOnlyEngineReadableBases = F -> all(rawTerms F, term -> all(term#1, basisElement ->
+            any(builtinSymmetricBases, B0 -> B0#"BasisId" == basisElement#"BasisId")))
+
+-- Extracts the coefficient of one basis element, using the C++ targeted
+-- coefficient dispatcher for built-in bases and ordinary conversion otherwise.
+basisCoefficient = method()
+basisCoefficient(SymmetricRingElement, SymmetricRingElement) := (F, target) -> (
+    if ring F =!= ring target then error "expected elements in the same symmetric ring";
+    R0 := ring F;
+    A := coefficientRing R0;
+    targetTerms := rawTerms target;
+    if #targetTerms != 1 or targetTerms#0#0 != 1_A or #targetTerms#0#1 != 1 then
+        error "expected one basis element with coefficient one";
+    targetBasisElement := targetTerms#0#1#0;
+    if #targetBasisElement#"Inner" != 0 then
+        error "expected one non-skew basis element";
+    targetBasis := basisWithId(R0, targetBasisElement#"BasisId");
+    targetIsBuiltIn := any(builtinSymmetricBases,
+        B0 -> B0#"BasisId" == targetBasis#"BasisId");
+    rememberRingBasisData R0;
+    if usesOnlyEngineReadableBases F and targetIsBuiltIn then
+        return new A from rawSymmetricRingsBasisCoefficient(
+            raw(elementWithDefaultBasisSymbols F),
+            raw(elementWithDefaultBasisSymbols target));
+    expanded := toBasis(F, targetBasis);
+    coefficients := coefficientsInBasisIfPossibleM2(expanded, targetBasis);
+    if coefficients === null then error "could not extract a basis coefficient";
+    targetIndex := atomIndexForSpecialization targetBasisElement;
+    if coefficients#?targetIndex then coefficients#targetIndex else 0_A
+    )
+
+-- Sends a built-in inner product to the engine together with the diagonal
+-- pairing rules for the active specialization context.
+engineHallInnerProduct = (F, G, contextName) -> (
+    R0 := ring F;
+    A := coefficientRing R0;
+    pairingData := innerProductMapData(R0, contextName);
+    if #pairingData == 0 then return null;
+    new A from rawSymmetricRingsHallInnerProduct(
+        raw(elementWithDefaultBasisSymbols F),
+        raw(elementWithDefaultBasisSymbols G),
+        innerProductContextCode contextName,
+        pairingData)
+    )
+
 -- Specializes inner-product arguments and determines the pairing context.
 -- The context is chosen after specialization because a Hall-Littlewood pairing
 -- at t=0 should use ordinary pairing data, not the deformed p-pairing.
-prepareInnerProductArguments = (f, g, substitutions, promoteSpecializedRing) -> (
+prepareInnerProductArguments = (f, g, substitutions, promoteSpecializedRing, requestedContext) -> (
     if ring f =!= ring g then error "expected elements in the same symmetric ring";
     sourceRing := ring f;
     Rtarget := if #substitutions == 0 then sourceRing else specializationTargetRing(sourceRing, substitutions, promoteSpecializedRing);
     F := if #substitutions == 0 then f else specializeSymmetricElementInRing(f, substitutions, Rtarget);
     G := if #substitutions == 0 then g else specializeSymmetricElementInRing(g, substitutions, Rtarget);
-    {F, G, innerProductContextName(sourceRing, Rtarget, substitutions)}
+    contextName := resolveInnerProductContextName(
+        sourceRing, Rtarget, substitutions, requestedContext);
+    {F, G, contextName}
     )
 
 -- Defaults for the public Hall inner product method.
-hallInnerProductOptionDefaults = hashTable {"ParameterSpecialization" => {}, "PromoteSpecializedRing" => false}
+hallInnerProductOptionDefaults = hashTable {
+    "InnerProduct" => "Automatic",
+    "ParameterSpecialization" => {},
+    "PromoteSpecializedRing" => false
+    }
 
 -- Public wrapper for the Hall inner product.
 hallInnerProduct = args -> (
@@ -791,12 +870,21 @@ hallInnerProduct = args -> (
     substitutions := opts#"ParameterSpecialization";
     if not instance(substitutions, List) then error "expected a list for option ParameterSpecialization";
     if class opts#"PromoteSpecializedRing" =!= Boolean then error "expected Boolean value for option PromoteSpecializedRing";
-    prepared := prepareInnerProductArguments(f, g, substitutions, opts#"PromoteSpecializedRing");
+    prepared := prepareInnerProductArguments(
+        f,
+        g,
+        substitutions,
+        opts#"PromoteSpecializedRing",
+        opts#"InnerProduct");
     F := prepared#0;
     G := prepared#1;
     contextName := prepared#2;
     R0 := ring F;
     rememberRingBasisData R0;
+    if usesOnlyEngineReadableBases F and usesOnlyEngineReadableBases G then (
+        engineResult := engineHallInnerProduct(F, G, contextName);
+        if engineResult =!= null then return engineResult;
+        );
     result := directInnerProductFromMetadata(F, G, contextName);
     if result =!= null then result else powerSumFallbackInnerProduct(F, G, contextName)
     )

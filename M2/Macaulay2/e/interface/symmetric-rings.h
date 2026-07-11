@@ -93,7 +93,11 @@ const RingElement *rawSymmetricRingsOmega(const RingElement *f,
 const RingElement *rawSymmetricRingsStraighten(const RingElement *f);
 const RingElement *rawSymmetricRingsHallInnerProduct(const RingElement *f,
                                                     const RingElement *g,
+                                                    int innerProductKind,
                                                     M2_arrayint innerProductMap);
+const RingElement *rawSymmetricRingsBasisCoefficient(
+    const RingElement *f,
+    const RingElement *targetBasisElement);
 int rawSymmetricRingsTermCount(const RingElement *f);
 const RingElement *rawSymmetricRingsTermCoefficient(const RingElement *f, int i);
 M2_arrayint rawSymmetricRingsTermMonomial(const RingElement *f, int i);

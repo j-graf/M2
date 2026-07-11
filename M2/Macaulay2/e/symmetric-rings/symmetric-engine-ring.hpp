@@ -91,6 +91,8 @@ class SymmetricEngineRing : public Ring
   mutable GCMap<int, CoeffMap> hallLittlewoodSingleCycleCapitalGreenMapCache;
   mutable GCMap<int, CoeffMap> hallLittlewoodSingleCycleNormalizedGreenMapCache;
   mutable GCMap<Partition, CoeffMap> hallLittlewoodPowerSumToCapitalColumnCache;
+  mutable GCMap<std::string, ring_elem>
+      hallLittlewoodPowerSumToCapitalCoefficientCache;
   mutable GCMap<Partition, CoeffMap> hallLittlewoodRaisingGeneratorMapCache;
   mutable std::map<int, CharacterTable> characterTableCache;
   mutable GCMap<int, CoeffMap> powerSumToCompleteMapCache;
@@ -106,6 +108,7 @@ class SymmetricEngineRing : public Ring
       littlewoodRichardsonTableauProductCache;
   mutable std::map<std::pair<Partition, Partition>, std::vector<LRProductTerm>>
       skewSchurToSchurViaLittlewoodRichardsonCache;
+  mutable std::map<std::pair<Partition, Partition>, long> kostkaNumberCache;
   mutable std::map<std::pair<Partition, int>, std::vector<LRProductTerm>>
       schurTimesPowerSumViaBorderStripsCache;
   mutable std::map<std::pair<Partition, Partition>, std::vector<LRProductTerm>>
@@ -163,7 +166,8 @@ class SymmetricEngineRing : public Ring
 #include "symmetric-rings/basis-conversion-dispatch.hpp"
 #include "symmetric-rings/omega.hpp"
 #include "symmetric-rings/plethysm.hpp"
-#include "symmetric-rings/inner-product.hpp"
+#include "symmetric-rings/inner-product-dispatch.hpp"
+#include "symmetric-rings/inner-product-kernels.hpp"
 
   // ============================================================================
   // Polynomial Arithmetic

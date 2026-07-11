@@ -45,647 +45,10 @@ size_t partitionCount(int weight)
 }
 }
 
-SymmetricEngineRing::ConversionPipeline SymmetricEngineRing::selectConversionPipeline(
-        const ConversionRequest& request,
-        int pBasisId,
-        int targetBasisId,
-        const std::string& targetDisplay,
-        bool targetIsMultiplicative) const
-{
-    if (request.kind == ConversionRequestKind::FactorizedProduct)
-      return ConversionPipeline::FactorizedProduct;
-    if (request.kind == ConversionRequestKind::PostPlethysm)
-      return ConversionPipeline::PostPlethysm;
-
-    const ConversionInput& input = request.input;
-    if (input.origin == SymmetricConversionOrigin::Plethysm &&
-        input.guarantees.expandedBasis == pBasisId)
-      return ConversionPipeline::PostPlethysmPowerSums;
-    if (input.guarantees.expandedBasis == pBasisId)
-      return ConversionPipeline::PowerSums;
-
-    if (targetIsMultiplicative &&
-        input.guarantees.normalized == KnownState::True &&
-        input.guarantees.skewFree == KnownState::True)
-      return ConversionPipeline::GroupedMultiplicativeTarget;
-
-    if (canUseGroupedHallLittlewoodPipeline(input.guarantees, targetDisplay))
-      return ConversionPipeline::GroupedHallLittlewood;
-
-    if (canUseWholeExpressionPipeline(input.guarantees,
-                                      targetBasisId,
-                                      targetDisplay,
-                                      targetIsMultiplicative))
-      return ConversionPipeline::WholeExpression;
-
-    return ConversionPipeline::FallbackTerm;
-  }
-
-ring_elem SymmetricEngineRing::executeConversionPipeline(
-        ConversionPipeline pipeline,
-        const ConversionRequest& request,
-        int pBasisId,
-        const std::string& pDisplay,
-        int pOrder,
-        bool pIsMultiplicative,
-        int targetBasisId,
-        const std::string& targetDisplay,
-        int targetOrder,
-        bool targetIsMultiplicative) const
-{
-    const ConversionInput& input = request.input;
-    switch (pipeline)
-      {
-        case ConversionPipeline::WholeExpression:
-          return runWholeExpressionPipeline(input,
-                                         pBasisId,
-                                         pDisplay,
-                                         pOrder,
-                                         pIsMultiplicative,
-                                         targetBasisId,
-                                         targetDisplay,
-                                         targetOrder,
-                                         targetIsMultiplicative);
-        case ConversionPipeline::GroupedMultiplicativeTarget:
-          return runGroupedMultiplicativeTargetPipeline(input,
-                                         pBasisId,
-                                         pDisplay,
-                                         pOrder,
-                                         pIsMultiplicative,
-                                         targetBasisId,
-                                         targetDisplay,
-                                         targetOrder,
-                                         targetIsMultiplicative);
-        case ConversionPipeline::GroupedHallLittlewood:
-          return runGroupedHallLittlewoodPipeline(input,
-                                         pBasisId,
-                                         pDisplay,
-                                         pOrder,
-                                         pIsMultiplicative,
-                                         targetBasisId,
-                                         targetDisplay,
-                                         targetOrder,
-                                         targetIsMultiplicative);
-        case ConversionPipeline::PowerSums:
-          return runPowerSumsPipeline(input,
-                                  pBasisId,
-                                  pDisplay,
-                                  pOrder,
-                                  pIsMultiplicative,
-                                  targetBasisId,
-                                  targetDisplay,
-                                  targetOrder,
-                                  targetIsMultiplicative);
-        case ConversionPipeline::PostPlethysmPowerSums:
-          return runPostPlethysmPowerSumsPipeline(input,
-                                  pBasisId,
-                                  pDisplay,
-                                  pOrder,
-                                  pIsMultiplicative,
-                                  targetBasisId,
-                                  targetDisplay,
-                                  targetOrder,
-                                  targetIsMultiplicative);
-        case ConversionPipeline::FallbackTerm:
-          return runFallbackTermPipeline(input,
-                                      pBasisId,
-                                      pDisplay,
-                                      pOrder,
-                                      pIsMultiplicative,
-                                      targetBasisId,
-                                      targetDisplay,
-                                      targetOrder,
-                                      targetIsMultiplicative);
-        case ConversionPipeline::FactorizedProduct:
-          if (!request.leftOperand || !request.rightOperand)
-            {
-              ERROR("factorized-product conversion requires two operands");
-              return zero();
-            }
-          return runFactorizedProductPipeline(*request.leftOperand,
-                                           *request.rightOperand,
-                                           pBasisId,
-                                           pDisplay,
-                                           pOrder,
-                                           pIsMultiplicative,
-                                           targetBasisId,
-                                           targetDisplay,
-                                           targetOrder,
-                                           targetIsMultiplicative);
-        case ConversionPipeline::PostPlethysm:
-          if (!request.leftOperand || !request.rightOperand)
-            {
-              ERROR("post-plethysm conversion requires two operands");
-              return zero();
-            }
-          return runPostPlethysmPipeline(input,
-                                         *request.leftOperand,
-                                         *request.rightOperand,
-                                         pBasisId,
-                                         pDisplay,
-                                         pOrder,
-                                         pIsMultiplicative,
-                                         targetBasisId,
-                                         targetDisplay,
-                                         targetOrder,
-                                         targetIsMultiplicative);
-      }
-
-    ERROR("unknown basis conversion pipeline");
-    return zero();
-  }
-
-SymmetricEngineRing::PowerSumsToTargetRoute
-SymmetricEngineRing::selectPowerSumsToTargetRoute(
-        const ConversionInput& input,
-        int pBasisId,
-        int targetBasisId,
-        const std::string& targetDisplay) const
-{
-    auto schurRoute = [&](bool omega) {
-      const char *forcedRoute = std::getenv(
-          "M2_SYMMETRIC_RINGS_FORCE_P_TO_S_ROUTE");
-      if (forcedRoute != nullptr)
-        {
-          std::string route(forcedRoute);
-          if (route == "border-strips")
-            return omega
-                ? PowerSumsToTargetRoute::ViaOmegaThenSchurBorderStrips
-                : PowerSumsToTargetRoute::ViaSchurBorderStrips;
-          if (route == "via-complete")
-            return omega
-                ? PowerSumsToTargetRoute::ViaOmegaThenSchurComplete
-                : PowerSumsToTargetRoute::ViaSchurComplete;
-          if (route == "grouped-characters")
-            return omega
-                ? PowerSumsToTargetRoute::ViaOmegaThenSchurCharacters
-                : PowerSumsToTargetRoute::ViaSchurCharacters;
-        }
-
-      const ConversionGuarantees& guarantees = input.guarantees;
-      if (guarantees.homogeneousWeight && guarantees.termCount)
-        {
-          int weight = *guarantees.homogeneousWeight;
-          size_t termCount = *guarantees.termCount;
-          if (weight >= 0 && weight <= groupedPowerSumCharacterMaxWeight &&
-              termCount >= groupedPowerSumCharacterMinTermCount)
-            return omega
-                ? PowerSumsToTargetRoute::ViaOmegaThenSchurCharacters
-                : PowerSumsToTargetRoute::ViaSchurCharacters;
-          bool denseAtFirstWeight =
-              weight == powerSumViaCompleteFirstWeight &&
-              termCount >= powerSumViaCompleteMinTermCountAtFirstWeight;
-          bool denseAboveFirstWeight =
-              weight > powerSumViaCompleteFirstWeight &&
-              termCount >= powerSumViaCompleteMinTermCountAboveFirstWeight;
-          if (denseAtFirstWeight || denseAboveFirstWeight)
-            return omega
-                ? PowerSumsToTargetRoute::ViaOmegaThenSchurComplete
-                : PowerSumsToTargetRoute::ViaSchurComplete;
-        }
-      return omega
-          ? PowerSumsToTargetRoute::ViaOmegaThenSchurBorderStrips
-          : PowerSumsToTargetRoute::ViaSchurBorderStrips;
-    };
-
-    if (targetBasisId == pBasisId)
-      return PowerSumsToTargetRoute::AlreadyInTarget;
-    if (targetDisplay == "S")
-      return schurRoute(false);
-    if (targetDisplay == "Somega")
-      return schurRoute(true);
-    if (targetDisplay == "h")
-      return PowerSumsToTargetRoute::ViaCompleteLogarithmFormula;
-    if (targetDisplay == "e")
-      return PowerSumsToTargetRoute::ViaElementaryLogarithmFormula;
-    if (targetDisplay == "q" || targetDisplay == "b")
-      return PowerSumsToTargetRoute::ViaHallLittlewoodGeneratorLogarithmFormula;
-    if (targetDisplay == "Q" || targetDisplay == "P" ||
-        targetDisplay == "B" || targetDisplay == "R")
-      {
-        const auto *poly = polyValue(input.expression);
-        Partition singleIndex;
-        bool hasSinglePowerSumIndex =
-            poly->terms.size() == 1 &&
-            powerSumIndexFromMonomial(
-                poly->terms.front().monomial, singleIndex) &&
-            !singleIndex.empty();
-        const char *forcedRoute = std::getenv(
-            "M2_SYMMETRIC_RINGS_FORCE_HALL_POWER_SUM_ROUTE");
-        if (forcedRoute != nullptr)
-          {
-            std::string route(forcedRoute);
-            if (route == "green-duality" && hasSinglePowerSumIndex)
-              return PowerSumsToTargetRoute::ViaHallLittlewoodGreenPolynomialsAndDuality;
-            if (route == "triangular")
-              return PowerSumsToTargetRoute::ViaHallLittlewoodTriangularReduction;
-          }
-        bool allTermsAreSingleCycles = !poly->terms.empty();
-        for (const auto& term : poly->terms)
-          {
-            Partition index;
-            if (!powerSumIndexFromMonomial(term.monomial, index) ||
-                index.size() > 1)
-              {
-                allTermsAreSingleCycles = false;
-                break;
-              }
-          }
-        if (allTermsAreSingleCycles)
-          return PowerSumsToTargetRoute::ViaHallLittlewoodSingleCycleGreenPolynomials;
-        if (hasSinglePowerSumIndex)
-          return PowerSumsToTargetRoute::ViaHallLittlewoodGreenPolynomialsAndDuality;
-        return PowerSumsToTargetRoute::ViaHallLittlewoodTriangularReduction;
-      }
-    if (targetDisplay == "m")
-      return PowerSumsToTargetRoute::ViaMonomialTransition;
-    if (isForgottenDisplay(targetDisplay))
-      return PowerSumsToTargetRoute::ViaForgottenTransition;
-    return PowerSumsToTargetRoute::ViaTermwiseFallback;
-  }
-
-SymmetricEngineRing::SourceToTargetRoute
-SymmetricEngineRing::selectSourceToTargetRoute(
-        const ConversionInput& input,
-        int pBasisId,
-        int targetBasisId,
-        const std::string& targetDisplay) const
-{
-    if (input.guarantees.targetClosed == KnownState::True)
-      return SourceToTargetRoute::AlreadyInTarget;
-
-    if (input.guarantees.expandedBasis &&
-        input.guarantees.normalized == KnownState::True &&
-        input.guarantees.skewFree == KnownState::True)
-      {
-        const std::string sourceDisplay =
-            displayForBasis(*input.guarantees.expandedBasis);
-        if ((sourceDisplay == "Q" && targetDisplay == "P") ||
-            (sourceDisplay == "P" && targetDisplay == "Q") ||
-            (sourceDisplay == "B" && targetDisplay == "R") ||
-            (sourceDisplay == "R" && targetDisplay == "B"))
-          return SourceToTargetRoute::ViaHallLittlewoodNormalization;
-        if ((sourceDisplay == "S" && targetDisplay == "Somega") ||
-            (sourceDisplay == "Somega" && targetDisplay == "S"))
-          return SourceToTargetRoute::ViaSchurOmegaConjugation;
-      }
-
-    if (input.guarantees.expandedBasis == pBasisId)
-      return SourceToTargetRoute::ViaSelectedPowerSumsToTargetRoute;
-
-    if (targetDisplay == "S")
-      {
-        int completeId = requiredBasisIdForDisplay("h");
-        if (error()) return SourceToTargetRoute::ViaPowerSumsThenCompleteThenSchur;
-        if (input.guarantees.pureBasis == completeId)
-          return SourceToTargetRoute::ViaCompleteToSchurRecursiveTransition;
-        return SourceToTargetRoute::ViaPowerSumsThenCompleteThenSchur;
-      }
-
-    return SourceToTargetRoute::ViaSourceToPowerSumsThenTarget;
-  }
-
-ring_elem SymmetricEngineRing::executeSourceToTargetRoute(
-        SourceToTargetRoute route,
-        const ConversionInput& input,
-        int pBasisId,
-        int targetBasisId,
-        const std::string& targetDisplay,
-        int targetOrder,
-        bool targetIsMultiplicative) const
-{
-    auto finish = [&](ring_elem result) {
-      if (!error())
-        {
-          ConversionGuarantees guarantees =
-              guaranteesAfterSourceTargetConversion(
-                  input.guarantees, result, targetBasisId);
-          attachConversionGuarantees(result, guarantees, input.origin);
-        }
-      return result;
-    };
-
-    if (route == SourceToTargetRoute::AlreadyInTarget)
-      return finish(copyPolyValue(polyValue(input.expression)));
-
-    if (route == SourceToTargetRoute::ViaHallLittlewoodNormalization)
-      {
-        int sourceBasisId = *input.guarantees.expandedBasis;
-        const std::string sourceDisplay = displayForBasis(sourceBasisId);
-        bool capitalToNormalized = sourceDisplay == "Q" || sourceDisplay == "B";
-        return finish(hallLittlewoodCapitalNormalizedConversionViaDiagonalScaling(
-            input.expression,
-            sourceBasisId,
-            targetBasisId,
-            targetDisplay,
-            targetOrder,
-            capitalToNormalized));
-      }
-
-    if (route == SourceToTargetRoute::ViaSchurOmegaConjugation)
-      return finish(schurOmegaConversionViaPartitionConjugation(
-          input.expression,
-          *input.guarantees.expandedBasis,
-          targetBasisId,
-          targetDisplay,
-          targetOrder));
-
-    if (route == SourceToTargetRoute::ViaSelectedPowerSumsToTargetRoute)
-      {
-        return finish(powerSumsToTargetDispatch(input,
-                                                pBasisId,
-                                                targetBasisId,
-                                                targetDisplay,
-                                                targetOrder,
-                                                targetIsMultiplicative));
-      }
-
-    if (route == SourceToTargetRoute::ViaCompleteToSchurRecursiveTransition)
-      {
-        int completeId = requiredBasisIdForDisplay("h");
-        if (error()) return zero();
-        return finish(completeToSchurViaRecursiveTransition(
-            input.expression,
-            completeId,
-            "h",
-            basisOrderForId(completeId),
-            isMultiplicativeBasis(completeId),
-            targetBasisId,
-            targetDisplay,
-            targetOrder));
-      }
-
-    ring_elem inPowerSums =
-        expressionToPowerSumsViaBasisElementRoutes(input.expression);
-    if (error()) return zero();
-    ConversionInput powerSumInput{
-        inPowerSums,
-        inferConversionGuarantees(inPowerSums, targetBasisId),
-        input.origin};
-    powerSumInput.guarantees.pureBasis = pBasisId;
-    powerSumInput.guarantees.expandedBasis = pBasisId;
-    if (!powerSumInput.guarantees.homogeneousWeight &&
-        input.guarantees.homogeneousWeight)
-      powerSumInput.guarantees.homogeneousWeight =
-          input.guarantees.homogeneousWeight;
-    powerSumInput.guarantees = strengthenConversionGuarantees(
-        std::move(powerSumInput.guarantees), targetBasisId);
-
-    if (route == SourceToTargetRoute::ViaPowerSumsThenCompleteThenSchur)
-      {
-        int completeId = requiredBasisIdForDisplay("h");
-        if (error()) return zero();
-        int completeOrder = basisOrderForId(completeId);
-        bool completeIsMultiplicative = isMultiplicativeBasis(completeId);
-        ring_elem inComplete = powerSumsToCompleteViaLogarithmFormula(
-            inPowerSums, completeId, completeOrder);
-        if (error()) return zero();
-        return finish(completeToSchurViaRecursiveTransition(
-            inComplete,
-            completeId,
-            "h",
-            completeOrder,
-            completeIsMultiplicative,
-            targetBasisId,
-            targetDisplay,
-            targetOrder));
-      }
-
-    return finish(powerSumsToTargetDispatch(powerSumInput,
-                                            pBasisId,
-                                            targetBasisId,
-                                            targetDisplay,
-                                            targetOrder,
-                                            targetIsMultiplicative));
-  }
-
-ring_elem SymmetricEngineRing::sourceToTargetDispatch(
-        const ConversionInput& input,
-        int pBasisId,
-        const std::string& pDisplay,
-        int pOrder,
-        bool pIsMultiplicative,
-        int targetBasisId,
-        const std::string& targetDisplay,
-        int targetOrder,
-        bool targetIsMultiplicative) const
-{
-    rememberBasis(pBasisId, pDisplay, pOrder, pIsMultiplicative);
-    rememberBasis(targetBasisId,
-                  targetDisplay,
-                  targetOrder,
-                  targetIsMultiplicative);
-    SourceToTargetRoute route = selectSourceToTargetRoute(
-        input, pBasisId, targetBasisId, targetDisplay);
-    if (error()) return zero();
-    traceSourceToTargetSelection(route, input, targetDisplay);
-    return executeSourceToTargetRoute(route,
-                                      input,
-                                      pBasisId,
-                                      targetBasisId,
-                                      targetDisplay,
-                                      targetOrder,
-                                      targetIsMultiplicative);
-  }
-
-const char *SymmetricEngineRing::powerSumsToTargetRouteName(
-    PowerSumsToTargetRoute route) const
-{
-    switch (route)
-      {
-        case PowerSumsToTargetRoute::AlreadyInTarget:
-          return "p->p:identity";
-        case PowerSumsToTargetRoute::ViaSchurBorderStrips:
-          return "p->S:border-strips";
-        case PowerSumsToTargetRoute::ViaSchurComplete:
-          return "p->h->S:recursive-transition";
-        case PowerSumsToTargetRoute::ViaSchurCharacters:
-          return "p->S:grouped-characters";
-        case PowerSumsToTargetRoute::ViaOmegaThenSchurBorderStrips:
-          return "p->omega(p)->S->Somega:border-strips";
-        case PowerSumsToTargetRoute::ViaOmegaThenSchurComplete:
-          return "p->omega(p)->h->S->Somega";
-        case PowerSumsToTargetRoute::ViaOmegaThenSchurCharacters:
-          return "p->omega(p)->S->Somega:grouped-characters";
-        case PowerSumsToTargetRoute::ViaCompleteLogarithmFormula:
-          return "p->h:logarithm-formula";
-        case PowerSumsToTargetRoute::ViaElementaryLogarithmFormula:
-          return "p->e:logarithm-formula";
-        case PowerSumsToTargetRoute::ViaHallLittlewoodGeneratorLogarithmFormula:
-          return "p->q/b:logarithm-formula";
-        case PowerSumsToTargetRoute::ViaHallLittlewoodSingleCycleGreenPolynomials:
-          return "single-cycle-p-terms->Hall-Littlewood:Green-polynomials";
-        case PowerSumsToTargetRoute::ViaHallLittlewoodGreenPolynomialsAndDuality:
-          return "p_mu->Hall-Littlewood:Green-polynomials-via-duality";
-        case PowerSumsToTargetRoute::ViaHallLittlewoodTriangularReduction:
-          return "p->Hall-Littlewood:triangular-reduction";
-        case PowerSumsToTargetRoute::ViaMonomialTransition:
-          return "p->m:transition";
-        case PowerSumsToTargetRoute::ViaForgottenTransition:
-          return "p->ff:transition";
-        case PowerSumsToTargetRoute::ViaTermwiseFallback:
-          return "p->target:termwise-fallback";
-      }
-    return "p->target:unknown";
-  }
-
-const char *SymmetricEngineRing::sourceToTargetRouteName(
-    SourceToTargetRoute route) const
-{
-    switch (route)
-      {
-        case SourceToTargetRoute::AlreadyInTarget:
-          return "already-in-target";
-        case SourceToTargetRoute::ViaHallLittlewoodNormalization:
-          return "Hall-Littlewood-capital-normalized:diagonal-scaling";
-        case SourceToTargetRoute::ViaSchurOmegaConjugation:
-          return "Schur-omega:partition-conjugation";
-        case SourceToTargetRoute::ViaSelectedPowerSumsToTargetRoute:
-          return "expanded-p->selected-p-target-route";
-        case SourceToTargetRoute::ViaCompleteToSchurRecursiveTransition:
-          return "h->S:recursive-transition";
-        case SourceToTargetRoute::ViaPowerSumsThenCompleteThenSchur:
-          return "source->p->h->S";
-        case SourceToTargetRoute::ViaSourceToPowerSumsThenTarget:
-          return "source->p->target";
-      }
-    return "unknown";
-  }
-
-const char *SymmetricEngineRing::productExpansionMethodName(
-    ProductExpansionMethod method) const
-{
-    switch (method)
-      {
-        case ProductExpansionMethod::ViaLittlewoodRichardson:
-          return "littlewood-richardson";
-        case ProductExpansionMethod::ViaHorizontalPieri:
-          return "horizontal-pieri";
-        case ProductExpansionMethod::ViaVerticalPieri:
-          return "vertical-pieri";
-        case ProductExpansionMethod::ViaBorderStrips:
-          return "border-strips";
-        case ProductExpansionMethod::ViaSchurCompatibleRules:
-          return "schur-compatible-rules";
-        case ProductExpansionMethod::ViaFactorwiseConversion:
-          return "factorwise-conversion";
-        case ProductExpansionMethod::NoApplicableMethod:
-          return "source-target-fallback";
-      }
-    return "unknown";
-  }
-
-const char *SymmetricEngineRing::conversionPipelineName(
-        ConversionPipeline pipeline) const
-{
-    switch (pipeline)
-      {
-        case ConversionPipeline::WholeExpression: return "whole-expression";
-        case ConversionPipeline::GroupedMultiplicativeTarget:
-          return "grouped-multiplicative-target";
-        case ConversionPipeline::GroupedHallLittlewood:
-          return "grouped-hall-littlewood";
-        case ConversionPipeline::PowerSums: return "power-sums";
-        case ConversionPipeline::PostPlethysmPowerSums:
-          return "post-plethysm-power-sums";
-        case ConversionPipeline::FallbackTerm: return "fallback-term";
-        case ConversionPipeline::FactorizedProduct: return "factorized-product";
-        case ConversionPipeline::PostPlethysm: return "post-plethysm";
-      }
-    return "unknown";
-  }
-
-void SymmetricEngineRing::traceConversionSelection(
-        ConversionPipeline pipeline,
-        const ConversionRequest& request,
-        const std::string& targetDisplay) const
-{
-    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
-    const ConversionInput& input = request.input;
-
-    auto knownInt = [](const std::optional<int>& value) {
-      return value ? std::to_string(*value) : std::string("unknown");
-    };
-    auto knownSize = [](const std::optional<size_t>& value) {
-      return value ? std::to_string(*value) : std::string("unknown");
-    };
-    auto knownDouble = [](const std::optional<double>& value) {
-      return value ? std::to_string(*value) : std::string("unknown");
-    };
-    const char *route = "pipeline-defined";
-    if ((pipeline == ConversionPipeline::PowerSums ||
-         pipeline == ConversionPipeline::PostPlethysmPowerSums))
-      {
-        int pBasisId = basisIdForDisplay("p");
-        int targetBasisId = basisIdForDisplay(targetDisplay);
-        if (pBasisId >= 0 && targetBasisId >= 0)
-          route = powerSumsToTargetRouteName(
-              selectPowerSumsToTargetRoute(
-                  input, pBasisId, targetBasisId, targetDisplay));
-      }
-
-    std::fprintf(stderr,
-                 "SymmetricRings conversion: pipeline=%s route=%s target=%s "
-                 "pureBasis=%s expandedBasis=%s terms=%s weight=%s "
-                 "maxLength=%s density=%s\n",
-                 conversionPipelineName(pipeline),
-                 route,
-                 targetDisplay.c_str(),
-                 knownInt(input.guarantees.pureBasis).c_str(),
-                 knownInt(input.guarantees.expandedBasis).c_str(),
-                 knownSize(input.guarantees.termCount).c_str(),
-                 knownInt(input.guarantees.homogeneousWeight).c_str(),
-                 knownSize(input.guarantees.maximumPartitionLength).c_str(),
-                 knownDouble(input.guarantees.density).c_str());
-  }
-
-void SymmetricEngineRing::traceSourceToTargetSelection(
-        SourceToTargetRoute route,
-        const ConversionInput& input,
-        const std::string& targetDisplay) const
-{
-    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
-    std::string source = "mixed";
-    if (input.guarantees.expandedBasis)
-      source = displayForBasis(*input.guarantees.expandedBasis);
-    else if (input.guarantees.pureBasis)
-      source = displayForBasis(*input.guarantees.pureBasis);
-    std::fprintf(stderr,
-                 "SymmetricRings source-target: source=%s target=%s route=%s\n",
-                 source.c_str(),
-                 targetDisplay.c_str(),
-                 sourceToTargetRouteName(route));
-  }
-
-void SymmetricEngineRing::tracePowerSumsToTargetSelection(
-        PowerSumsToTargetRoute route,
-        const std::string& targetDisplay) const
-{
-    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
-    std::fprintf(stderr,
-                 "SymmetricRings power-sums-target: target=%s route=%s\n",
-                 targetDisplay.c_str(),
-                 powerSumsToTargetRouteName(route));
-  }
-
-void SymmetricEngineRing::traceProductExpansionSelection(
-        ProductExpansionMethod method,
-        const TermConversionClassification& classification) const
-{
-    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
-    std::ostringstream factors;
-    for (size_t i = 0; i < classification.factorDisplays.size(); ++i)
-      {
-        if (i != 0) factors << ",";
-        factors << classification.factorDisplays[i];
-      }
-    std::fprintf(stderr,
-                 "SymmetricRings product-expansion: factors=%s target=%s "
-                 "method=%s\n",
-                 factors.str().c_str(),
-                 classification.targetDisplay.c_str(),
-                 productExpansionMethodName(method));
-  }
+// ============================================================================
+// Conversion Guarantees And Profiles
+// ============================================================================
+// Expression facts are inferred once and updated as pipeline stages change them.
 
 SymmetricEngineRing::ConversionGuarantees
 SymmetricEngineRing::inferConversionGuarantees(
@@ -1029,6 +392,230 @@ void SymmetricEngineRing::attachConversionGuarantees(
     mutablePolyValue(f)->conversionMetadata = std::move(metadata);
   }
 
+// ============================================================================
+// Top-Level Conversion Pipeline
+// ============================================================================
+// The selector chooses a workflow; execution delegates to one named pipeline.
+
+SymmetricEngineRing::ConversionPipeline SymmetricEngineRing::selectConversionPipeline(
+        const ConversionRequest& request,
+        int pBasisId,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        bool targetIsMultiplicative) const
+{
+    if (request.kind == ConversionRequestKind::FactorizedProduct)
+      return ConversionPipeline::FactorizedProduct;
+    if (request.kind == ConversionRequestKind::PostPlethysm)
+      return ConversionPipeline::PostPlethysm;
+
+    const ConversionInput& input = request.input;
+    if (input.origin == SymmetricConversionOrigin::Plethysm &&
+        input.guarantees.expandedBasis == pBasisId)
+      return ConversionPipeline::PostPlethysmPowerSums;
+    if (input.guarantees.expandedBasis == pBasisId)
+      return ConversionPipeline::PowerSums;
+
+    if (targetIsMultiplicative &&
+        input.guarantees.normalized == KnownState::True &&
+        input.guarantees.skewFree == KnownState::True)
+      return ConversionPipeline::GroupedMultiplicativeTarget;
+
+    if (canUseGroupedHallLittlewoodPipeline(input.guarantees, targetDisplay))
+      return ConversionPipeline::GroupedHallLittlewood;
+
+    if (canUseWholeExpressionPipeline(input.guarantees,
+                                      targetBasisId,
+                                      targetDisplay,
+                                      targetIsMultiplicative))
+      return ConversionPipeline::WholeExpression;
+
+    return ConversionPipeline::FallbackTerm;
+  }
+
+const char *SymmetricEngineRing::conversionPipelineName(
+        ConversionPipeline pipeline) const
+{
+    switch (pipeline)
+      {
+        case ConversionPipeline::WholeExpression: return "whole-expression";
+        case ConversionPipeline::GroupedMultiplicativeTarget:
+          return "grouped-multiplicative-target";
+        case ConversionPipeline::GroupedHallLittlewood:
+          return "grouped-hall-littlewood";
+        case ConversionPipeline::PowerSums: return "power-sums";
+        case ConversionPipeline::PostPlethysmPowerSums:
+          return "post-plethysm-power-sums";
+        case ConversionPipeline::FallbackTerm: return "fallback-term";
+        case ConversionPipeline::FactorizedProduct: return "factorized-product";
+        case ConversionPipeline::PostPlethysm: return "post-plethysm";
+      }
+    return "unknown";
+  }
+
+void SymmetricEngineRing::traceConversionSelection(
+        ConversionPipeline pipeline,
+        const ConversionRequest& request,
+        const std::string& targetDisplay) const
+{
+    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
+    const ConversionInput& input = request.input;
+
+    auto knownInt = [](const std::optional<int>& value) {
+      return value ? std::to_string(*value) : std::string("unknown");
+    };
+    auto knownSize = [](const std::optional<size_t>& value) {
+      return value ? std::to_string(*value) : std::string("unknown");
+    };
+    auto knownDouble = [](const std::optional<double>& value) {
+      return value ? std::to_string(*value) : std::string("unknown");
+    };
+    const char *route = "pipeline-defined";
+    if ((pipeline == ConversionPipeline::PowerSums ||
+         pipeline == ConversionPipeline::PostPlethysmPowerSums))
+      {
+        int pBasisId = basisIdForDisplay("p");
+        int targetBasisId = basisIdForDisplay(targetDisplay);
+        if (pBasisId >= 0 && targetBasisId >= 0)
+          route = powerSumsToTargetRouteName(
+              selectPowerSumsToTargetRoute(
+                  input, pBasisId, targetBasisId, targetDisplay));
+      }
+
+    std::fprintf(stderr,
+                 "SymmetricRings conversion: pipeline=%s route=%s target=%s "
+                 "pureBasis=%s expandedBasis=%s terms=%s weight=%s "
+                 "maxLength=%s density=%s\n",
+                 conversionPipelineName(pipeline),
+                 route,
+                 targetDisplay.c_str(),
+                 knownInt(input.guarantees.pureBasis).c_str(),
+                 knownInt(input.guarantees.expandedBasis).c_str(),
+                 knownSize(input.guarantees.termCount).c_str(),
+                 knownInt(input.guarantees.homogeneousWeight).c_str(),
+                 knownSize(input.guarantees.maximumPartitionLength).c_str(),
+                 knownDouble(input.guarantees.density).c_str());
+  }
+
+ring_elem SymmetricEngineRing::executeConversionPipeline(
+        ConversionPipeline pipeline,
+        const ConversionRequest& request,
+        int pBasisId,
+        const std::string& pDisplay,
+        int pOrder,
+        bool pIsMultiplicative,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetOrder,
+        bool targetIsMultiplicative) const
+{
+    const ConversionInput& input = request.input;
+    switch (pipeline)
+      {
+        case ConversionPipeline::WholeExpression:
+          return runWholeExpressionPipeline(input,
+                                         pBasisId,
+                                         pDisplay,
+                                         pOrder,
+                                         pIsMultiplicative,
+                                         targetBasisId,
+                                         targetDisplay,
+                                         targetOrder,
+                                         targetIsMultiplicative);
+        case ConversionPipeline::GroupedMultiplicativeTarget:
+          return runGroupedMultiplicativeTargetPipeline(input,
+                                         pBasisId,
+                                         pDisplay,
+                                         pOrder,
+                                         pIsMultiplicative,
+                                         targetBasisId,
+                                         targetDisplay,
+                                         targetOrder,
+                                         targetIsMultiplicative);
+        case ConversionPipeline::GroupedHallLittlewood:
+          return runGroupedHallLittlewoodPipeline(input,
+                                         pBasisId,
+                                         pDisplay,
+                                         pOrder,
+                                         pIsMultiplicative,
+                                         targetBasisId,
+                                         targetDisplay,
+                                         targetOrder,
+                                         targetIsMultiplicative);
+        case ConversionPipeline::PowerSums:
+          return runPowerSumsPipeline(input,
+                                  pBasisId,
+                                  pDisplay,
+                                  pOrder,
+                                  pIsMultiplicative,
+                                  targetBasisId,
+                                  targetDisplay,
+                                  targetOrder,
+                                  targetIsMultiplicative);
+        case ConversionPipeline::PostPlethysmPowerSums:
+          return runPostPlethysmPowerSumsPipeline(input,
+                                  pBasisId,
+                                  pDisplay,
+                                  pOrder,
+                                  pIsMultiplicative,
+                                  targetBasisId,
+                                  targetDisplay,
+                                  targetOrder,
+                                  targetIsMultiplicative);
+        case ConversionPipeline::FallbackTerm:
+          return runFallbackTermPipeline(input,
+                                      pBasisId,
+                                      pDisplay,
+                                      pOrder,
+                                      pIsMultiplicative,
+                                      targetBasisId,
+                                      targetDisplay,
+                                      targetOrder,
+                                      targetIsMultiplicative);
+        case ConversionPipeline::FactorizedProduct:
+          if (!request.leftOperand || !request.rightOperand)
+            {
+              ERROR("factorized-product conversion requires two operands");
+              return zero();
+            }
+          return runFactorizedProductPipeline(*request.leftOperand,
+                                           *request.rightOperand,
+                                           pBasisId,
+                                           pDisplay,
+                                           pOrder,
+                                           pIsMultiplicative,
+                                           targetBasisId,
+                                           targetDisplay,
+                                           targetOrder,
+                                           targetIsMultiplicative);
+        case ConversionPipeline::PostPlethysm:
+          if (!request.leftOperand || !request.rightOperand)
+            {
+              ERROR("post-plethysm conversion requires two operands");
+              return zero();
+            }
+          return runPostPlethysmPipeline(input,
+                                         *request.leftOperand,
+                                         *request.rightOperand,
+                                         pBasisId,
+                                         pDisplay,
+                                         pOrder,
+                                         pIsMultiplicative,
+                                         targetBasisId,
+                                         targetDisplay,
+                                         targetOrder,
+                                         targetIsMultiplicative);
+      }
+
+    ERROR("unknown basis conversion pipeline");
+    return zero();
+  }
+
+// ============================================================================
+// Whole-Expression Pipeline
+// ============================================================================
+// Whole-expression routes avoid termwise work when guarantees permit it.
+
 bool SymmetricEngineRing::canUseWholeExpressionPipeline(
         const ConversionGuarantees& guarantees,
         int targetBasisId,
@@ -1081,31 +668,6 @@ bool SymmetricEngineRing::canUseWholeExpressionPipeline(
                                  "S", "Somega", "Q", "B", "P", "R"});
   }
 
-bool SymmetricEngineRing::canUseGroupedHallLittlewoodPipeline(
-        const ConversionGuarantees& guarantees,
-        const std::string& targetDisplay) const
-{
-    if (targetDisplay != "Q" && targetDisplay != "P" &&
-        targetDisplay != "B" && targetDisplay != "R")
-      return false;
-    if (guarantees.normalized != KnownState::True ||
-        guarantees.skewFree != KnownState::True || !guarantees.factorBases)
-      return false;
-    const std::string generator =
-        targetDisplay == "Q" || targetDisplay == "P" ? "q" : "b";
-    for (int basisId : *guarantees.factorBases)
-      if (displayForBasis(basisId) != generator) return false;
-    const char *forced = std::getenv(
-        "M2_SYMMETRIC_RINGS_FORCE_HALL_LITTLEWOOD_PIPELINE");
-    if (forced != nullptr)
-      {
-        std::string choice(forced);
-        if (choice == "grouped") return true;
-        if (choice == "fallback") return false;
-      }
-    return true;
-  }
-
 SymmetricEngineRing::WholeExpressionRoute
 SymmetricEngineRing::selectWholeExpressionRoute(
         const ConversionInput& input,
@@ -1144,6 +706,46 @@ SymmetricEngineRing::selectWholeExpressionRoute(
       return WholeExpressionRoute::ViaHallLittlewoodTriangularReduction;
     (void) targetBasisId;
     return WholeExpressionRoute::NoApplicableRoute;
+  }
+
+const char *SymmetricEngineRing::wholeExpressionRouteName(
+        WholeExpressionRoute route) const
+{
+    switch (route)
+      {
+        case WholeExpressionRoute::AlreadyInTarget:
+          return "already-in-target";
+        case WholeExpressionRoute::ViaCompleteToSchurRecursiveTransition:
+          return "h->S:recursive-transition";
+        case WholeExpressionRoute::ViaSchurCompatibleProducts:
+          return "Schur-compatible-products";
+        case WholeExpressionRoute::ViaSchurTriangularReduction:
+          return "Schur-triangular-reduction";
+        case WholeExpressionRoute::ViaHallLittlewoodNormalization:
+          return "Hall-Littlewood-capital-normalized:diagonal-scaling";
+        case WholeExpressionRoute::ViaSchurOmegaConjugation:
+          return "Schur-omega:partition-conjugation";
+        case WholeExpressionRoute::ViaHallLittlewoodTriangularReduction:
+          return "Hall-Littlewood-triangular-reduction";
+        case WholeExpressionRoute::NoApplicableRoute:
+          return "source-target-fallback";
+      }
+    return "unknown";
+  }
+
+void SymmetricEngineRing::traceWholeExpressionSelection(
+        WholeExpressionRoute route,
+        const ConversionInput& input,
+        const std::string& targetDisplay) const
+{
+    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
+    std::fprintf(stderr,
+                 "SymmetricRings whole-expression: target=%s route=%s "
+                 "terms=%zu\n",
+                 targetDisplay.c_str(),
+                 wholeExpressionRouteName(route),
+                 input.guarantees.termCount.value_or(
+                     polyValue(input.expression)->terms.size()));
   }
 
 bool SymmetricEngineRing::executeWholeExpressionRoute(
@@ -1219,46 +821,6 @@ bool SymmetricEngineRing::executeWholeExpressionRoute(
     return false;
   }
 
-const char *SymmetricEngineRing::wholeExpressionRouteName(
-        WholeExpressionRoute route) const
-{
-    switch (route)
-      {
-        case WholeExpressionRoute::AlreadyInTarget:
-          return "already-in-target";
-        case WholeExpressionRoute::ViaCompleteToSchurRecursiveTransition:
-          return "h->S:recursive-transition";
-        case WholeExpressionRoute::ViaSchurCompatibleProducts:
-          return "Schur-compatible-products";
-        case WholeExpressionRoute::ViaSchurTriangularReduction:
-          return "Schur-triangular-reduction";
-        case WholeExpressionRoute::ViaHallLittlewoodNormalization:
-          return "Hall-Littlewood-capital-normalized:diagonal-scaling";
-        case WholeExpressionRoute::ViaSchurOmegaConjugation:
-          return "Schur-omega:partition-conjugation";
-        case WholeExpressionRoute::ViaHallLittlewoodTriangularReduction:
-          return "Hall-Littlewood-triangular-reduction";
-        case WholeExpressionRoute::NoApplicableRoute:
-          return "source-target-fallback";
-      }
-    return "unknown";
-  }
-
-void SymmetricEngineRing::traceWholeExpressionSelection(
-        WholeExpressionRoute route,
-        const ConversionInput& input,
-        const std::string& targetDisplay) const
-{
-    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
-    std::fprintf(stderr,
-                 "SymmetricRings whole-expression: target=%s route=%s "
-                 "terms=%zu\n",
-                 targetDisplay.c_str(),
-                 wholeExpressionRouteName(route),
-                 input.guarantees.termCount.value_or(
-                     polyValue(input.expression)->terms.size()));
-  }
-
 ring_elem SymmetricEngineRing::runWholeExpressionPipeline(
         const ConversionInput& input,
         int pBasisId,
@@ -1300,122 +862,170 @@ ring_elem SymmetricEngineRing::runWholeExpressionPipeline(
                                   targetIsMultiplicative);
   }
 
-ring_elem SymmetricEngineRing::runGroupedMultiplicativeTargetPipeline(
+// ============================================================================
+// Power-Sums-To-Target Dispatch
+// ============================================================================
+// All p-to-target route choices are visible together in this dispatcher family.
+
+SymmetricEngineRing::PowerSumsToTargetRoute
+SymmetricEngineRing::selectPowerSumsToTargetRoute(
         const ConversionInput& input,
         int pBasisId,
-        const std::string& pDisplay,
-        int pOrder,
-        bool pIsMultiplicative,
         int targetBasisId,
-        const std::string& targetDisplay,
-        int targetOrder,
-        bool targetIsMultiplicative) const
+        const std::string& targetDisplay) const
 {
-    ring_elem result;
-    if (tryExpressionToTarget(input.expression,
-                              targetBasisId,
-                              targetDisplay,
-                              targetOrder,
-                              targetIsMultiplicative,
-                              result))
+    auto schurRoute = [&](bool omega) {
+      const char *forcedRoute = std::getenv(
+          "M2_SYMMETRIC_RINGS_FORCE_P_TO_S_ROUTE");
+      if (forcedRoute != nullptr)
+        {
+          std::string route(forcedRoute);
+          if (route == "border-strips")
+            return omega
+                ? PowerSumsToTargetRoute::ViaOmegaThenSchurBorderStrips
+                : PowerSumsToTargetRoute::ViaSchurBorderStrips;
+          if (route == "via-complete")
+            return omega
+                ? PowerSumsToTargetRoute::ViaOmegaThenSchurComplete
+                : PowerSumsToTargetRoute::ViaSchurComplete;
+          if (route == "grouped-characters")
+            return omega
+                ? PowerSumsToTargetRoute::ViaOmegaThenSchurCharacters
+                : PowerSumsToTargetRoute::ViaSchurCharacters;
+        }
+
+      const ConversionGuarantees& guarantees = input.guarantees;
+      if (guarantees.homogeneousWeight && guarantees.termCount)
+        {
+          int weight = *guarantees.homogeneousWeight;
+          size_t termCount = *guarantees.termCount;
+          if (weight >= 0 && weight <= groupedPowerSumCharacterMaxWeight &&
+              termCount >= groupedPowerSumCharacterMinTermCount)
+            return omega
+                ? PowerSumsToTargetRoute::ViaOmegaThenSchurCharacters
+                : PowerSumsToTargetRoute::ViaSchurCharacters;
+          bool denseAtFirstWeight =
+              weight == powerSumViaCompleteFirstWeight &&
+              termCount >= powerSumViaCompleteMinTermCountAtFirstWeight;
+          bool denseAboveFirstWeight =
+              weight > powerSumViaCompleteFirstWeight &&
+              termCount >= powerSumViaCompleteMinTermCountAboveFirstWeight;
+          if (denseAtFirstWeight || denseAboveFirstWeight)
+            return omega
+                ? PowerSumsToTargetRoute::ViaOmegaThenSchurComplete
+                : PowerSumsToTargetRoute::ViaSchurComplete;
+        }
+      return omega
+          ? PowerSumsToTargetRoute::ViaOmegaThenSchurBorderStrips
+          : PowerSumsToTargetRoute::ViaSchurBorderStrips;
+    };
+
+    if (targetBasisId == pBasisId)
+      return PowerSumsToTargetRoute::AlreadyInTarget;
+    if (targetDisplay == "S")
+      return schurRoute(false);
+    if (targetDisplay == "Somega")
+      return schurRoute(true);
+    if (targetDisplay == "h")
+      return PowerSumsToTargetRoute::ViaCompleteLogarithmFormula;
+    if (targetDisplay == "e")
+      return PowerSumsToTargetRoute::ViaElementaryLogarithmFormula;
+    if (targetDisplay == "q" || targetDisplay == "b")
+      return PowerSumsToTargetRoute::ViaHallLittlewoodGeneratorLogarithmFormula;
+    if (targetDisplay == "Q" || targetDisplay == "P" ||
+        targetDisplay == "B" || targetDisplay == "R")
       {
-        ConversionGuarantees guarantees =
-            guaranteesAfterSourceTargetConversion(
-                input.guarantees, result, targetBasisId);
-        attachConversionGuarantees(result, guarantees, input.origin);
-        return result;
+        const auto *poly = polyValue(input.expression);
+        Partition singleIndex;
+        bool hasSinglePowerSumIndex =
+            poly->terms.size() == 1 &&
+            powerSumIndexFromMonomial(
+                poly->terms.front().monomial, singleIndex) &&
+            !singleIndex.empty();
+        const char *forcedRoute = std::getenv(
+            "M2_SYMMETRIC_RINGS_FORCE_HALL_POWER_SUM_ROUTE");
+        if (forcedRoute != nullptr)
+          {
+            std::string route(forcedRoute);
+            if (route == "green-duality" && hasSinglePowerSumIndex)
+              return PowerSumsToTargetRoute::ViaHallLittlewoodGreenPolynomialsAndDuality;
+            if (route == "triangular")
+              return PowerSumsToTargetRoute::ViaHallLittlewoodTriangularReduction;
+          }
+        bool allTermsAreSingleCycles = !poly->terms.empty();
+        for (const auto& term : poly->terms)
+          {
+            Partition index;
+            if (!powerSumIndexFromMonomial(term.monomial, index) ||
+                index.size() > 1)
+              {
+                allTermsAreSingleCycles = false;
+                break;
+              }
+          }
+        if (allTermsAreSingleCycles)
+          return PowerSumsToTargetRoute::ViaHallLittlewoodSingleCycleGreenPolynomials;
+        if (hasSinglePowerSumIndex)
+          return PowerSumsToTargetRoute::ViaHallLittlewoodGreenPolynomialsAndDuality;
+        return PowerSumsToTargetRoute::ViaHallLittlewoodTriangularReduction;
       }
-    if (error()) return zero();
-    return sourceToTargetDispatch(input,
-                                  pBasisId,
-                                  pDisplay,
-                                  pOrder,
-                                  pIsMultiplicative,
-                                  targetBasisId,
-                                  targetDisplay,
-                                  targetOrder,
-                                  targetIsMultiplicative);
+    if (targetDisplay == "m")
+      return PowerSumsToTargetRoute::ViaMonomialTransition;
+    if (isForgottenDisplay(targetDisplay))
+      return PowerSumsToTargetRoute::ViaForgottenTransition;
+    return PowerSumsToTargetRoute::ViaTermwiseFallback;
   }
 
-ring_elem SymmetricEngineRing::runGroupedHallLittlewoodPipeline(
-        const ConversionInput& input,
-        int pBasisId,
-        const std::string& pDisplay,
-        int pOrder,
-        bool pIsMultiplicative,
-        int targetBasisId,
-        const std::string& targetDisplay,
-        int targetOrder,
-        bool targetIsMultiplicative) const
+const char *SymmetricEngineRing::powerSumsToTargetRouteName(
+    PowerSumsToTargetRoute route) const
 {
-    ring_elem result;
-    if (tryExpressionToHallLittlewoodViaTriangularReduction(
-            input.expression,
-            targetBasisId,
-            targetDisplay,
-            targetOrder,
-            result))
+    switch (route)
       {
-        ConversionGuarantees guarantees =
-            guaranteesAfterSourceTargetConversion(
-                input.guarantees, result, targetBasisId);
-        attachConversionGuarantees(result, guarantees, input.origin);
-        return result;
+        case PowerSumsToTargetRoute::AlreadyInTarget:
+          return "p->p:identity";
+        case PowerSumsToTargetRoute::ViaSchurBorderStrips:
+          return "p->S:border-strips";
+        case PowerSumsToTargetRoute::ViaSchurComplete:
+          return "p->h->S:recursive-transition";
+        case PowerSumsToTargetRoute::ViaSchurCharacters:
+          return "p->S:grouped-characters";
+        case PowerSumsToTargetRoute::ViaOmegaThenSchurBorderStrips:
+          return "p->omega(p)->S->Somega:border-strips";
+        case PowerSumsToTargetRoute::ViaOmegaThenSchurComplete:
+          return "p->omega(p)->h->S->Somega";
+        case PowerSumsToTargetRoute::ViaOmegaThenSchurCharacters:
+          return "p->omega(p)->S->Somega:grouped-characters";
+        case PowerSumsToTargetRoute::ViaCompleteLogarithmFormula:
+          return "p->h:logarithm-formula";
+        case PowerSumsToTargetRoute::ViaElementaryLogarithmFormula:
+          return "p->e:logarithm-formula";
+        case PowerSumsToTargetRoute::ViaHallLittlewoodGeneratorLogarithmFormula:
+          return "p->q/b:logarithm-formula";
+        case PowerSumsToTargetRoute::ViaHallLittlewoodSingleCycleGreenPolynomials:
+          return "single-cycle-p-terms->Hall-Littlewood:Green-polynomials";
+        case PowerSumsToTargetRoute::ViaHallLittlewoodGreenPolynomialsAndDuality:
+          return "p_mu->Hall-Littlewood:Green-polynomials-via-duality";
+        case PowerSumsToTargetRoute::ViaHallLittlewoodTriangularReduction:
+          return "p->Hall-Littlewood:triangular-reduction";
+        case PowerSumsToTargetRoute::ViaMonomialTransition:
+          return "p->m:transition";
+        case PowerSumsToTargetRoute::ViaForgottenTransition:
+          return "p->ff:transition";
+        case PowerSumsToTargetRoute::ViaTermwiseFallback:
+          return "p->target:termwise-fallback";
       }
-    if (error()) return zero();
-    return sourceToTargetDispatch(input,
-                                  pBasisId,
-                                  pDisplay,
-                                  pOrder,
-                                  pIsMultiplicative,
-                                  targetBasisId,
-                                  targetDisplay,
-                                  targetOrder,
-                                  targetIsMultiplicative);
+    return "p->target:unknown";
   }
 
-ring_elem SymmetricEngineRing::runPowerSumsPipeline(
-        const ConversionInput& input,
-        int pBasisId,
-        const std::string& pDisplay,
-        int pOrder,
-        bool pIsMultiplicative,
-        int targetBasisId,
-        const std::string& targetDisplay,
-        int targetOrder,
-        bool targetIsMultiplicative) const
+void SymmetricEngineRing::tracePowerSumsToTargetSelection(
+        PowerSumsToTargetRoute route,
+        const std::string& targetDisplay) const
 {
-    return sourceToTargetDispatch(input,
-                                  pBasisId,
-                                  pDisplay,
-                                  pOrder,
-                                  pIsMultiplicative,
-                                  targetBasisId,
-                                  targetDisplay,
-                                  targetOrder,
-                                  targetIsMultiplicative);
-  }
-
-ring_elem SymmetricEngineRing::runPostPlethysmPowerSumsPipeline(
-        const ConversionInput& input,
-        int pBasisId,
-        const std::string& pDisplay,
-        int pOrder,
-        bool pIsMultiplicative,
-        int targetBasisId,
-        const std::string& targetDisplay,
-        int targetOrder,
-        bool targetIsMultiplicative) const
-{
-    return sourceToTargetDispatch(input,
-                                  pBasisId,
-                                  pDisplay,
-                                  pOrder,
-                                  pIsMultiplicative,
-                                  targetBasisId,
-                                  targetDisplay,
-                                  targetOrder,
-                                  targetIsMultiplicative);
+    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
+    std::fprintf(stderr,
+                 "SymmetricRings power-sums-target: target=%s route=%s\n",
+                 targetDisplay.c_str(),
+                 powerSumsToTargetRouteName(route));
   }
 
 ring_elem SymmetricEngineRing::executePowerSumsToTargetRoute(
@@ -1557,6 +1167,579 @@ ring_elem SymmetricEngineRing::powerSumsToSchurViaComplete(
                                                  targetOrder);
   }
 
+ring_elem SymmetricEngineRing::runPowerSumsPipeline(
+        const ConversionInput& input,
+        int pBasisId,
+        const std::string& pDisplay,
+        int pOrder,
+        bool pIsMultiplicative,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetOrder,
+        bool targetIsMultiplicative) const
+{
+    return sourceToTargetDispatch(input,
+                                  pBasisId,
+                                  pDisplay,
+                                  pOrder,
+                                  pIsMultiplicative,
+                                  targetBasisId,
+                                  targetDisplay,
+                                  targetOrder,
+                                  targetIsMultiplicative);
+  }
+
+ring_elem SymmetricEngineRing::runPostPlethysmPowerSumsPipeline(
+        const ConversionInput& input,
+        int pBasisId,
+        const std::string& pDisplay,
+        int pOrder,
+        bool pIsMultiplicative,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetOrder,
+        bool targetIsMultiplicative) const
+{
+    return sourceToTargetDispatch(input,
+                                  pBasisId,
+                                  pDisplay,
+                                  pOrder,
+                                  pIsMultiplicative,
+                                  targetBasisId,
+                                  targetDisplay,
+                                  targetOrder,
+                                  targetIsMultiplicative);
+  }
+
+// ============================================================================
+// General Source-To-Target Dispatch
+// ============================================================================
+// General conversion selects a direct route or composes source-to-p and p-to-target.
+
+SymmetricEngineRing::SourceToTargetRoute
+SymmetricEngineRing::selectSourceToTargetRoute(
+        const ConversionInput& input,
+        int pBasisId,
+        int targetBasisId,
+        const std::string& targetDisplay) const
+{
+    if (input.guarantees.targetClosed == KnownState::True)
+      return SourceToTargetRoute::AlreadyInTarget;
+
+    if (input.guarantees.expandedBasis &&
+        input.guarantees.normalized == KnownState::True &&
+        input.guarantees.skewFree == KnownState::True)
+      {
+        const std::string sourceDisplay =
+            displayForBasis(*input.guarantees.expandedBasis);
+        if ((sourceDisplay == "Q" && targetDisplay == "P") ||
+            (sourceDisplay == "P" && targetDisplay == "Q") ||
+            (sourceDisplay == "B" && targetDisplay == "R") ||
+            (sourceDisplay == "R" && targetDisplay == "B"))
+          return SourceToTargetRoute::ViaHallLittlewoodNormalization;
+        if ((sourceDisplay == "S" && targetDisplay == "Somega") ||
+            (sourceDisplay == "Somega" && targetDisplay == "S"))
+          return SourceToTargetRoute::ViaSchurOmegaConjugation;
+      }
+
+    if (input.guarantees.expandedBasis == pBasisId)
+      return SourceToTargetRoute::ViaSelectedPowerSumsToTargetRoute;
+
+    if (targetDisplay == "S")
+      {
+        int completeId = requiredBasisIdForDisplay("h");
+        if (error()) return SourceToTargetRoute::ViaPowerSumsThenCompleteThenSchur;
+        if (input.guarantees.pureBasis == completeId)
+          return SourceToTargetRoute::ViaCompleteToSchurRecursiveTransition;
+        return SourceToTargetRoute::ViaPowerSumsThenCompleteThenSchur;
+      }
+
+    return SourceToTargetRoute::ViaSourceToPowerSumsThenTarget;
+  }
+
+const char *SymmetricEngineRing::sourceToTargetRouteName(
+    SourceToTargetRoute route) const
+{
+    switch (route)
+      {
+        case SourceToTargetRoute::AlreadyInTarget:
+          return "already-in-target";
+        case SourceToTargetRoute::ViaHallLittlewoodNormalization:
+          return "Hall-Littlewood-capital-normalized:diagonal-scaling";
+        case SourceToTargetRoute::ViaSchurOmegaConjugation:
+          return "Schur-omega:partition-conjugation";
+        case SourceToTargetRoute::ViaSelectedPowerSumsToTargetRoute:
+          return "expanded-p->selected-p-target-route";
+        case SourceToTargetRoute::ViaCompleteToSchurRecursiveTransition:
+          return "h->S:recursive-transition";
+        case SourceToTargetRoute::ViaPowerSumsThenCompleteThenSchur:
+          return "source->p->h->S";
+        case SourceToTargetRoute::ViaSourceToPowerSumsThenTarget:
+          return "source->p->target";
+      }
+    return "unknown";
+  }
+
+void SymmetricEngineRing::traceSourceToTargetSelection(
+        SourceToTargetRoute route,
+        const ConversionInput& input,
+        const std::string& targetDisplay) const
+{
+    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
+    std::string source = "mixed";
+    if (input.guarantees.expandedBasis)
+      source = displayForBasis(*input.guarantees.expandedBasis);
+    else if (input.guarantees.pureBasis)
+      source = displayForBasis(*input.guarantees.pureBasis);
+    std::fprintf(stderr,
+                 "SymmetricRings source-target: source=%s target=%s route=%s\n",
+                 source.c_str(),
+                 targetDisplay.c_str(),
+                 sourceToTargetRouteName(route));
+  }
+
+ring_elem SymmetricEngineRing::executeSourceToTargetRoute(
+        SourceToTargetRoute route,
+        const ConversionInput& input,
+        int pBasisId,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetOrder,
+        bool targetIsMultiplicative) const
+{
+    auto finish = [&](ring_elem result) {
+      if (!error())
+        {
+          ConversionGuarantees guarantees =
+              guaranteesAfterSourceTargetConversion(
+                  input.guarantees, result, targetBasisId);
+          attachConversionGuarantees(result, guarantees, input.origin);
+        }
+      return result;
+    };
+
+    if (route == SourceToTargetRoute::AlreadyInTarget)
+      return finish(copyPolyValue(polyValue(input.expression)));
+
+    if (route == SourceToTargetRoute::ViaHallLittlewoodNormalization)
+      {
+        int sourceBasisId = *input.guarantees.expandedBasis;
+        const std::string sourceDisplay = displayForBasis(sourceBasisId);
+        bool capitalToNormalized = sourceDisplay == "Q" || sourceDisplay == "B";
+        return finish(hallLittlewoodCapitalNormalizedConversionViaDiagonalScaling(
+            input.expression,
+            sourceBasisId,
+            targetBasisId,
+            targetDisplay,
+            targetOrder,
+            capitalToNormalized));
+      }
+
+    if (route == SourceToTargetRoute::ViaSchurOmegaConjugation)
+      return finish(schurOmegaConversionViaPartitionConjugation(
+          input.expression,
+          *input.guarantees.expandedBasis,
+          targetBasisId,
+          targetDisplay,
+          targetOrder));
+
+    if (route == SourceToTargetRoute::ViaSelectedPowerSumsToTargetRoute)
+      {
+        return finish(powerSumsToTargetDispatch(input,
+                                                pBasisId,
+                                                targetBasisId,
+                                                targetDisplay,
+                                                targetOrder,
+                                                targetIsMultiplicative));
+      }
+
+    if (route == SourceToTargetRoute::ViaCompleteToSchurRecursiveTransition)
+      {
+        int completeId = requiredBasisIdForDisplay("h");
+        if (error()) return zero();
+        return finish(completeToSchurViaRecursiveTransition(
+            input.expression,
+            completeId,
+            "h",
+            basisOrderForId(completeId),
+            isMultiplicativeBasis(completeId),
+            targetBasisId,
+            targetDisplay,
+            targetOrder));
+      }
+
+    ring_elem inPowerSums =
+        expressionToPowerSumsViaBasisElementRoutes(input.expression);
+    if (error()) return zero();
+    ConversionInput powerSumInput{
+        inPowerSums,
+        inferConversionGuarantees(inPowerSums, targetBasisId),
+        input.origin};
+    powerSumInput.guarantees.pureBasis = pBasisId;
+    powerSumInput.guarantees.expandedBasis = pBasisId;
+    if (!powerSumInput.guarantees.homogeneousWeight &&
+        input.guarantees.homogeneousWeight)
+      powerSumInput.guarantees.homogeneousWeight =
+          input.guarantees.homogeneousWeight;
+    powerSumInput.guarantees = strengthenConversionGuarantees(
+        std::move(powerSumInput.guarantees), targetBasisId);
+
+    if (route == SourceToTargetRoute::ViaPowerSumsThenCompleteThenSchur)
+      {
+        int completeId = requiredBasisIdForDisplay("h");
+        if (error()) return zero();
+        int completeOrder = basisOrderForId(completeId);
+        bool completeIsMultiplicative = isMultiplicativeBasis(completeId);
+        ring_elem inComplete = powerSumsToCompleteViaLogarithmFormula(
+            inPowerSums, completeId, completeOrder);
+        if (error()) return zero();
+        return finish(completeToSchurViaRecursiveTransition(
+            inComplete,
+            completeId,
+            "h",
+            completeOrder,
+            completeIsMultiplicative,
+            targetBasisId,
+            targetDisplay,
+            targetOrder));
+      }
+
+    return finish(powerSumsToTargetDispatch(powerSumInput,
+                                            pBasisId,
+                                            targetBasisId,
+                                            targetDisplay,
+                                            targetOrder,
+                                            targetIsMultiplicative));
+  }
+
+ring_elem SymmetricEngineRing::sourceToTargetDispatch(
+        const ConversionInput& input,
+        int pBasisId,
+        const std::string& pDisplay,
+        int pOrder,
+        bool pIsMultiplicative,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetOrder,
+        bool targetIsMultiplicative) const
+{
+    rememberBasis(pBasisId, pDisplay, pOrder, pIsMultiplicative);
+    rememberBasis(targetBasisId,
+                  targetDisplay,
+                  targetOrder,
+                  targetIsMultiplicative);
+    SourceToTargetRoute route = selectSourceToTargetRoute(
+        input, pBasisId, targetBasisId, targetDisplay);
+    if (error()) return zero();
+    traceSourceToTargetSelection(route, input, targetDisplay);
+    return executeSourceToTargetRoute(route,
+                                      input,
+                                      pBasisId,
+                                      targetBasisId,
+                                      targetDisplay,
+                                      targetOrder,
+                                      targetIsMultiplicative);
+  }
+
+// ============================================================================
+// Grouped Conversion Pipelines
+// ============================================================================
+// Grouped pipelines preserve whole-expression structure for suitable targets.
+
+bool SymmetricEngineRing::canUseGroupedHallLittlewoodPipeline(
+        const ConversionGuarantees& guarantees,
+        const std::string& targetDisplay) const
+{
+    if (targetDisplay != "Q" && targetDisplay != "P" &&
+        targetDisplay != "B" && targetDisplay != "R")
+      return false;
+    if (guarantees.normalized != KnownState::True ||
+        guarantees.skewFree != KnownState::True || !guarantees.factorBases)
+      return false;
+    const std::string generator =
+        targetDisplay == "Q" || targetDisplay == "P" ? "q" : "b";
+    for (int basisId : *guarantees.factorBases)
+      if (displayForBasis(basisId) != generator) return false;
+    const char *forced = std::getenv(
+        "M2_SYMMETRIC_RINGS_FORCE_HALL_LITTLEWOOD_PIPELINE");
+    if (forced != nullptr)
+      {
+        std::string choice(forced);
+        if (choice == "grouped") return true;
+        if (choice == "fallback") return false;
+      }
+    return true;
+  }
+
+ring_elem SymmetricEngineRing::runGroupedMultiplicativeTargetPipeline(
+        const ConversionInput& input,
+        int pBasisId,
+        const std::string& pDisplay,
+        int pOrder,
+        bool pIsMultiplicative,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetOrder,
+        bool targetIsMultiplicative) const
+{
+    ring_elem result;
+    if (tryExpressionToTarget(input.expression,
+                              targetBasisId,
+                              targetDisplay,
+                              targetOrder,
+                              targetIsMultiplicative,
+                              result))
+      {
+        ConversionGuarantees guarantees =
+            guaranteesAfterSourceTargetConversion(
+                input.guarantees, result, targetBasisId);
+        attachConversionGuarantees(result, guarantees, input.origin);
+        return result;
+      }
+    if (error()) return zero();
+    return sourceToTargetDispatch(input,
+                                  pBasisId,
+                                  pDisplay,
+                                  pOrder,
+                                  pIsMultiplicative,
+                                  targetBasisId,
+                                  targetDisplay,
+                                  targetOrder,
+                                  targetIsMultiplicative);
+  }
+
+ring_elem SymmetricEngineRing::runGroupedHallLittlewoodPipeline(
+        const ConversionInput& input,
+        int pBasisId,
+        const std::string& pDisplay,
+        int pOrder,
+        bool pIsMultiplicative,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetOrder,
+        bool targetIsMultiplicative) const
+{
+    ring_elem result;
+    if (tryExpressionToHallLittlewoodViaTriangularReduction(
+            input.expression,
+            targetBasisId,
+            targetDisplay,
+            targetOrder,
+            result))
+      {
+        ConversionGuarantees guarantees =
+            guaranteesAfterSourceTargetConversion(
+                input.guarantees, result, targetBasisId);
+        attachConversionGuarantees(result, guarantees, input.origin);
+        return result;
+      }
+    if (error()) return zero();
+    return sourceToTargetDispatch(input,
+                                  pBasisId,
+                                  pDisplay,
+                                  pOrder,
+                                  pIsMultiplicative,
+                                  targetBasisId,
+                                  targetDisplay,
+                                  targetOrder,
+                                  targetIsMultiplicative);
+  }
+
+// ============================================================================
+// Fallback Term Pipeline
+// ============================================================================
+// The correctness baseline normalizes, classifies, expands products, and converts terms.
+
+bool SymmetricEngineRing::normalizeTermForConversion(
+    const SymmetricTerm& term,
+    VECTOR(SymmetricTerm)& normalizedTerms) const
+{
+    normalizedTerms.clear();
+    ring_elem straightened = straightenMonomial(term.monomial);
+    if (error()) return false;
+
+    const auto *poly = polyValue(straightened);
+    normalizedTerms.reserve(poly->terms.size());
+    for (const auto& straightenedTerm : poly->terms)
+      {
+        ring_elem coeff = coefficientRing->mult(term.coeff,
+                                                straightenedTerm.coeff);
+        if (coefficientRing->is_zero(coeff)) continue;
+        normalizedTerms.push_back({coeff, straightenedTerm.monomial});
+      }
+    return true;
+  }
+
+SymmetricEngineRing::TermConversionClassification
+SymmetricEngineRing::classifyNormalizedTerm(
+        const SymmetricTerm& term,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetDisplayOrder,
+        bool targetIsMultiplicative) const
+{
+    int factorCount = 0;
+    std::vector<std::string> factorDisplays;
+    bool hasSkewFactor = false;
+    size_t pos = 0;
+    while (pos < term.monomial.data.size())
+      {
+        ++factorCount;
+        factorDisplays.push_back(
+            displayForBasis(atomBasisIdAt(term.monomial, pos)));
+        hasSkewFactor = hasSkewFactor || atomIsSkewAt(term.monomial, pos);
+        pos += atomLengthAt(term.monomial, pos);
+      }
+
+    return TermConversionClassification{
+        factorCount == 0,
+        factorCount == 1,
+        factorCount > 1,
+        targetIsMultiplicative,
+        factorCount,
+        singleBasisIdInMonomial(term.monomial),
+        targetDisplay,
+        std::move(factorDisplays),
+        hasSkewFactor};
+  }
+
+SymmetricEngineRing::ProductExpansionMethod
+SymmetricEngineRing::selectProductExpansionMethod(
+    const TermConversionClassification& classification) const
+{
+    if (classification.targetDisplay == "S")
+      {
+        bool compatible = true;
+        bool hasSchur = false;
+        bool hasComplete = false;
+        bool hasElementary = false;
+        bool hasPowerSum = false;
+        for (const auto& display : classification.factorDisplays)
+          {
+            hasSchur = hasSchur || display == "S";
+            hasComplete = hasComplete || display == "h";
+            hasElementary = hasElementary || display == "e";
+            hasPowerSum = hasPowerSum || display == "p";
+            if (display != "S" && display != "h" &&
+                display != "e" && display != "p")
+              compatible = false;
+          }
+        if (classification.hasSkewFactor && !hasSchur) compatible = false;
+        if (!compatible) return ProductExpansionMethod::NoApplicableMethod;
+
+        int specializedKinds = static_cast<int>(hasComplete) +
+                               static_cast<int>(hasElementary) +
+                               static_cast<int>(hasPowerSum);
+        if (classification.hasSkewFactor || specializedKinds > 1)
+          return ProductExpansionMethod::ViaSchurCompatibleRules;
+        if (hasPowerSum) return ProductExpansionMethod::ViaBorderStrips;
+        if (hasElementary) return ProductExpansionMethod::ViaVerticalPieri;
+        if (hasComplete) return ProductExpansionMethod::ViaHorizontalPieri;
+        return ProductExpansionMethod::ViaLittlewoodRichardson;
+      }
+
+    if (classification.targetDisplay == "h" ||
+        classification.targetDisplay == "e" ||
+        classification.targetIsMultiplicative)
+      return ProductExpansionMethod::ViaFactorwiseConversion;
+
+    return ProductExpansionMethod::NoApplicableMethod;
+  }
+
+const char *SymmetricEngineRing::productExpansionMethodName(
+    ProductExpansionMethod method) const
+{
+    switch (method)
+      {
+        case ProductExpansionMethod::ViaLittlewoodRichardson:
+          return "littlewood-richardson";
+        case ProductExpansionMethod::ViaHorizontalPieri:
+          return "horizontal-pieri";
+        case ProductExpansionMethod::ViaVerticalPieri:
+          return "vertical-pieri";
+        case ProductExpansionMethod::ViaBorderStrips:
+          return "border-strips";
+        case ProductExpansionMethod::ViaSchurCompatibleRules:
+          return "schur-compatible-rules";
+        case ProductExpansionMethod::ViaFactorwiseConversion:
+          return "factorwise-conversion";
+        case ProductExpansionMethod::NoApplicableMethod:
+          return "source-target-fallback";
+      }
+    return "unknown";
+  }
+
+void SymmetricEngineRing::traceProductExpansionSelection(
+        ProductExpansionMethod method,
+        const TermConversionClassification& classification) const
+{
+    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
+    std::ostringstream factors;
+    for (size_t i = 0; i < classification.factorDisplays.size(); ++i)
+      {
+        if (i != 0) factors << ",";
+        factors << classification.factorDisplays[i];
+      }
+    std::fprintf(stderr,
+                 "SymmetricRings product-expansion: factors=%s target=%s "
+                 "method=%s\n",
+                 factors.str().c_str(),
+                 classification.targetDisplay.c_str(),
+                 productExpansionMethodName(method));
+  }
+
+bool SymmetricEngineRing::executeProductExpansionMethod(
+                          ProductExpansionMethod method,
+                          const SymmetricTerm& term,
+                          int targetBasisId,
+                          const std::string& targetDisplay,
+                          int targetDisplayOrder,
+                          bool targetIsMultiplicative,
+                          ConversionInput& result) const
+{
+    if (method == ProductExpansionMethod::NoApplicableMethod) return false;
+
+    ring_elem expanded;
+    if (method == ProductExpansionMethod::ViaLittlewoodRichardson)
+      {
+        if (!trySchurProductMonomialToSchurViaLittlewoodRichardson(term.monomial,
+                                         targetBasisId,
+                                         targetDisplay,
+                                         targetDisplayOrder,
+                                         expanded))
+          return false;
+      }
+    else if (method == ProductExpansionMethod::ViaHorizontalPieri ||
+             method == ProductExpansionMethod::ViaVerticalPieri ||
+             method == ProductExpansionMethod::ViaBorderStrips ||
+             method == ProductExpansionMethod::ViaSchurCompatibleRules)
+      {
+        if (!trySchurCompatibleMonomialToSchur(term.monomial,
+                                               targetBasisId,
+                                               targetDisplay,
+                                               targetDisplayOrder,
+                                               expanded))
+          return false;
+      }
+    else if (method == ProductExpansionMethod::ViaFactorwiseConversion)
+      {
+        if (!tryMonomialToTarget(term.monomial,
+                                targetBasisId,
+                                targetDisplay,
+                                targetDisplayOrder,
+                                targetIsMultiplicative,
+                                expanded))
+          return false;
+      }
+    else
+      return false;
+
+    result.expression = scaled(term.coeff, expanded);
+    result.guarantees = guaranteesAfterProductExpansion(
+        result.expression, targetBasisId);
+    return true;
+  }
+
 ring_elem SymmetricEngineRing::runFallbackTermPipeline(
         const ConversionInput& input,
         int pBasisId,
@@ -1626,6 +1809,11 @@ ring_elem SymmetricEngineRing::runFallbackTermPipeline(
     attachConversionGuarantees(result, resultGuarantees, input.origin);
     return result;
   }
+
+// ============================================================================
+// Retained-Operand Pipelines
+// ============================================================================
+// These workflows preserve operands supplied by products or plethysm.
 
 ring_elem SymmetricEngineRing::runFactorizedProductPipeline(
         ring_elem f,
@@ -1729,153 +1917,251 @@ ring_elem SymmetricEngineRing::runPostPlethysmPipeline(
                                            targetIsMultiplicative);
   }
 
-bool SymmetricEngineRing::normalizeTermForConversion(
-    const SymmetricTerm& term,
-    VECTOR(SymmetricTerm)& normalizedTerms) const
-{
-    normalizedTerms.clear();
-    ring_elem straightened = straightenMonomial(term.monomial);
-    if (error()) return false;
+// ============================================================================
+// Basis-Coefficient Dispatch
+// ============================================================================
+// Targeted scalar transitions avoid constructing complete target-basis expansions.
 
-    const auto *poly = polyValue(straightened);
-    normalizedTerms.reserve(poly->terms.size());
-    for (const auto& straightenedTerm : poly->terms)
+SymmetricEngineRing::BasisCoefficientRoute
+SymmetricEngineRing::selectBasisCoefficientRoute(
+    ring_elem f,
+    int targetBasisId,
+    const std::string& targetDisplay) const
+{
+    int sourceBasisId = singleBasisId(f);
+    if (sourceBasisId == targetBasisId)
       {
-        ring_elem coeff = coefficientRing->mult(term.coeff,
-                                                straightenedTerm.coeff);
-        if (coefficientRing->is_zero(coeff)) continue;
-        normalizedTerms.push_back({coeff, straightenedTerm.monomial});
+        CoeffMap coefficients;
+        if (coefficientsInBasisIfPossible(f, targetBasisId, coefficients))
+          return BasisCoefficientRoute::AlreadyExpandedInTarget;
+        return BasisCoefficientRoute::ViaFullBasisConversion;
       }
-    return true;
+    int pBasisId = basisIdForDisplay("p");
+    if (sourceBasisId != pBasisId)
+      return BasisCoefficientRoute::ViaFullBasisConversion;
+    if (targetDisplay == "p")
+      return BasisCoefficientRoute::ViaPowerSumLookup;
+    if (targetDisplay == "S")
+      return BasisCoefficientRoute::ViaSchurCharacters;
+    if (targetDisplay == "Somega")
+      return BasisCoefficientRoute::ViaOmegaSchurCharacters;
+    if (targetDisplay == "h")
+      return BasisCoefficientRoute::ViaCompleteLogarithmFormula;
+    if (targetDisplay == "e")
+      return BasisCoefficientRoute::ViaElementaryLogarithmFormula;
+    if (targetDisplay == "q" || targetDisplay == "b")
+      return BasisCoefficientRoute::ViaHallLittlewoodGeneratorLogarithmFormula;
+    if (targetDisplay == "Q" || targetDisplay == "P" ||
+        targetDisplay == "B" || targetDisplay == "R")
+      return BasisCoefficientRoute::ViaHallLittlewoodCapitalGreenPolynomialDuality;
+    if (targetDisplay == "m")
+      return BasisCoefficientRoute::ViaMonomialTransition;
+    if (isForgottenDisplay(targetDisplay))
+      return BasisCoefficientRoute::ViaForgottenTransition;
+    return BasisCoefficientRoute::ViaFullBasisConversion;
   }
 
-SymmetricEngineRing::TermConversionClassification
-SymmetricEngineRing::classifyNormalizedTerm(
-        const SymmetricTerm& term,
-        int targetBasisId,
-        const std::string& targetDisplay,
-        int targetDisplayOrder,
-        bool targetIsMultiplicative) const
+const char *SymmetricEngineRing::basisCoefficientRouteName(
+    BasisCoefficientRoute route) const
 {
-    int factorCount = 0;
-    std::vector<std::string> factorDisplays;
-    bool hasSkewFactor = false;
-    size_t pos = 0;
-    while (pos < term.monomial.data.size())
+    switch (route)
       {
-        ++factorCount;
-        factorDisplays.push_back(
-            displayForBasis(atomBasisIdAt(term.monomial, pos)));
-        hasSkewFactor = hasSkewFactor || atomIsSkewAt(term.monomial, pos);
-        pos += atomLengthAt(term.monomial, pos);
+        case BasisCoefficientRoute::AlreadyExpandedInTarget:
+          return "already-expanded-in-target";
+        case BasisCoefficientRoute::ViaPowerSumLookup:
+          return "p:coefficient-lookup";
+        case BasisCoefficientRoute::ViaSchurCharacters:
+          return "p->S:characters";
+        case BasisCoefficientRoute::ViaOmegaSchurCharacters:
+          return "p->Somega:omega-characters";
+        case BasisCoefficientRoute::ViaCompleteLogarithmFormula:
+          return "p->h:logarithm-formula";
+        case BasisCoefficientRoute::ViaElementaryLogarithmFormula:
+          return "p->e:logarithm-formula";
+        case BasisCoefficientRoute::ViaHallLittlewoodGeneratorLogarithmFormula:
+          return "p->q/b:logarithm-formula";
+        case BasisCoefficientRoute::ViaHallLittlewoodCapitalGreenPolynomialDuality:
+          return "p->Q/P/B/R:Green-polynomial-duality";
+        case BasisCoefficientRoute::ViaMonomialTransition:
+          return "p->m:transition";
+        case BasisCoefficientRoute::ViaForgottenTransition:
+          return "p->ff:transition";
+        case BasisCoefficientRoute::ViaFullBasisConversion:
+          return "full-basis-conversion";
       }
-
-    return TermConversionClassification{
-        factorCount == 0,
-        factorCount == 1,
-        factorCount > 1,
-        targetIsMultiplicative,
-        factorCount,
-        singleBasisIdInMonomial(term.monomial),
-        targetDisplay,
-        std::move(factorDisplays),
-        hasSkewFactor};
+    return "unknown";
   }
 
-SymmetricEngineRing::ProductExpansionMethod
-SymmetricEngineRing::selectProductExpansionMethod(
-    const TermConversionClassification& classification) const
+void SymmetricEngineRing::traceBasisCoefficientSelection(
+    BasisCoefficientRoute route,
+    const std::string& targetDisplay,
+    const Partition& targetIndex) const
 {
-    if (classification.targetDisplay == "S")
+    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
+    std::fprintf(stderr,
+                 "SymmetricRings basis-coefficient: target=%s_%s route=%s\n",
+                 targetDisplay.c_str(),
+                 partitionKey(targetIndex).c_str(),
+                 basisCoefficientRouteName(route));
+  }
+
+ring_elem SymmetricEngineRing::executeBasisCoefficientRoute(
+    BasisCoefficientRoute route,
+    ring_elem f,
+    int targetBasisId,
+    const std::string& targetDisplay,
+    int targetOrder,
+    bool targetIsMultiplicative,
+    const Partition& targetIndex) const
+{
+    auto coefficientFromMap = [&](const CoeffMap& coefficients) {
+      auto found = coefficients.find(targetIndex);
+      return found == coefficients.end() ? coefficientRing->zero()
+                                         : found->second;
+    };
+
+    if (route == BasisCoefficientRoute::AlreadyExpandedInTarget)
+      return coefficientFromMap(coefficientsInBasis(f, targetBasisId));
+
+    int pBasisId = requiredBasisIdForDisplay("p");
+    if (error()) return coefficientRing->zero();
+    if (route == BasisCoefficientRoute::ViaFullBasisConversion)
       {
-        bool compatible = true;
-        bool hasSchur = false;
-        bool hasComplete = false;
-        bool hasElementary = false;
-        bool hasPowerSum = false;
-        for (const auto& display : classification.factorDisplays)
+        ring_elem converted = toBasis(f,
+                                      pBasisId,
+                                      "p",
+                                      basisOrderForId(pBasisId),
+                                      isMultiplicativeBasis(pBasisId),
+                                      targetBasisId,
+                                      targetDisplay,
+                                      targetOrder,
+                                      targetIsMultiplicative);
+        if (error()) return coefficientRing->zero();
+        return coefficientFromMap(coefficientsInBasis(converted, targetBasisId));
+      }
+
+    CoeffMap powerSumCoefficients = coefficientsInBasis(f, pBasisId);
+    if (error()) return coefficientRing->zero();
+    if (route == BasisCoefficientRoute::ViaPowerSumLookup)
+      return coefficientFromMap(powerSumCoefficients);
+
+    ring_elem result = coefficientRing->zero();
+    for (const auto& term : powerSumCoefficients)
+      {
+        ring_elem transition = coefficientRing->zero();
+        if (route == BasisCoefficientRoute::ViaSchurCharacters ||
+            route == BasisCoefficientRoute::ViaOmegaSchurCharacters)
           {
-            hasSchur = hasSchur || display == "S";
-            hasComplete = hasComplete || display == "h";
-            hasElementary = hasElementary || display == "e";
-            hasPowerSum = hasPowerSum || display == "p";
-            if (display != "S" && display != "h" &&
-                display != "e" && display != "p")
-              compatible = false;
+            int value = characterValue(targetIndex, term.first);
+            if (route == BasisCoefficientRoute::ViaOmegaSchurCharacters &&
+                (partitionWeight(term.first) - partitionLength(term.first)) % 2 != 0)
+              value = -value;
+            transition = coefficientRing->from_long(value);
           }
-        if (classification.hasSkewFactor && !hasSchur) compatible = false;
-        if (!compatible) return ProductExpansionMethod::NoApplicableMethod;
-
-        int specializedKinds = static_cast<int>(hasComplete) +
-                               static_cast<int>(hasElementary) +
-                               static_cast<int>(hasPowerSum);
-        if (classification.hasSkewFactor || specializedKinds > 1)
-          return ProductExpansionMethod::ViaSchurCompatibleRules;
-        if (hasPowerSum) return ProductExpansionMethod::ViaBorderStrips;
-        if (hasElementary) return ProductExpansionMethod::ViaVerticalPieri;
-        if (hasComplete) return ProductExpansionMethod::ViaHorizontalPieri;
-        return ProductExpansionMethod::ViaLittlewoodRichardson;
+        else if (route == BasisCoefficientRoute::ViaCompleteLogarithmFormula)
+          transition = coefficientFromMap(
+              powerSumIndexToCompleteMapViaLogarithmFormula(term.first));
+        else if (route == BasisCoefficientRoute::ViaElementaryLogarithmFormula)
+          transition = coefficientFromMap(
+              powerSumIndexToElementaryMapViaLogarithmFormula(term.first));
+        else if (route ==
+                 BasisCoefficientRoute::ViaHallLittlewoodGeneratorLogarithmFormula)
+          transition = coefficientFromMap(
+              powerSumIndexToHallGeneratorMapViaLogarithmFormula(
+                  term.first, targetDisplay == "b"));
+        else if (route ==
+                 BasisCoefficientRoute::ViaHallLittlewoodCapitalGreenPolynomialDuality)
+          {
+            bool omega = targetDisplay == "B" || targetDisplay == "R";
+            transition =
+                powerSumIndexToHallLittlewoodCapitalCoefficientViaGreenPolynomialDuality(
+                    term.first, targetIndex);
+            if (omega &&
+                (partitionWeight(term.first) - partitionLength(term.first)) % 2 != 0)
+              transition = coefficientRing->negate(transition);
+            if (targetDisplay == "P" || targetDisplay == "R")
+              transition = coefficientRing->mult(
+                  transition, hallLittlewoodCFactor(targetIndex));
+          }
+        else if (route == BasisCoefficientRoute::ViaMonomialTransition ||
+                 route == BasisCoefficientRoute::ViaForgottenTransition)
+          {
+            long value = pToMonomialCoefficient(term.first, targetIndex);
+            if (route == BasisCoefficientRoute::ViaForgottenTransition &&
+                (partitionWeight(term.first) - partitionLength(term.first)) % 2 != 0)
+              value = -value;
+            transition = coefficientRing->from_long(value);
+          }
+        if (error()) return coefficientRing->zero();
+        result = coefficientRing->add(
+            result,
+            coefficientRing->mult(term.second, transition));
       }
-
-    if (classification.targetDisplay == "h" ||
-        classification.targetDisplay == "e" ||
-        classification.targetIsMultiplicative)
-      return ProductExpansionMethod::ViaFactorwiseConversion;
-
-    return ProductExpansionMethod::NoApplicableMethod;
+    return result;
   }
 
-bool SymmetricEngineRing::executeProductExpansionMethod(
-                          ProductExpansionMethod method,
-                          const SymmetricTerm& term,
-                          int targetBasisId,
-                          const std::string& targetDisplay,
-                          int targetDisplayOrder,
-                          bool targetIsMultiplicative,
-                          ConversionInput& result) const
+ring_elem SymmetricEngineRing::basisCoefficientDispatch(
+    ring_elem f,
+    int targetBasisId,
+    const std::string& targetDisplay,
+    int targetOrder,
+    bool targetIsMultiplicative,
+    const Partition& targetIndex) const
 {
-    if (method == ProductExpansionMethod::NoApplicableMethod) return false;
-
-    ring_elem expanded;
-    if (method == ProductExpansionMethod::ViaLittlewoodRichardson)
-      {
-        if (!trySchurProductMonomialToSchurViaLittlewoodRichardson(term.monomial,
-                                         targetBasisId,
-                                         targetDisplay,
-                                         targetDisplayOrder,
-                                         expanded))
-          return false;
-      }
-    else if (method == ProductExpansionMethod::ViaHorizontalPieri ||
-             method == ProductExpansionMethod::ViaVerticalPieri ||
-             method == ProductExpansionMethod::ViaBorderStrips ||
-             method == ProductExpansionMethod::ViaSchurCompatibleRules)
-      {
-        if (!trySchurCompatibleMonomialToSchur(term.monomial,
-                                               targetBasisId,
-                                               targetDisplay,
-                                               targetDisplayOrder,
-                                               expanded))
-          return false;
-      }
-    else if (method == ProductExpansionMethod::ViaFactorwiseConversion)
-      {
-        if (!tryMonomialToTarget(term.monomial,
-                                targetBasisId,
-                                targetDisplay,
-                                targetDisplayOrder,
-                                targetIsMultiplicative,
-                                expanded))
-          return false;
-      }
-    else
-      return false;
-
-    result.expression = scaled(term.coeff, expanded);
-    result.guarantees = guaranteesAfterProductExpansion(
-        result.expression, targetBasisId);
-    return true;
+    rememberBasis(targetBasisId,
+                  targetDisplay,
+                  targetOrder,
+                  targetIsMultiplicative);
+    BasisCoefficientRoute route =
+        selectBasisCoefficientRoute(f, targetBasisId, targetDisplay);
+    traceBasisCoefficientSelection(route, targetDisplay, targetIndex);
+    return executeBasisCoefficientRoute(route,
+                                        f,
+                                        targetBasisId,
+                                        targetDisplay,
+                                        targetOrder,
+                                        targetIsMultiplicative,
+                                        normalizePartition(targetIndex));
   }
+
+ring_elem SymmetricEngineRing::basisCoefficient(
+    ring_elem f,
+    ring_elem targetBasisElement) const
+{
+    const auto *target = polyValue(targetBasisElement);
+    if (target->terms.size() != 1 ||
+        !coefficientRing->is_equal(target->terms.front().coeff,
+                                   coefficientRing->one()))
+      {
+        ERROR("expected one basis element with coefficient one");
+        return coefficientRing->zero();
+      }
+    const SymmetricMonomial& monomial = target->terms.front().monomial;
+    if (monomial.data.empty() || atomIsSkewAt(monomial, 0) ||
+        atomLengthAt(monomial, 0) != monomial.data.size())
+      {
+        ERROR("expected one non-skew basis element");
+        return coefficientRing->zero();
+      }
+    Partition targetIndex = basisElementIndex(monomial, 0);
+    if (!isPartitionIndex(targetIndex))
+      {
+        ERROR("expected a partition-indexed basis element");
+        return coefficientRing->zero();
+      }
+    int targetBasisId = atomBasisIdAt(monomial, 0);
+    return basisCoefficientDispatch(f,
+                                    targetBasisId,
+                                    displayForBasis(targetBasisId),
+                                    atomOrderAt(monomial, 0),
+                                    isMultiplicativeBasis(targetBasisId),
+                                    targetIndex);
+  }
+
+// ============================================================================
+// Public Conversion Entry Points
+// ============================================================================
+// All external conversion requests enter the pipeline system here.
 
 ring_elem SymmetricEngineRing::conversionRequestToBasisDispatch(
                     const ConversionRequest& suppliedRequest,

@@ -1155,21 +1155,54 @@ doc ///
 
  Node
   Key
+   basisCoefficient
+   (basisCoefficient,SymmetricRingElement,SymmetricRingElement)
+  Headline
+   extract the coefficient of one symmetric-function basis element
+  Usage
+   basisCoefficient(f,b)
+  Inputs
+   f:SymmetricRingElement
+   b:SymmetricRingElement
+  Outputs
+   :RingElement
+  Description
+   Text
+    The second argument must be one non-skew basis element with coefficient
+    one. The result is its coefficient in the expansion of @TT "f"@ in that
+    basis. Built-in power-sum inputs use targeted character, logarithm,
+    transition, or Green-polynomial routes when available, without constructing
+    the complete target-basis expansion.
+   Example
+    A = frac(QQ[t])
+    R = symmetricRing A
+    F = toBasis((1+t)*Q_{3,1} + Q_{2,2}, p)
+    basisCoefficient(F,Q_{3,1})
+    basisCoefficient(F,Q_{2,2})
+   Text
+    For transformed and custom bases, coefficient extraction uses the ordinary
+    @TO toBasis@ path so registered M2 conversion hooks remain available.
+
+ Node
+  Key
    hallInnerProduct
+   "hallInnerProduct(...,\"InnerProduct\"=>...)"
    "hallInnerProduct(...,\"ParameterSpecialization\"=>...)"
    "hallInnerProduct(...,\"PromoteSpecializedRing\"=>...)"
   Headline
    compute the Hall inner product
   Usage
    hallInnerProduct(f,g)
+   hallInnerProduct(f,g,"InnerProduct"=>"Ordinary")
    hallInnerProduct(f,g,"ParameterSpecialization"=>{t=>0})
   Description
    Text
     The @TO hallInnerProduct@ uses known diagonal pairings when possible and
     otherwise converts both arguments to the power-sum basis.  The active
-    pairing context follows the coefficient ring: ordinary rings use the
-    ordinary Hall inner product, while rings with a Hall-Littlewood parameter
-    use the Hall-Littlewood inner product.  In the ordinary context
+    pairing context is selected explicitly by the "InnerProduct" option or,
+    when its value is "Automatic", follows the symmetric ring: ordinary rings
+    use the ordinary Hall inner product, while rings with a Hall-Littlewood
+    parameter use the Hall-Littlewood inner product. In the ordinary context
     $\langle p_\lambda,p_\lambda\rangle=z_\lambda$; in the Hall-Littlewood
     context this package uses
     $\langle p_\lambda,p_\lambda\rangle_t
@@ -1180,6 +1213,17 @@ doc ///
     hallInnerProduct(q_2,m_2)
     hallInnerProduct(Q_2,P_2)
     hallInnerProduct(Q_2,Q_2)
+   Text
+    Set "InnerProduct" to "Ordinary" or "HallLittlewood" to select the scalar
+    product independently of the coefficient ring's available parameters.
+    The values "SchurQ" and "Macdonald" are reserved for their corresponding
+    scalar products but currently report that they are not implemented.
+   Example
+    A = frac(QQ[t])
+    R = symmetricRing A
+    hallInnerProduct(S_1,S_1)
+    hallInnerProduct(S_1,S_1,"InnerProduct"=>"Ordinary")
+    hallInnerProduct(S_1,S_1,"InnerProduct"=>"HallLittlewood")
    Text
     Use "ParameterSpecialization" to compute in a specialized parameter context.
     For example, setting the Hall-Littlewood parameter to zero specializes

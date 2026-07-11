@@ -115,6 +115,7 @@ TEST ///
     assert(toBasis(p_2, "HScaled") == HScaled_2 - (1/4)*HScaled_{1,1})
     assert(toBasis(MScaled_2, p) == (1/2)*toBasis(m_2, p))
     assert(toBasis(FFScaled_2, p) == (1/2)*toBasis(ff_2, p))
+    assert(basisCoefficient(3*HScaled_2 + HScaled_{1,1}, HScaled_2) == 3_QQ)
     assert(omegaInvolution HScaled_2 == EScaled_2)
     assert(omegaInvolution MScaled_2 == FFScaled_2)
     assert(hallInnerProduct(HScaled_{2,1}, MScaled_{2,1}) == 1_QQ)
@@ -509,6 +510,45 @@ TEST ///
     assert(toBasis(toBasis(hallCapitalSum, P), Q) == hallCapitalSum)
     assert(toBasis(toBasis(P_2, p), P) == P_2)
     assert(toBasis(toBasis(R_2, p), R) == R_2)
+    targetedQPowerSums = toBasis((1+E_0)*Q_{3,1} + Q_{2,2}, p)
+    targetedBPowerSums = toBasis((1-E_0)*B_{3,1} + B_{2,2}, p)
+    assert(hallInnerProduct(targetedQPowerSums, 3*P_{3,1}) == 3*(1+E_0))
+    assert(hallInnerProduct(3*P_{3,1}, targetedQPowerSums) == 3*(1+E_0))
+    assert(hallInnerProduct(targetedBPowerSums, 2*R_{3,1}) == 2*(1-E_0))
+    assert(hallInnerProduct(2*R_{3,1}, targetedBPowerSums) == 2*(1-E_0))
+    assert(basisCoefficient(p_{3,1} + 2*p_4, p_{3,1}) == 1_E)
+    assert(basisCoefficient(toBasis((1+E_0)*S_{3,1} + S_{2,2}, p), S_{3,1}) == 1+E_0)
+    assert(basisCoefficient(toBasis((1-E_0)*Somega_{3,1} + Somega_{2,2}, p), Somega_{3,1}) == 1-E_0)
+    assert(basisCoefficient(toBasis((2+E_0)*h_{3,1} + h_{2,2}, p), h_{3,1}) == 2+E_0)
+    assert(basisCoefficient(toBasis((2-E_0)*e_{3,1} + e_{2,2}, p), e_{3,1}) == 2-E_0)
+    assert(basisCoefficient(toBasis((1+2*E_0)*q_{3,1} + q_{2,2}, p), q_{3,1}) == 1+2*E_0)
+    assert(basisCoefficient(toBasis((1-2*E_0)*b_{3,1} + b_{2,2}, p), b_{3,1}) == 1-2*E_0)
+    assert(basisCoefficient(toBasis((3+E_0)*Q_{3,1} + Q_{2,2}, p), Q_{3,1}) == 3+E_0)
+    assert(basisCoefficient(toBasis((3-E_0)*P_{3,1} + P_{2,2}, p), P_{3,1}) == 3-E_0)
+    assert(basisCoefficient(toBasis((4+E_0)*B_{3,1} + B_{2,2}, p), B_{3,1}) == 4+E_0)
+    assert(basisCoefficient(toBasis((4-E_0)*R_{3,1} + R_{2,2}, p), R_{3,1}) == 4-E_0)
+    assert(basisCoefficient(toBasis((5+E_0)*m_{3,1} + m_{2,2}, p), m_{3,1}) == 5+E_0)
+    assert(basisCoefficient(toBasis((5-E_0)*ff_{3,1} + ff_{2,2}, p), ff_{3,1}) == 5-E_0)
+    targetedPPowerSums = toBasis((2+E_0)*P_{3,1} + P_{2,2}, p)
+    targetedRPowerSums = toBasis((2-E_0)*R_{3,1} + R_{2,2}, p)
+    assert(hallInnerProduct(targetedPPowerSums, 3*Q_{3,1}) == 3*(2+E_0))
+    assert(hallInnerProduct(3*Q_{3,1}, targetedPPowerSums) == 3*(2+E_0))
+    assert(hallInnerProduct(targetedRPowerSums, 2*B_{3,1}) == 2*(2-E_0))
+    assert(hallInnerProduct(2*B_{3,1}, targetedRPowerSums) == 2*(2-E_0))
+    targetedQGeneratorPowerSums = toBasis((1+E_0)*q_{3,1} + q_{2,2}, p)
+    targetedBGeneratorPowerSums = toBasis((1-E_0)*b_{3,1} + b_{2,2}, p)
+    assert(hallInnerProduct(targetedQGeneratorPowerSums, m_{3,1}) == 1+E_0)
+    assert(hallInnerProduct(m_{3,1}, targetedQGeneratorPowerSums) == 1+E_0)
+    assert(hallInnerProduct(targetedBGeneratorPowerSums, ff_{3,1}) == 1-E_0)
+    assert(hallInnerProduct(ff_{3,1}, targetedBGeneratorPowerSums) == 1-E_0)
+    assert(hallInnerProduct(p_2, S_2) == 1/(1-E_0^2))
+    assert(hallInnerProduct(S_2, p_2) == 1/(1-E_0^2))
+    weightedCharacterPowerSums = (1+E_0)*p_{3,1} + p_{2,2}
+    weightedCharacterSchur = (2-E_0)*S_{3,1} + S_{2,2}
+    weightedCharacterFallback = hallInnerProduct(
+        weightedCharacterPowerSums, toBasis(weightedCharacterSchur, p))
+    assert(hallInnerProduct(weightedCharacterPowerSums, weightedCharacterSchur) == weightedCharacterFallback)
+    assert(hallInnerProduct(weightedCharacterSchur, weightedCharacterPowerSums) == weightedCharacterFallback)
     assert(multiplyToBasis(Q_2, Q_1, Q) == toBasis(Q_2*Q_1, Q))
     assert(multiplyToBasis(P_2, P_1, P) == toBasis(P_2*P_1, P))
     assert(multiplyToBasis(B_2, B_1, B) == toBasis(B_2*B_1, B))
@@ -585,14 +625,79 @@ TEST ///
     assert(hallInnerProduct(h_2, m_2) == 1_QQ)
     assert(hallInnerProduct(e_2, ff_2) == 1_QQ)
     assert(hallInnerProduct(p_2, p_2) == 2_QQ)
+    ordinaryHPowerSums = toBasis(2*h_{3,1} + h_{2,2}, p)
+    ordinaryMPowerSums = toBasis(3*m_{3,1} + m_{2,2}, p)
+    ordinaryEPowerSums = toBasis(4*e_{3,1} + e_{2,2}, p)
+    ordinaryFFPowerSums = toBasis(5*ff_{3,1} + ff_{2,2}, p)
+    assert(hallInnerProduct(ordinaryHPowerSums, m_{3,1}) == 2_QQ)
+    assert(hallInnerProduct(m_{3,1}, ordinaryHPowerSums) == 2_QQ)
+    assert(hallInnerProduct(ordinaryMPowerSums, h_{3,1}) == 3_QQ)
+    assert(hallInnerProduct(h_{3,1}, ordinaryMPowerSums) == 3_QQ)
+    assert(hallInnerProduct(ordinaryEPowerSums, ff_{3,1}) == 4_QQ)
+    assert(hallInnerProduct(ff_{3,1}, ordinaryEPowerSums) == 4_QQ)
+    assert(hallInnerProduct(ordinaryFFPowerSums, e_{3,1}) == 5_QQ)
+    assert(hallInnerProduct(e_{3,1}, ordinaryFFPowerSums) == 5_QQ)
+    kostkaPairs = {
+        {{3,1}, {2,1,1}},
+        {{2,2}, {2,1,1}},
+        {{4,1}, {3,1,1}},
+        {{3,2}, {2,2,1}},
+        {{3,1,1}, {2,1,1,1}}
+        }
+    scan(kostkaPairs, pair -> (
+            schurTerm := S_(pair#0);
+            completeTerm := h_(pair#1);
+            fallbackValue := hallInnerProduct(toBasis(schurTerm, p), toBasis(completeTerm, p));
+            assert(hallInnerProduct(schurTerm, completeTerm) == fallbackValue);
+            assert(hallInnerProduct(completeTerm, schurTerm) == fallbackValue);
+            assert(hallInnerProduct(3*schurTerm, 2*completeTerm) == 6*fallbackValue);
+            ))
+    scan(kostkaPairs, pair -> (
+            schurTerm := S_(pair#0);
+            elementaryTerm := e_(pair#1);
+            fallbackValue := hallInnerProduct(toBasis(schurTerm, p), toBasis(elementaryTerm, p));
+            assert(hallInnerProduct(schurTerm, elementaryTerm) == fallbackValue);
+            assert(hallInnerProduct(elementaryTerm, schurTerm) == fallbackValue);
+            ))
+    assert(hallInnerProduct(S_{3,1}, h_3) == 0_QQ)
+    assert(hallInnerProduct(h_3, S_{3,1}) == 0_QQ)
     assert(omegaInvolution h_2 == e_2)
     assert(not ((bases Rordinary)#?"Q"))
+    Romega = symmetricRing(QQ, "NormalizeSomega" => false)
+    omegaSchurTerm = Somega_{3,1}
+    completeTerm = h_{2,1,1}
+    elementaryTerm = e_{2,1,1}
+    assert(hallInnerProduct(omegaSchurTerm, completeTerm) ==
+        hallInnerProduct(toBasis(omegaSchurTerm, p), toBasis(completeTerm, p)))
+    assert(hallInnerProduct(completeTerm, omegaSchurTerm) ==
+        hallInnerProduct(toBasis(completeTerm, p), toBasis(omegaSchurTerm, p)))
+    assert(hallInnerProduct(omegaSchurTerm, elementaryTerm) ==
+        hallInnerProduct(toBasis(omegaSchurTerm, p), toBasis(elementaryTerm, p)))
+    assert(hallInnerProduct(elementaryTerm, omegaSchurTerm) ==
+        hallInnerProduct(toBasis(elementaryTerm, p), toBasis(omegaSchurTerm, p)))
     A = QQ[t]
     Rhl = symmetricRing A
     assert((bases Rhl)#?"Q")
     assert(omegaInvolution Q_2 == B_2)
     assert(hallInnerProduct(Q_2, P_2) == 1_A)
     assert(specializeParameters(Q_2, {A_0 => 0}) == S_2)
+///
+
+TEST ///
+    K = frac(QQ[t])
+    Rcontexts = symmetricRing K
+    assert(hallInnerProduct(p_2, p_2) == 2/(1-K_0^2))
+    assert(hallInnerProduct(p_2, p_2, "InnerProduct" => "HallLittlewood") ==
+        2/(1-K_0^2))
+    assert(hallInnerProduct(p_2, p_2, "InnerProduct" => "Ordinary") == 2_K)
+    assert(hallInnerProduct(S_2, S_2, "InnerProduct" => "Ordinary") == 1_K)
+    assert(hallInnerProduct(S_2, S_{1,1}, "InnerProduct" => "Ordinary") == 0_K)
+    assert(hallInnerProduct(S_1, S_1) == 1/(1-K_0))
+    assert(hallInnerProduct(S_1, S_1, "InnerProduct" => "HallLittlewood") ==
+        1/(1-K_0))
+    assert(hallInnerProduct(S_1, S_1, "InnerProduct" => "Ordinary") == 1_K)
+    assert(try (hallInnerProduct(S_1, S_1, "InnerProduct" => "SchurQ"); false) else true)
+    assert(try (hallInnerProduct(S_1, S_1, "InnerProduct" => "Macdonald"); false) else true)
 ///
 
 TEST ///
@@ -605,6 +710,7 @@ TEST ///
     assert(toBasis(toBasis(purePowerSums, e), p) == purePowerSums)
     assert(toBasis(toBasis(purePowerSums, m), p) == purePowerSums)
     assert(toBasis(toBasis(purePowerSums, ff), p) == purePowerSums)
+    assert(basisCoefficient(S_1*S_1, S_2) == 1_QQ)
     pFromComplete = toP h_2
     pFromElementary = toP e_2
     assert(toS(pFromComplete + pFromElementary) == toS(toP(h_2 + e_2)))

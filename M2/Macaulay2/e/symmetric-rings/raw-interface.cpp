@@ -430,6 +430,7 @@ const RingElement *rawSymmetricRingsStraighten(const RingElement *f)
 
 const RingElement *rawSymmetricRingsHallInnerProduct(const RingElement *f,
                                                     const RingElement *g,
+                                                    int innerProductKind,
                                                     M2_arrayint innerProductMap)
 {
   try
@@ -443,7 +444,33 @@ const RingElement *rawSymmetricRingsHallInnerProduct(const RingElement *f,
         }
       ring_elem result = S->hallInnerProduct(f->get_value(),
                                              g->get_value(),
+                                             innerProductKind,
                                              innerProductMap);
+      if (error()) return nullptr;
+      return RingElement::make_raw(S->getCoefficientRing(), result);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+const RingElement *rawSymmetricRingsBasisCoefficient(
+    const RingElement *f,
+    const RingElement *targetBasisElement)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      if (targetBasisElement->get_ring() != S)
+        {
+          ERROR("expected elements in the same symmetric ring");
+          return nullptr;
+        }
+      ring_elem result = S->basisCoefficient(
+          f->get_value(), targetBasisElement->get_value());
       if (error()) return nullptr;
       return RingElement::make_raw(S->getCoefficientRing(), result);
     }

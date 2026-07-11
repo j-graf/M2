@@ -542,23 +542,44 @@ setupfun("rawSymmetricRingsStraighten", rawSymmetricRingsStraighten);
 export rawSymmetricRingsHallInnerProduct(e:Expr):Expr := (
      when e
      is s:Sequence do (
-	  if length(s) != 3 then return WrongNumArgs(3);
+	  if length(s) != 4 then return WrongNumArgs(4);
 	  when s.0
 	  is f:RawRingElementCell do (
 	       when s.1
 	       is g:RawRingElementCell do (
 		    when s.2
-		    is innerProductMap:List do (
-			 if !isSequenceOfSmallIntegers(innerProductMap.v) then return WrongArg(3, "a list of small integers");
-			 toExpr(Ccode(RawRingElementOrNull,
-			      "rawSymmetricRingsHallInnerProduct(",
-			      f.p, ", ", g.p, ", ",
-			      getSequenceOfSmallIntegers(innerProductMap.v), ")")))
-		    else WrongArg(3, "a list of small integers"))
+		    is innerProductKind:ZZcell do (
+			 if !isInt(innerProductKind) then return WrongArgSmallInteger(3);
+			 when s.3
+			 is innerProductMap:List do (
+			      if !isSequenceOfSmallIntegers(innerProductMap.v) then return WrongArg(4, "a list of small integers");
+			      toExpr(Ccode(RawRingElementOrNull,
+				   "rawSymmetricRingsHallInnerProduct(",
+				   f.p, ", ", g.p, ", ",
+				   toInt(innerProductKind), ", ",
+				   getSequenceOfSmallIntegers(innerProductMap.v), ")")))
+			 else WrongArg(4, "a list of small integers"))
+		    else WrongArg(3, "a small integer"))
 	       else WrongArg(2, "a raw ring element"))
 	  else WrongArg(1, "a raw ring element"))
-     else WrongNumArgs(3));
+     else WrongNumArgs(4));
 setupfun("rawSymmetricRingsHallInnerProduct", rawSymmetricRingsHallInnerProduct);
+
+export rawSymmetricRingsBasisCoefficient(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 2 then return WrongNumArgs(2);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is target:RawRingElementCell do
+		    toExpr(Ccode(RawRingElementOrNull,
+			 "rawSymmetricRingsBasisCoefficient(",
+			 f.p, ", ", target.p, ")"))
+	       else WrongArg(2, "a raw ring element"))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(2));
+setupfun("rawSymmetricRingsBasisCoefficient", rawSymmetricRingsBasisCoefficient);
 
 export rawSymmetricRingsTermCount(e:Expr):Expr := (
      when e

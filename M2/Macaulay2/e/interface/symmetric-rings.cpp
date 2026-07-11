@@ -200,11 +200,21 @@ const RingElement *rawSymmetricRingsStraighten(const RingElement *f)
 
 const RingElement *rawSymmetricRingsHallInnerProduct(const RingElement *f,
                                                     const RingElement *g,
+                                                    int innerProductKind,
                                                     M2_arrayint innerProductMap)
 {
   return symmetric_rings::rawSymmetricRingsHallInnerProduct(f,
                                                             g,
+                                                            innerProductKind,
                                                             innerProductMap);
+}
+
+const RingElement *rawSymmetricRingsBasisCoefficient(
+    const RingElement *f,
+    const RingElement *targetBasisElement)
+{
+  return symmetric_rings::rawSymmetricRingsBasisCoefficient(
+      f, targetBasisElement);
 }
 
 int rawSymmetricRingsTermCount(const RingElement *f)

@@ -134,6 +134,7 @@ void SymmetricEngineRing::clearHallLittlewoodCaches() const
     hallLittlewoodSingleCycleCapitalGreenMapCache.clear();
     hallLittlewoodSingleCycleNormalizedGreenMapCache.clear();
     hallLittlewoodPowerSumToCapitalColumnCache.clear();
+    hallLittlewoodPowerSumToCapitalCoefficientCache.clear();
     hallLittlewoodRaisingGeneratorMapCache.clear();
     powerSumToQGeneratorMapCache.clear();
     powerSumToBGeneratorMapCache.clear();

@@ -27,8 +27,14 @@ centralized while grouping member declarations by implementation topic.
   straightening routines, and direct pair-level conversion kernels.
 - `basis-conversion-products.cpp/.hpp`: multiplication rules and direct product
   conversion helpers used while converting products to a target basis.
-- `inner-product.cpp/.hpp`: Hall inner products and pairing primitives used by
-  formulas elsewhere in the subsystem.
+- `inner-product-dispatch.cpp/.hpp`: requests, lazy profiles, pipeline and route
+  selection, cache-aware cost estimates, tracing, orchestration, and the public
+  Hall-inner-product entry point. Its pipeline selector distinguishes
+  diagonal bases, single basis elements, structured power sums, and the
+  unconditional power-sum fallback. Pairing a power-sum expansion with one
+  element of a known dual basis uses the targeted basis-coefficient dispatcher.
+- `inner-product-kernels.cpp/.hpp`: coefficient-map pairings, power-sum diagonal
+  factors, weighted character formulas, and Kostka-number scalar formulas.
 - `omega.cpp/.hpp`: omega involution logic.
 - `plethysm.cpp/.hpp`: plethysm and plethysm-to-basis helpers.
 - `storage.cpp/.hpp`: monomial/term storage, ordering, display helper data, and
@@ -116,12 +122,37 @@ negation and nonzero scalar multiplication preserve metadata, compatible
 additions merge it, and products preserve the facts implied by a shared
 multiplicative basis.
 
+Inner-product candidate selection computes maximum partition length only for
+routes whose cost estimate uses it. Estimates account for weight, term counts,
+transition-cache state, and whether conversions are required. The direct
+ordinary formulas currently cover `S/h`, `S/e`, `Somega/h`, and `Somega/e`
+through Kostka numbers and conjugate Kostka numbers.
+
+For diagnostic comparisons, set
+`M2_SYMMETRIC_RINGS_FORCE_INNER_PRODUCT_PIPELINE=fallback-power-sums` to bypass
+all specialized routes. Set `M2_SYMMETRIC_RINGS_FORCE_INNER_PRODUCT_ROUTE` to
+an exact route name reported by `M2_SYMMETRIC_RINGS_TRACE_INNER_PRODUCT`;
+forcing an inapplicable route reports an error.
+
+Inner-product context is explicit at the engine boundary. M2 resolves
+`"InnerProduct" => "Automatic"`, `"Ordinary"`, or `"HallLittlewood"` and sends
+an `InnerProductKind` code with the pairing map. The pipeline does not infer the
+scalar product from available basis pairings. A separate
+`PowerSumPairingKind` selects the diagonal power-sum formula used by structured
+and fallback routes.
+
 Concrete formulas, straightening, and pair-level source-target kernels live in
 `basis-conversion-kernels.cpp`; multiplication algorithms live in
 `basis-conversion-products.cpp`; and pipeline selection and orchestration live
 in `basis-conversion-dispatch.cpp`.  This separation is intended to make the
 mathematical route visible from the dispatch code while keeping each algorithm
 independently maintainable and benchmarkable.
+
+Within those files, matching comment-block sections organize dispatch code by
+decision flow, kernels by basis family, and products by combinatorial rule. The
+corresponding `.hpp` declaration fragments use the same section order as their
+`.cpp` implementations, so a conversion family can be located from either side
+without searching through unrelated algorithms.
 
 Raising-operator Hall-Littlewood expansions process first indices in
 descending order, so a coordinate is replenished before any operator whose

@@ -175,7 +175,8 @@ set(SRCLIST
   symmetric-rings/basis-conversion-dispatch
   symmetric-rings/basis-conversion-kernels
   symmetric-rings/basis-conversion-products
-  symmetric-rings/inner-product
+  symmetric-rings/inner-product-dispatch
+  symmetric-rings/inner-product-kernels
   symmetric-rings/omega
   symmetric-rings/plethysm
   symmetric-rings/raw-interface
