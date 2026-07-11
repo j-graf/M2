@@ -19,8 +19,24 @@
   ring_elem scaled(ring_elem coeff, ring_elem f) const;
   ring_elem coefficientQuotient(ring_elem numerator, ring_elem denominator) const;
   ring_elem hallLittlewoodCFactor(const Partition& lambda) const;
+  CoeffMap hallLittlewoodSingleCycleGreenMap(int n, bool normalized) const;
+  ring_elem hallLittlewoodCapitalNormalizedConversionViaDiagonalScaling(
+      ring_elem f,
+      int sourceBasisId,
+      int targetBasisId,
+      const std::string& targetDisplay,
+      int targetOrder,
+      bool capitalToNormalized) const;
+  ring_elem schurOmegaConversionViaPartitionConjugation(
+      ring_elem f,
+      int sourceBasisId,
+      int targetBasisId,
+      const std::string& targetDisplay,
+      int targetOrder) const;
   void addCoeff(CoeffMap& target, const Partition& index, ring_elem coeff) const;
-  CoeffMap scaledCoeffMap(ring_elem coeff, const CoeffMap& source) const;
+  void addScaledCoeffMap(CoeffMap& target,
+                         ring_elem coeff,
+                         const CoeffMap& source) const;
   CoeffMap addCoeffMaps(const CoeffMap& a, const CoeffMap& b) const;
   CoeffMap multiplyCoeffMaps(const CoeffMap& a, const CoeffMap& b) const;
   CoeffMap multiplyMonomialCoeffMaps(const CoeffMap& a, const CoeffMap& b) const;
@@ -39,21 +55,32 @@
   ring_elem completePartToPowerSumsViaClassicalFormula(int n) const;
   ring_elem elementaryPartToPowerSumsViaClassicalFormula(int n) const;
   ring_elem hallLittlewoodGeneratorPartToPowerSumsViaClassicalFormula(int n, bool omega) const;
+  CoeffMap hallLittlewoodGeneratorPartToPowerSumsQuotientMapViaClassicalFormula(
+      int n,
+      bool omega) const;
   CoeffMap raisingExpansion(const Partition& lambda) const;
   CoeffMap raisingGeneratorMap(const Partition& lambda) const;
   ring_elem hallLittlewoodCapitalToPowerSumsViaRaisingOperators(const Partition& lambda, bool omega) const;
   ring_elem hallLittlewoodNormalizedToPowerSumsViaCapitalNormalization(const Partition& lambda, bool omega) const;
-  ring_elem schurToPowerSumsViaCharacters(const Partition& lambda) const;
-  ring_elem powerSumPartToCompleteViaNewtonRecurrence(int n, int hId, int hOrder) const;
-  ring_elem powerSumPartToElementaryViaNewtonRecurrence(int n, int eId, int eOrder) const;
-  ring_elem powerSumPartToHallGeneratorViaNewtonRecurrence(int n,
-                                          int generatorId,
-                                          const std::string& display,
-                                          int generatorOrder,
-                                          bool omega) const;
-  CoeffMap powerSumPartToHallGeneratorMapViaNewtonRecurrence(int n, bool omega) const;
-  CoeffMap powerSumIndexToHallGeneratorMapViaNewtonRecurrence(const Partition& index, bool omega) const;
-  CoeffMap powerSumsToHallGeneratorMapViaNewtonRecurrence(ring_elem f, bool omega) const;
+  ring_elem schurLikeToPowerSumsViaCharacters(const Partition& lambda,
+                                               bool omegaStyle) const;
+  CoeffMap powerSumPartToGeneratorMapViaLogarithmFormula(
+      int n,
+      ring_elem common) const;
+  ring_elem powerSumLogarithmCoefficient(const Partition& lambda) const;
+  CoeffMap powerSumPartToCompleteMapViaLogarithmFormula(int n) const;
+  CoeffMap powerSumPartToElementaryMapViaLogarithmFormula(int n) const;
+  CoeffMap powerSumIndexToCompleteMapViaLogarithmFormula(
+      const Partition& index) const;
+  CoeffMap powerSumIndexToElementaryMapViaLogarithmFormula(
+      const Partition& index) const;
+  CoeffMap powerSumPartToHallGeneratorMapViaLogarithmFormula(int n,
+                                                             bool omega) const;
+  CoeffMap powerSumIndexToHallGeneratorMapViaLogarithmFormula(
+      const Partition& index,
+      bool omega) const;
+  CoeffMap powerSumsToHallGeneratorMapViaLogarithmFormula(ring_elem f,
+                                                           bool omega) const;
   CoeffMap triangularReduceHallCapital(const CoeffMap& generatorMap,
                                          bool omega) const;
   ring_elem powerSumIndexToSchurLikeViaCharacters(const Partition& mu,
@@ -70,11 +97,6 @@
   ring_elem powerSumsToSchurViaCharacters(ring_elem f,
                                            int schurId,
                                            int schurOrder) const;
-  ring_elem powerSumsToOmegaSchurViaCharacters(ring_elem f,
-                                                int omegaSchurId,
-                                                int omegaSchurOrder) const;
-  RingElemVector solveSquareSystem(RingElemMatrix M,
-                                     RingElemVector v) const;
   ring_elem monomialToPowerSumsViaTransitionMatrix(const Partition& lambda, bool forgotten) const;
   ring_elem powerSumIndexToMonomialViaTransitionMatrix(const Partition& lambda,
                                             int targetBasisId,
@@ -104,9 +126,19 @@
   ring_elem basisElementForDisplay(const std::string& display,
                                      const Partition& index) const;
   ring_elem powerSumsToHallLittlewoodCapitalViaTriangularReduction(ring_elem f,
-                                           int targetBasisId,
-                                           const std::string& targetDisplay,
-                                           int targetDisplayOrder) const;
+                                         int targetBasisId,
+                                         const std::string& targetDisplay,
+                                         int targetDisplayOrder) const;
+  ring_elem powerSumSingleCycleTermsToHallLittlewoodViaGreenPolynomials(
+      ring_elem f,
+      int targetBasisId,
+      const std::string& targetDisplay,
+      int targetDisplayOrder) const;
+  ring_elem powerSumIndexToHallLittlewoodViaGreenPolynomialsAndDuality(
+      ring_elem f,
+      int targetBasisId,
+      const std::string& targetDisplay,
+      int targetDisplayOrder) const;
   CoeffMap schurGeneratorMap(const Partition& lambda,
                                bool omegaStyle,
                                int generatorId,
@@ -158,10 +190,10 @@
                                         const std::string& targetDisplay,
                                         int targetDisplayOrder,
                                         bool targetIsMultiplicative) const;
-  ring_elem powerSumsToCompleteViaNewtonRecurrence(ring_elem f,
+  ring_elem powerSumsToCompleteViaLogarithmFormula(ring_elem f,
                                                     int completeId,
                                                     int completeOrder) const;
-  ring_elem powerSumsToElementaryViaNewtonRecurrence(ring_elem f,
+  ring_elem powerSumsToElementaryViaLogarithmFormula(ring_elem f,
                                                       int elementaryId,
                                                       int elementaryOrder) const;
   ring_elem powerSumsToHallLittlewoodViaTriangularReduction(
@@ -169,11 +201,6 @@
       int targetBasisId,
       const std::string& targetDisplay,
       int targetDisplayOrder) const;
-  ring_elem powerSumsToTargetDispatch(ring_elem f,
-                                      int targetBasisId,
-                                      const std::string& targetDisplay,
-                                      int targetDisplayOrder,
-                                      bool targetIsMultiplicative) const;
   bool tryAtomToTarget(const SymmetricMonomial& monomial,
                             size_t pos,
                             int targetBasisId,
@@ -187,6 +214,22 @@
                                 int targetDisplayOrder,
                                 bool targetIsMultiplicative,
                                 ring_elem& result) const;
+  ExpressionToTargetMethod selectExpressionToTargetMethod(
+                               const std::string& targetDisplay,
+                               bool targetIsMultiplicative) const;
+  bool executeExpressionToTargetMethod(
+                               ExpressionToTargetMethod method,
+                               ring_elem f,
+                               int targetBasisId,
+                               const std::string& targetDisplay,
+                               int targetDisplayOrder,
+                               bool targetIsMultiplicative,
+                               ring_elem& result) const;
+  const char *expressionToTargetMethodName(
+                               ExpressionToTargetMethod method) const;
+  void traceExpressionToTargetSelection(
+                               ExpressionToTargetMethod method,
+                               const std::string& targetDisplay) const;
   bool tryExpressionToTarget(ring_elem f,
                                int targetBasisId,
                                const std::string& targetDisplay,

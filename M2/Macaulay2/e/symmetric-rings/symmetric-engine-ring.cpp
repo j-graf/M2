@@ -127,8 +127,16 @@ void SymmetricEngineRing::clearHallLittlewoodCaches() const
 {
     hallLittlewoodQGeneratorToPowerSumsCache.clear();
     hallLittlewoodBGeneratorToPowerSumsCache.clear();
-    powerSumToQGeneratorCache.clear();
-    powerSumToBGeneratorCache.clear();
+    hallLittlewoodQGeneratorToPowerSumsQuotientMapCache.clear();
+    hallLittlewoodBGeneratorToPowerSumsQuotientMapCache.clear();
+    hallLittlewoodPartFactorCache.clear();
+    hallLittlewoodCFactorCache.clear();
+    hallLittlewoodSingleCycleCapitalGreenMapCache.clear();
+    hallLittlewoodSingleCycleNormalizedGreenMapCache.clear();
+    hallLittlewoodPowerSumToCapitalColumnCache.clear();
+    hallLittlewoodRaisingGeneratorMapCache.clear();
+    powerSumToQGeneratorMapCache.clear();
+    powerSumToBGeneratorMapCache.clear();
   }
 
 ring_elem SymmetricEngineRing::hallLittlewoodFactor(const Partition& mu) const
@@ -136,9 +144,15 @@ ring_elem SymmetricEngineRing::hallLittlewoodFactor(const Partition& mu) const
     ring_elem result = coefficientRing->one();
     for (int part : mu)
       {
-        ring_elem tPower = coefficientRing->power(hallLittlewoodParameter, part);
-        ring_elem oneMinus = coefficientRing->subtract(coefficientRing->one(), tPower);
-        result = coefficientRing->mult(result, oneMinus);
+        auto cached = hallLittlewoodPartFactorCache.find(part);
+        if (cached == hallLittlewoodPartFactorCache.end())
+          {
+            ring_elem tPower = coefficientRing->power(hallLittlewoodParameter, part);
+            ring_elem oneMinus = coefficientRing->subtract(
+                coefficientRing->one(), tPower);
+            cached = hallLittlewoodPartFactorCache.emplace(part, oneMinus).first;
+          }
+        result = coefficientRing->mult(result, cached->second);
       }
     return result;
   }

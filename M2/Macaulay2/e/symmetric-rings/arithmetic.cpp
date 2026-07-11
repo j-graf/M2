@@ -517,6 +517,7 @@ ring_elem SymmetricEngineRing::negate(const ring_elem f) const
 {
     auto result = new SymmetricRingPoly;
     const auto *poly = polyValue(f);
+    result->conversionMetadata = poly->conversionMetadata;
     result->terms.reserve(poly->terms.size());
     for (const auto& term : poly->terms)
       result->terms.push_back({coefficientRing->negate(term.coeff), term.monomial});
@@ -527,15 +528,55 @@ ring_elem SymmetricEngineRing::add(const ring_elem f, const ring_elem g) const
 {
     const auto *left = polyValue(f);
     const auto *right = polyValue(g);
+    auto preserveMetadata = [&](ring_elem value) {
+      if (!left->conversionMetadata || !right->conversionMetadata) return value;
+      const auto& leftMetadata = *left->conversionMetadata;
+      const auto& rightMetadata = *right->conversionMetadata;
+      SymmetricConversionMetadata metadata;
+      if (leftMetadata.pureBasis == rightMetadata.pureBasis)
+        metadata.pureBasis = leftMetadata.pureBasis;
+      if (leftMetadata.expandedBasis == rightMetadata.expandedBasis)
+        metadata.expandedBasis = leftMetadata.expandedBasis;
+      if (leftMetadata.homogeneousWeight == rightMetadata.homogeneousWeight)
+        metadata.homogeneousWeight = leftMetadata.homogeneousWeight;
+      if (leftMetadata.maximumPartitionLength &&
+          rightMetadata.maximumPartitionLength)
+        metadata.maximumPartitionLength = std::max(
+            *leftMetadata.maximumPartitionLength,
+            *rightMetadata.maximumPartitionLength);
+      if (leftMetadata.factorBases && rightMetadata.factorBases)
+        {
+          std::vector<int> factors = *leftMetadata.factorBases;
+          factors.insert(factors.end(),
+                         rightMetadata.factorBases->begin(),
+                         rightMetadata.factorBases->end());
+          std::sort(factors.begin(), factors.end());
+          factors.erase(std::unique(factors.begin(), factors.end()), factors.end());
+          metadata.factorBases = std::move(factors);
+        }
+      const auto *resultPoly = polyValue(value);
+      metadata.termCount = resultPoly->terms.size();
+      metadata.singleTerm = resultPoly->terms.size() == 1;
+      metadata.singleAtom = resultPoly->terms.size() == 1 &&
+                            !resultPoly->terms[0].monomial.data.empty();
+      if (leftMetadata.noProducts && rightMetadata.noProducts)
+        metadata.noProducts = *leftMetadata.noProducts &&
+                              *rightMetadata.noProducts;
+      metadata.normalized = leftMetadata.normalized && rightMetadata.normalized;
+      metadata.skewFree = leftMetadata.skewFree && rightMetadata.skewFree;
+      metadata.collected = true;
+      mutablePolyValue(value)->conversionMetadata = std::move(metadata);
+      return value;
+    };
     if (left->terms.empty()) return copyPolyValue(right);
     if (right->terms.empty()) return copyPolyValue(left);
 
     if (compareMonomials(left->terms.back().monomial,
                          right->terms.front().monomial) == LT)
-      return concatenateTerms(left, right);
+      return preserveMetadata(concatenateTerms(left, right));
     if (compareMonomials(right->terms.back().monomial,
                          left->terms.front().monomial) == LT)
-      return concatenateTerms(right, left);
+      return preserveMetadata(concatenateTerms(right, left));
 
     auto result = new SymmetricRingPoly;
     result->terms.reserve(left->terms.size() + right->terms.size());
@@ -560,7 +601,7 @@ ring_elem SymmetricEngineRing::add(const ring_elem f, const ring_elem g) const
       }
     result->terms.insert(result->terms.end(), left->terms.begin() + i, left->terms.end());
     result->terms.insert(result->terms.end(), right->terms.begin() + j, right->terms.end());
-    return makePolyValue(result);
+    return preserveMetadata(makePolyValue(result));
   }
 
 ring_elem SymmetricEngineRing::subtract(const ring_elem f, const ring_elem g) const
@@ -573,6 +614,7 @@ SymmetricRingPoly *SymmetricEngineRing::multByCoefficient(ring_elem coeff,
 {
     auto result = new SymmetricRingPoly;
     if (coefficientRing->is_zero(coeff)) return result;
+    result->conversionMetadata = poly->conversionMetadata;
     result->terms.reserve(poly->terms.size());
     for (const auto& term : poly->terms)
       {
@@ -587,6 +629,49 @@ ring_elem SymmetricEngineRing::mult(const ring_elem f, const ring_elem g) const
     ring_elem scalar;
     const auto *left = polyValue(f);
     const auto *right = polyValue(g);
+    auto preserveProductMetadata = [&](ring_elem value) {
+      if (!left->conversionMetadata || !right->conversionMetadata) return value;
+      const auto& leftMetadata = *left->conversionMetadata;
+      const auto& rightMetadata = *right->conversionMetadata;
+      SymmetricConversionMetadata metadata;
+      if (leftMetadata.pureBasis &&
+          leftMetadata.pureBasis == rightMetadata.pureBasis)
+        metadata.pureBasis = leftMetadata.pureBasis;
+      if (leftMetadata.homogeneousWeight && rightMetadata.homogeneousWeight)
+        metadata.homogeneousWeight = *leftMetadata.homogeneousWeight +
+                                     *rightMetadata.homogeneousWeight;
+      if (leftMetadata.maximumPartitionLength &&
+          rightMetadata.maximumPartitionLength)
+        metadata.maximumPartitionLength = std::max(
+            *leftMetadata.maximumPartitionLength,
+            *rightMetadata.maximumPartitionLength);
+      if (leftMetadata.factorBases && rightMetadata.factorBases)
+        {
+          std::vector<int> factors = *leftMetadata.factorBases;
+          factors.insert(factors.end(),
+                         rightMetadata.factorBases->begin(),
+                         rightMetadata.factorBases->end());
+          std::sort(factors.begin(), factors.end());
+          factors.erase(std::unique(factors.begin(), factors.end()), factors.end());
+          metadata.factorBases = std::move(factors);
+        }
+      metadata.normalized = leftMetadata.normalized && rightMetadata.normalized;
+      metadata.skewFree = leftMetadata.skewFree && rightMetadata.skewFree;
+      if (metadata.pureBasis && isMultiplicativeBasis(*metadata.pureBasis) &&
+          metadata.skewFree)
+        {
+          metadata.expandedBasis = metadata.pureBasis;
+          metadata.noProducts = true;
+        }
+      const auto *resultPoly = polyValue(value);
+      metadata.termCount = resultPoly->terms.size();
+      metadata.singleTerm = resultPoly->terms.size() == 1;
+      metadata.singleAtom = resultPoly->terms.size() == 1 &&
+                            !resultPoly->terms[0].monomial.data.empty();
+      metadata.collected = true;
+      mutablePolyValue(value)->conversionMetadata = std::move(metadata);
+      return value;
+    };
     if (getScalar(left, scalar)) return makePolyValue(multByCoefficient(scalar, right));
     if (getScalar(right, scalar)) return makePolyValue(multByCoefficient(scalar, left));
     if (left->terms.size() == 1 && right->terms.size() == 1)
@@ -598,7 +683,7 @@ ring_elem SymmetricEngineRing::mult(const ring_elem f, const ring_elem g) const
           result->terms.push_back({coeff,
                                    multiplyMonomials(left->terms[0].monomial,
                                                      right->terms[0].monomial)});
-        return makePolyValue(result);
+        return preserveProductMetadata(makePolyValue(result));
       }
     VECTOR(SymmetricTerm) products;
     products.reserve(left->terms.size() * right->terms.size());
@@ -610,7 +695,7 @@ ring_elem SymmetricEngineRing::mult(const ring_elem f, const ring_elem g) const
             products.push_back(
                 {coeff, multiplyMonomials(lt.monomial, rt.monomial)});
         }
-    return fromTermVector(products, false);
+    return preserveProductMetadata(fromTermVector(products, false));
   }
 
 bool SymmetricEngineRing::promoteCollectedExpansion(

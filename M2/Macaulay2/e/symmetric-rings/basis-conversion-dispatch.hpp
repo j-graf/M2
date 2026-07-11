@@ -9,6 +9,8 @@
   enum class ConversionPipeline
   {
     WholeExpression,
+    GroupedMultiplicativeTarget,
+    GroupedHallLittlewood,
     PowerSum,
     PostPlethysmPowerSum,
     FallbackTerm,
@@ -27,9 +29,26 @@
     ViaComplete,
     ViaCharacters
   };
+  enum class PowerSumsToTargetMethod
+  {
+    AlreadyInTarget,
+    ViaSchurDispatch,
+    ViaOmegaSchurDispatch,
+    ViaCompleteLogarithmFormula,
+    ViaElementaryLogarithmFormula,
+    ViaHallLittlewoodGeneratorLogarithmFormula,
+    ViaHallLittlewoodSingleCycleGreenPolynomials,
+    ViaHallLittlewoodGreenPolynomialsViaDuality,
+    ViaHallLittlewoodTriangularReduction,
+    ViaMonomialTransition,
+    ViaForgottenTransition,
+    ViaTermwiseFallback
+  };
   enum class SourceToTargetMethod
   {
     AlreadyInTarget,
+    ViaHallLittlewoodNormalization,
+    ViaSchurOmegaConjugation,
     ViaPowerSumKernels,
     ViaCompleteRecursiveTransition,
     ViaComplete,
@@ -45,6 +64,22 @@
     ViaFactorwiseConversion,
     NoApplicableMethod
   };
+  enum class WholeExpressionMethod
+  {
+    AlreadyInTarget,
+    ViaCompleteRecursiveTransition,
+    ViaSchurCompatibleProducts,
+    ViaSchurTriangularReduction,
+    ViaHallLittlewoodNormalization,
+    ViaSchurOmegaConjugation,
+    ViaHallLittlewoodTriangularReduction,
+    NoApplicableMethod
+  };
+  enum class ConversionProfileFact
+  {
+    MaximumPartitionLength,
+    Density
+  };
 
   struct ConversionGuarantees
   {
@@ -53,6 +88,7 @@
     std::optional<int> homogeneousWeight;
     std::optional<size_t> termCount;
     std::optional<size_t> maximumPartitionLength;
+    std::optional<double> density;
     std::optional<std::vector<int>> factorBases;
 
     KnownState singleAtom = KnownState::Unknown;
@@ -120,6 +156,26 @@
         const std::string& targetDisplay,
         int targetOrder,
         bool targetIsMultiplicative) const;
+  ring_elem runGroupedMultiplicativeTargetPipeline(
+        const ConversionInput& input,
+        int pBasisId,
+        const std::string& pDisplay,
+        int pOrder,
+        bool pIsMultiplicative,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetOrder,
+        bool targetIsMultiplicative) const;
+  ring_elem runGroupedHallLittlewoodPipeline(
+        const ConversionInput& input,
+        int pBasisId,
+        const std::string& pDisplay,
+        int pOrder,
+        bool pIsMultiplicative,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetOrder,
+        bool targetIsMultiplicative) const;
   ring_elem runPowerSumPipeline(
         const ConversionInput& input,
         int pBasisId,
@@ -168,6 +224,10 @@
   ConversionGuarantees strengthenConversionGuarantees(
         ConversionGuarantees guarantees,
         int targetBasisId) const;
+  ConversionGuarantees ensureConversionProfile(
+        ring_elem f,
+        ConversionGuarantees guarantees,
+        ConversionProfileFact fact) const;
   ConversionGuarantees guaranteesForFactorizedProduct(
         ring_elem f,
         ring_elem g,
@@ -195,8 +255,27 @@
         int targetBasisId,
         const std::string& targetDisplay,
         bool targetIsMultiplicative) const;
+  bool canUseGroupedHallLittlewoodPipeline(
+        const ConversionGuarantees& guarantees,
+        const std::string& targetDisplay) const;
+  WholeExpressionMethod selectWholeExpressionMethod(
+        const ConversionInput& input,
+        int targetBasisId,
+        const std::string& targetDisplay) const;
+  bool executeWholeExpressionMethod(
+        WholeExpressionMethod method,
+        const ConversionInput& input,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetOrder,
+        ring_elem& result) const;
   PowerSumsToSchurMethod selectPowerSumsToSchurMethod(
         const ConversionGuarantees& guarantees) const;
+  PowerSumsToTargetMethod selectPowerSumsToTargetMethod(
+        const ConversionInput& input,
+        int pBasisId,
+        int targetBasisId,
+        const std::string& targetDisplay) const;
   SourceToTargetMethod selectSourceToTargetMethod(
         const ConversionInput& input,
         int pBasisId,
@@ -217,6 +296,13 @@
         int targetBasisId,
         const std::string& targetDisplay,
         int targetOrder) const;
+  ring_elem powerSumsToTargetDispatch(
+        const ConversionInput& input,
+        int pBasisId,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetDisplayOrder,
+        bool targetIsMultiplicative) const;
   ring_elem powerSumsToSchurViaComplete(
         ring_elem f,
         int targetBasisId,
@@ -224,8 +310,11 @@
         int targetOrder) const;
   const char *powerSumsToSchurMethodName(
         PowerSumsToSchurMethod method) const;
+  const char *powerSumsToTargetMethodName(
+        PowerSumsToTargetMethod method) const;
   const char *sourceToTargetMethodName(SourceToTargetMethod method) const;
   const char *productExpansionMethodName(ProductExpansionMethod method) const;
+  const char *wholeExpressionMethodName(WholeExpressionMethod method) const;
   const char *conversionPipelineName(ConversionPipeline pipeline) const;
   void traceConversionSelection(
         ConversionPipeline pipeline,
@@ -238,13 +327,10 @@
   void traceProductExpansionSelection(
         ProductExpansionMethod method,
         const TermConversionClassification& classification) const;
-  bool tryWholeExpressionToTarget(
-        ring_elem f,
-        int targetBasisId,
-        const std::string& targetDisplay,
-        int targetOrder,
-        bool targetIsMultiplicative,
-        ring_elem& result) const;
+  void traceWholeExpressionSelection(
+        WholeExpressionMethod method,
+        const ConversionInput& input,
+        const std::string& targetDisplay) const;
   ring_elem runProductToBasisPipeline(
         ring_elem f,
         ring_elem g,

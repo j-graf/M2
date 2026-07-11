@@ -3,6 +3,7 @@
 #include "symmetric-rings/partitions.hpp"
 
 #include <algorithm>
+#include <functional>
 #include <sstream>
 
 namespace symmetric_rings {
@@ -131,23 +132,36 @@ std::vector<Partition> partitionsOf(int n)
   return result;
 }
 
-long assignmentCountRec(const Partition& parts, size_t pos, std::vector<int>& targets)
+long assignmentCountRec(
+    const Partition& parts,
+    size_t pos,
+    const Partition& targets,
+    std::map<std::pair<size_t, Partition>, long>& memo)
 {
-  if (pos == parts.size())
-    {
-      for (int target : targets)
-        if (target != 0) return 0;
-      return 1;
-    }
+  if (pos == parts.size()) return targets.empty() ? 1 : 0;
+  auto key = std::make_pair(pos, targets);
+  auto cached = memo.find(key);
+  if (cached != memo.end()) return cached->second;
+
   long total = 0;
   int part = parts[pos];
-  for (size_t i = 0; i < targets.size(); ++i)
-    if (targets[i] >= part)
+  size_t i = 0;
+  while (i < targets.size())
+    {
+      size_t j = i + 1;
+      while (j < targets.size() && targets[j] == targets[i]) ++j;
+      if (targets[i] >= part)
       {
-        targets[i] -= part;
-        total += assignmentCountRec(parts, pos + 1, targets);
-        targets[i] += part;
+        Partition next = targets;
+        next[i] -= part;
+        std::sort(next.begin(), next.end(), std::greater<int>());
+        while (!next.empty() && next.back() == 0) next.pop_back();
+        total += static_cast<long>(j - i) *
+                 assignmentCountRec(parts, pos + 1, next, memo);
       }
+      i = j;
+    }
+  memo[key] = total;
   return total;
 }
 
@@ -156,8 +170,8 @@ long pToMonomialCoefficient(const Partition& lambda, const Partition& mu)
   Partition normalizedLambda = normalizePartition(lambda);
   Partition normalizedMu = normalizePartition(mu);
   if (partitionWeight(normalizedLambda) != partitionWeight(normalizedMu)) return 0;
-  std::vector<int> targets = normalizedMu;
-  return assignmentCountRec(normalizedLambda, 0, targets);
+  std::map<std::pair<size_t, Partition>, long> memo;
+  return assignmentCountRec(normalizedLambda, 0, normalizedMu, memo);
 }
 
 long zValue(const Partition& lambda)

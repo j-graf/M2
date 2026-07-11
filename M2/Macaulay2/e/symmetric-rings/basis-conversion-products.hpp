@@ -111,6 +111,32 @@
                                    int targetDisplayOrder,
                                    bool targetIsMultiplicative,
                                    ring_elem& result) const;
+  bool tryProductToHallLittlewoodViaGenerators(
+                                   ring_elem f,
+                                   ring_elem g,
+                                   int targetBasisId,
+                                   const std::string& targetDisplay,
+                                   int targetDisplayOrder,
+                                   ring_elem& result) const;
+  ProductToTargetMethod selectProductToTargetMethod(
+                                   ring_elem f,
+                                   ring_elem g,
+                                   int targetBasisId,
+                                   const std::string& targetDisplay,
+                                   bool targetIsMultiplicative) const;
+  bool executeProductToTargetMethod(
+                                   ProductToTargetMethod method,
+                                   ring_elem f,
+                                   ring_elem g,
+                                   int targetBasisId,
+                                   const std::string& targetDisplay,
+                                   int targetDisplayOrder,
+                                   bool targetIsMultiplicative,
+                                   ring_elem& result) const;
+  const char *productToTargetMethodName(ProductToTargetMethod method) const;
+  void traceProductToTargetSelection(
+                                   ProductToTargetMethod method,
+                                   const std::string& targetDisplay) const;
   bool tryProductToTargetDispatch(ring_elem f,
                              ring_elem g,
                              int targetBasisId,

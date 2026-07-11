@@ -316,6 +316,8 @@ TEST ///
     assert(toBasis(S_2, "p") == (1/2)*p_2 + (1/2)*p_{1,1})
     assert(toBasis(p_2, "h") == 2*h_2 - h_{1,1})
     assert(toBasis(p_2, "e") == e_{1,1} - 2*e_2)
+    assert((last rawTerms toBasis(p_30, h))#0 == -1)
+    assert((last rawTerms toBasis(p_30, e))#0 == 1)
     assert(toBasis(p_2, "S") == S_2 - S_{1,1})
     assert(toP(h_2) == toBasis(h_2, p))
     assert(toS(p_2) == toBasis(p_2, S))
@@ -354,6 +356,10 @@ TEST ///
     RnoNormalize = symmetricRing(QQ, "NormalizeSomega" => false)
     assert((bases RnoNormalize)#?"Somega")
     assert(toString Somega_3 == "Somega_3")
+    assert(toBasis(S_{3,1} + 2*S_{2,2}, Somega) ==
+           Somega_{2,1,1} + 2*Somega_{2,2})
+    assert(toBasis(Somega_{3,1} + 2*Somega_{2,2}, S) ==
+           S_{2,1,1} + 2*S_{2,2})
     assert(omegaInvolution(S_3, "useSomega" => true) == Somega_3)
 ///
 
@@ -382,6 +388,16 @@ TEST ///
     assert(toBasis(toBasis(p_2, B), p) == p_2)
     assert(toBasis(toBasis(p_2, P), p) == p_2)
     assert(toBasis(toBasis(p_2, R), p) == p_2)
+    singleCyclePowerSums = 3 + p_5 + 2*p_3
+    assert(toBasis(toBasis(singleCyclePowerSums, Q), p) == singleCyclePowerSums)
+    assert(toBasis(toBasis(singleCyclePowerSums, B), p) == singleCyclePowerSums)
+    assert(toBasis(toBasis(p_{3,2}, Q), p) == p_{3,2})
+    assert(toBasis(toBasis(p_{3,2}, B), p) == p_{3,2})
+    assert(toBasis(toBasis(p_{3,2}, P), p) == p_{3,2})
+    assert(toBasis(toBasis(p_{3,2}, R), p) == p_{3,2})
+    cachedAndUncachedPowerSums = p_{3,2} + p_{4,1}
+    assert(toBasis(toBasis(cachedAndUncachedPowerSums, Q), p) ==
+           cachedAndUncachedPowerSums)
 ///
 
 TEST ///
@@ -477,14 +493,42 @@ TEST ///
     assert(constantQQLiftElement(E_0*p_1, Rqq) === null)
     assert(toBasis(toBasis(p_1, q), p) == p_1)
     assert(toBasis(toBasis(p_2, b), p) == p_2)
+    assert(toBasis(toBasis(p_5, q), p) == p_5)
+    assert(toBasis(toBasis(p_5, b), p) == p_5)
     assert(toBasis(Q_{2,1}, q) == q_{2,1} + (E_0 - 1)*q_3)
     assert(toBasis(B_{2,1}, b) == b_{2,1} + (E_0 - 1)*b_3)
     assert(toBasis(toBasis(Q_{2,1}, p), Q) == Q_{2,1})
     assert(toBasis(toBasis(B_{2,1}, p), B) == B_{2,1})
+    assert(toBasis(toBasis(p_4, Q), p) == p_4)
+    assert(toBasis(toBasis(p_4, B), p) == p_4)
     assert(toBasis(Q_2, P) == (1-E_0)*P_2)
     assert(toBasis(B_2, R) == (1-E_0)*R_2)
+    assert(toBasis(P_2, Q) == 1/(1-E_0)*Q_2)
+    assert(toBasis(R_2, B) == 1/(1-E_0)*B_2)
+    hallCapitalSum = Q_{3,1} + E_0*Q_{2,2}
+    assert(toBasis(toBasis(hallCapitalSum, P), Q) == hallCapitalSum)
     assert(toBasis(toBasis(P_2, p), P) == P_2)
     assert(toBasis(toBasis(R_2, p), R) == R_2)
+    assert(multiplyToBasis(Q_2, Q_1, Q) == toBasis(Q_2*Q_1, Q))
+    assert(multiplyToBasis(P_2, P_1, P) == toBasis(P_2*P_1, P))
+    assert(multiplyToBasis(B_2, B_1, B) == toBasis(B_2*B_1, B))
+    assert(multiplyToBasis(R_2, R_1, R) == toBasis(R_2*R_1, R))
+    assert(toBasis(P_{2,1}*e_1, P) ==
+           P_{3,1} + (1+E_0)*P_{2,2} + (1+E_0)*P_{2,1,1})
+    assert(toBasis(R_{2,1}*h_1, R) ==
+           R_{3,1} + (1+E_0)*R_{2,2} + (1+E_0)*R_{2,1,1})
+    assert(toBasis(toBasis(P_{2,1,1}, p), P) == P_{2,1,1})
+    assert(toBasis(toBasis(R_{2,1,1}, p), R) == R_{2,1,1})
+    assert(toBasis(P_{1,2}, p) == toBasis(straighten P_{1,2}, p))
+    assert(toBasis(R_{1,2}, p) == toBasis(straighten R_{1,2}, p))
+    sparseQGenerators = q_8 + q_{7,1}
+    sparseBGenerators = b_8 + b_{7,1}
+    assert(toBasis(toBasis(sparseQGenerators, Q), p) ==
+           toBasis(sparseQGenerators, p))
+    assert(toBasis(toBasis(sparseBGenerators, B), p) ==
+           toBasis(sparseBGenerators, p))
+    assert(toBasis(q_2*q_1 + q_3, Q) ==
+           toBasis(toBasis(q_2*q_1 + q_3, p), Q))
     assert(toBasis(q_2*p_1, q) == q_2*toBasis(p_1, q))
     assert(toBasis(p_1*b_2, b) == toBasis(p_1, b)*b_2)
     assert(toBasis(p_2, m) == m_2)
@@ -493,6 +537,8 @@ TEST ///
     assert(toBasis(ff_2, p) == -p_2)
     assert(toBasis(toBasis(m_{2,1}, p), m) == m_{2,1})
     assert(toBasis(toBasis(ff_{2,1}, p), ff) == ff_{2,1})
+    assert(toBasis(toBasis(m_{8,4,2}, p), m) == m_{8,4,2})
+    assert(toBasis(toBasis(ff_{8,4,2}, p), ff) == ff_{8,4,2})
     assert(hallInnerProduct(q_2, m_2) == 1_E)
     assert(hallInnerProduct(q_2, m_{1,1}) == 0_E)
     assert(hallInnerProduct(p_1, p_1) == 1/(1-E_0))
@@ -559,6 +605,11 @@ TEST ///
     assert(toBasis(toBasis(purePowerSums, e), p) == purePowerSums)
     assert(toBasis(toBasis(purePowerSums, m), p) == purePowerSums)
     assert(toBasis(toBasis(purePowerSums, ff), p) == purePowerSums)
+    pFromComplete = toP h_2
+    pFromElementary = toP e_2
+    assert(toS(pFromComplete + pFromElementary) == toS(toP(h_2 + e_2)))
+    assert(toS(-pFromComplete) == -toS(pFromComplete))
+    assert(toS(3*pFromComplete) == 3*toS(pFromComplete))
     assert(toBasis(S_{5,3,2}*S_{4,3,1}, S) == toBasis(toBasis(S_{5,3,2}*S_{4,3,1}, p), S))
     assert(toBasis(S_{5,3,2}*S_{4,3,1}*h_1, S) == toBasis(toBasis(S_{5,3,2}*S_{4,3,1}*h_1, p), S))
     assert(toBasis(S_{3,2}*h_{3,2}, S) == toBasis(toBasis(S_{3,2}*h_{3,2}, p), S))

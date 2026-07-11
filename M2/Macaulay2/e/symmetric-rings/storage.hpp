@@ -50,6 +50,7 @@ struct SymmetricConversionMetadata
   std::optional<int> homogeneousWeight;
   std::optional<size_t> termCount;
   std::optional<size_t> maximumPartitionLength;
+  std::optional<double> density;
   std::optional<std::vector<int>> factorBases;
   std::optional<bool> singleAtom;
   std::optional<bool> singleTerm;

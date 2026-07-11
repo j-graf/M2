@@ -40,6 +40,23 @@ class SymmetricEngineRing : public Ring
     ViaBorderStrips,
     ViaLittlewoodRichardsonExpansion
   };
+  enum class ProductToTargetMethod
+  {
+    ViaSchurCompatibleFactors,
+    ViaMonomialLikeExpansion,
+    ViaHallLittlewoodGenerators,
+    ViaConvertRightFactor,
+    ViaConvertLeftFactor,
+    AlreadyInTarget,
+    NoApplicableMethod
+  };
+  enum class ExpressionToTargetMethod
+  {
+    ViaSchurTriangularReduction,
+    ViaHallLittlewoodTriangularReduction,
+    ViaFactorwiseConversion,
+    NoApplicableMethod
+  };
 
   const Ring *coefficientRing;
   mutable std::map<int, std::string> basisDisplays;
@@ -50,12 +67,21 @@ class SymmetricEngineRing : public Ring
   mutable GCMap<int, ring_elem> elementaryToPowerSumsCache;
   mutable GCMap<int, ring_elem> hallLittlewoodQGeneratorToPowerSumsCache;
   mutable GCMap<int, ring_elem> hallLittlewoodBGeneratorToPowerSumsCache;
+  mutable GCMap<int, CoeffMap> hallLittlewoodQGeneratorToPowerSumsQuotientMapCache;
+  mutable GCMap<int, CoeffMap> hallLittlewoodBGeneratorToPowerSumsQuotientMapCache;
+  mutable GCMap<int, ring_elem> hallLittlewoodPartFactorCache;
+  mutable GCMap<Partition, ring_elem> hallLittlewoodCFactorCache;
+  mutable GCMap<int, CoeffMap> hallLittlewoodSingleCycleCapitalGreenMapCache;
+  mutable GCMap<int, CoeffMap> hallLittlewoodSingleCycleNormalizedGreenMapCache;
+  mutable GCMap<Partition, CoeffMap> hallLittlewoodPowerSumToCapitalColumnCache;
+  mutable GCMap<Partition, CoeffMap> hallLittlewoodRaisingGeneratorMapCache;
   mutable std::map<int, CharacterTable> characterTableCache;
-  mutable GCMap<int, ring_elem> powerSumToCompleteCache;
-  mutable GCMap<int, ring_elem> powerSumToElementaryCache;
-  mutable GCMap<int, ring_elem> powerSumToQGeneratorCache;
-  mutable GCMap<int, ring_elem> powerSumToBGeneratorCache;
+  mutable GCMap<int, CoeffMap> powerSumToCompleteMapCache;
+  mutable GCMap<int, CoeffMap> powerSumToElementaryMapCache;
+  mutable GCMap<int, CoeffMap> powerSumToQGeneratorMapCache;
+  mutable GCMap<int, CoeffMap> powerSumToBGeneratorMapCache;
   mutable GCMap<int, GCMap<std::string, ring_elem>> monomialToPowerSumCache;
+  mutable GCMap<int, GCMap<std::string, ring_elem>> forgottenToPowerSumCache;
   mutable std::map<std::string, std::vector<SchurConversionRecipeEntry>>
       powerSumsToSchurRecipeCache;
   mutable std::map<std::string, std::vector<LRProductTerm>> littlewoodRichardsonCoefficientProductCache;

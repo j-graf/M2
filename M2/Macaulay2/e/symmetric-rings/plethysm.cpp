@@ -111,8 +111,8 @@ ring_elem SymmetricEngineRing::completePlethysmViaAdamsRecurrence(int n,
       {
         ring_elem pIAtInner = powerSumsViaAdamsOperation(innerPowerSums, i);
         if (error()) return zero();
-        ring_elem pIAtInnerSchur = powerSumsToTargetDispatch(
-            pIAtInner, schurId, schurDisplay, schurOrder, false);
+        ring_elem pIAtInnerSchur = powerSumsToSchurViaCharacters(
+            pIAtInner, schurId, schurOrder);
         if (error()) return zero();
         ring_elem rest = completePlethysmViaAdamsRecurrence(n - i,
                                                       inner,
@@ -148,7 +148,7 @@ ring_elem SymmetricEngineRing::schurPlethysmToSchurViaAdamsJacobiTrudi(const Par
         return zero();
       }
 
-    ring_elem innerPowerSums = schurToPowerSumsViaCharacters(inner);
+    ring_elem innerPowerSums = schurLikeToPowerSumsViaCharacters(inner, false);
     if (error()) return zero();
 
     RingElemMatrix matrix(n, RingElemVector(n));

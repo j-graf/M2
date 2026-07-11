@@ -38,6 +38,7 @@ export {
     "toP",
     "toM",
     "toFF",
+    "multiplyToBasis",
     "plethysm",
     "omegaInvolution",
     "hallInnerProduct",

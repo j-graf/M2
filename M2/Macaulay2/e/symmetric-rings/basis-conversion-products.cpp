@@ -1238,6 +1238,153 @@ bool SymmetricEngineRing::tryProductToMonomialLikeTarget(
     return true;
   }
 
+bool SymmetricEngineRing::tryProductToHallLittlewoodViaGenerators(
+    ring_elem f,
+    ring_elem g,
+    int targetBasisId,
+    const std::string& targetDisplay,
+    int targetDisplayOrder,
+    ring_elem& result) const
+{
+    if (targetDisplay != "Q" && targetDisplay != "P" &&
+        targetDisplay != "B" && targetDisplay != "R")
+      return false;
+    const std::string generatorDisplay =
+        targetDisplay == "Q" || targetDisplay == "P" ? "q" : "b";
+    int generatorId = requiredBasisIdForDisplay(generatorDisplay);
+    if (error()) return false;
+    int generatorOrder = basisOrderForId(generatorId);
+    ring_elem leftGenerators;
+    ring_elem rightGenerators;
+    if (!tryExpressionToTarget(f, generatorId, generatorDisplay,
+                               generatorOrder, true, leftGenerators))
+      return false;
+    if (error()) return false;
+    if (!tryExpressionToTarget(g, generatorId, generatorDisplay,
+                               generatorOrder, true, rightGenerators))
+      return false;
+    if (error()) return false;
+    ring_elem generatorProduct = mult(leftGenerators, rightGenerators);
+    if (error()) return false;
+    return tryExpressionToHallLittlewoodViaTriangularReduction(
+        generatorProduct, targetBasisId, targetDisplay,
+        targetDisplayOrder, result);
+  }
+
+SymmetricEngineRing::ProductToTargetMethod
+SymmetricEngineRing::selectProductToTargetMethod(
+    ring_elem f,
+    ring_elem g,
+    int targetBasisId,
+    const std::string& targetDisplay,
+    bool targetIsMultiplicative) const
+{
+    if (targetDisplay == "S")
+      return ProductToTargetMethod::ViaSchurCompatibleFactors;
+    if (targetDisplay == "m" || isForgottenDisplay(targetDisplay))
+      return ProductToTargetMethod::ViaMonomialLikeExpansion;
+    if (targetDisplay == "Q" || targetDisplay == "P" ||
+        targetDisplay == "B" || targetDisplay == "R")
+      return ProductToTargetMethod::ViaHallLittlewoodGenerators;
+
+    int leftBasis = singleBasisId(f);
+    int rightBasis = singleBasisId(g);
+    if (targetIsMultiplicative && leftBasis == targetBasisId &&
+        rightBasis == targetBasisId)
+      return ProductToTargetMethod::AlreadyInTarget;
+    if (targetIsMultiplicative && leftBasis == targetBasisId)
+      return ProductToTargetMethod::ViaConvertRightFactor;
+    if (targetIsMultiplicative && rightBasis == targetBasisId)
+      return ProductToTargetMethod::ViaConvertLeftFactor;
+    bool leftNative = leftBasis == 0 || leftBasis == targetBasisId;
+    bool rightNative = rightBasis == 0 || rightBasis == targetBasisId;
+    if (leftNative && rightNative)
+      return ProductToTargetMethod::AlreadyInTarget;
+    return ProductToTargetMethod::NoApplicableMethod;
+  }
+
+bool SymmetricEngineRing::executeProductToTargetMethod(
+    ProductToTargetMethod method,
+    ring_elem f,
+    ring_elem g,
+    int targetBasisId,
+    const std::string& targetDisplay,
+    int targetDisplayOrder,
+    bool targetIsMultiplicative,
+    ring_elem& result) const
+{
+    if (method == ProductToTargetMethod::ViaSchurCompatibleFactors)
+      return tryProductToSchurViaCompatibleFactors(
+          f, g, targetBasisId, targetDisplay, targetDisplayOrder, result);
+    if (method == ProductToTargetMethod::ViaMonomialLikeExpansion)
+      return tryProductToMonomialLikeTarget(
+          f, g, targetBasisId, targetDisplay, targetDisplayOrder,
+          targetIsMultiplicative, result);
+    if (method == ProductToTargetMethod::ViaHallLittlewoodGenerators)
+      return tryProductToHallLittlewoodViaGenerators(
+          f, g, targetBasisId, targetDisplay, targetDisplayOrder, result);
+    if (method == ProductToTargetMethod::ViaConvertRightFactor)
+      {
+        ring_elem converted;
+        if (!tryExpressionToTarget(g, targetBasisId, targetDisplay,
+                                   targetDisplayOrder,
+                                   targetIsMultiplicative, converted))
+          return false;
+        result = mult(f, converted);
+        return !error();
+      }
+    if (method == ProductToTargetMethod::ViaConvertLeftFactor)
+      {
+        ring_elem converted;
+        if (!tryExpressionToTarget(f, targetBasisId, targetDisplay,
+                                   targetDisplayOrder,
+                                   targetIsMultiplicative, converted))
+          return false;
+        result = mult(converted, g);
+        return !error();
+      }
+    if (method == ProductToTargetMethod::AlreadyInTarget)
+      {
+        result = mult(f, g);
+        return !error();
+      }
+    return false;
+  }
+
+const char *SymmetricEngineRing::productToTargetMethodName(
+    ProductToTargetMethod method) const
+{
+    switch (method)
+      {
+        case ProductToTargetMethod::ViaSchurCompatibleFactors:
+          return "Schur-compatible-factors";
+        case ProductToTargetMethod::ViaMonomialLikeExpansion:
+          return "monomial-like-expansion";
+        case ProductToTargetMethod::ViaHallLittlewoodGenerators:
+          return "Hall-Littlewood-generators";
+        case ProductToTargetMethod::ViaConvertRightFactor:
+          return "convert-right-factor";
+        case ProductToTargetMethod::ViaConvertLeftFactor:
+          return "convert-left-factor";
+        case ProductToTargetMethod::AlreadyInTarget:
+          return "already-in-target";
+        case ProductToTargetMethod::NoApplicableMethod:
+          return "ordinary-product-fallback";
+      }
+    return "unknown";
+  }
+
+void SymmetricEngineRing::traceProductToTargetSelection(
+    ProductToTargetMethod method,
+    const std::string& targetDisplay) const
+{
+    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
+    std::fprintf(stderr,
+                 "SymmetricRings product-target: target=%s method=%s\n",
+                 targetDisplay.c_str(),
+                 productToTargetMethodName(method));
+  }
+
 bool SymmetricEngineRing::tryProductToTargetDispatch(ring_elem f,
                           ring_elem g,
                           int targetBasisId,
@@ -1251,65 +1398,17 @@ bool SymmetricEngineRing::tryProductToTargetDispatch(ring_elem f,
                   targetDisplayOrder,
                   targetIsMultiplicative);
 
-    if (targetDisplay == "S")
-      return tryProductToSchurViaCompatibleFactors(f,
-                                g,
-                                targetBasisId,
-                                targetDisplay,
-                                targetDisplayOrder,
-                                result);
-
-    if (targetDisplay == "m" || isForgottenDisplay(targetDisplay))
-      return tryProductToMonomialLikeTarget(f,
-                                       g,
-                                       targetBasisId,
-                                       targetDisplay,
-                                       targetDisplayOrder,
-                                       targetIsMultiplicative,
-                                       result);
-
-    int leftBasis = singleBasisId(f);
-    int rightBasis = singleBasisId(g);
-    if (targetIsMultiplicative && leftBasis == targetBasisId)
-      {
-        ring_elem convertedRight;
-        if (tryExpressionToTarget(g,
-                                  targetBasisId,
-                                  targetDisplay,
-                                  targetDisplayOrder,
-                                  targetIsMultiplicative,
-                                  convertedRight))
-          {
-            result = mult(f, convertedRight);
-            return !error();
-          }
-        if (error()) return false;
-      }
-    if (targetIsMultiplicative && rightBasis == targetBasisId)
-      {
-        ring_elem convertedLeft;
-        if (tryExpressionToTarget(f,
-                                  targetBasisId,
-                                  targetDisplay,
-                                  targetDisplayOrder,
-                                  targetIsMultiplicative,
-                                  convertedLeft))
-          {
-            result = mult(convertedLeft, g);
-            return !error();
-          }
-        if (error()) return false;
-      }
-
-    bool leftNative = leftBasis == 0 || leftBasis == targetBasisId;
-    bool rightNative = rightBasis == 0 || rightBasis == targetBasisId;
-    if (leftNative && rightNative)
-      {
-        result = mult(f, g);
-        return !error();
-      }
-
-    return false;
+    ProductToTargetMethod method = selectProductToTargetMethod(
+        f, g, targetBasisId, targetDisplay, targetIsMultiplicative);
+    traceProductToTargetSelection(method, targetDisplay);
+    return executeProductToTargetMethod(method,
+                                        f,
+                                        g,
+                                        targetBasisId,
+                                        targetDisplay,
+                                        targetDisplayOrder,
+                                        targetIsMultiplicative,
+                                        result);
   }
 
 } // namespace symmetric_rings

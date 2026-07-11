@@ -43,6 +43,7 @@ doc ///
    registerTransformedBasis
    plethysm
    toBasis
+   multiplyToBasis
 
  Node
   Key
@@ -82,6 +83,7 @@ doc ///
     toBasis(h_2, p)
     toS p_2
     toH S_{2,1}
+    multiplyToBasis(S_2, e_1, S)
    Text
     Schur functions with composition indices are straightened automatically
     when needed; the same operation is available directly through
@@ -942,6 +944,26 @@ doc ///
     R = symmetricRing A
     toBasis(S_{{2,1},{1}}, h)
     toBasis(Somega_{{2,1},{1}}, e)
+
+ Node
+  Key
+   multiplyToBasis
+   (multiplyToBasis,SymmetricRingElement,SymmetricRingElement,Thing)
+  Headline
+   multiply two symmetric functions in a requested basis
+  Usage
+   multiplyToBasis(f,g,B)
+  Description
+   Text
+    This operation preserves f and g as separate operands while selecting a
+    product expansion and conversion route. It is useful when the caller still
+    has the factors separately; ordinary toBasis continues to classify products
+    already present in an expression.
+   Example
+    A = frac(QQ[t])
+    R = symmetricRing A
+    multiplyToBasis(S_2, e_1, S)
+    multiplyToBasis(Q_2, Q_1, Q)
 
  Node
   Key

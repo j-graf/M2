@@ -50,14 +50,22 @@ is already closed in the target basis.  Ordinary callers infer inexpensive
 facts from the expression, while producers such as plethysm can attach trusted
 facts to their output and avoid another structural scan.
 
-The selector currently chooses one of six pipelines:
+The selector currently chooses one of eight pipelines:
 
 - `WholeExpression` handles expressions whose guarantees make a complete
   direct route applicable.  This includes target-closed expressions and
   supported whole-expression Schur or direct-target expansions.
+- `GroupedMultiplicativeTarget` converts a normalized expression to a
+  multiplicative target as one grouped operation, allowing converted factors
+  and canonical indices to be combined before returning.
+- `GroupedHallLittlewood` applies the generator-to-capital triangular
+  transition to any normalized, skew-free pure `q` or `b` expansion as a
+  whole expression. Comparative benchmarks showed that grouping wins even for
+  one sparse generator term, so this route has no density threshold.
 - `PowerSum` handles expressions guaranteed to be expanded in the power-sum
-  basis.  Most targets use the direct power-sum conversion kernels.  For a
-  Schur target, `selectPowerSumsToSchurMethod` selects a clearly named implementation:
+  basis. `selectPowerSumsToTargetMethod` makes the pair-level route explicit
+  for `h`, `e`, `S`, `Somega`, `Q/P/B/R`, `m`, and `ff` targets. For a Schur
+  target, `selectPowerSumsToSchurMethod` then selects a clearly named implementation:
   border-strip expansion, conversion through `h` followed by the recursive
   `h -> S` transition, or grouped character conversion.
 - `PostPlethysmPowerSum` handles a materialized power-sum expression whose
@@ -91,12 +99,33 @@ through the same `toBasis` pipeline selector. Product rules therefore remain
 reusable lower-level algorithms rather than alternative top-level conversion
 systems.
 
+`multiplyToBasis` exposes this retained-operand route to M2 callers. Product
+selection is explicit and traced: Schur-compatible factors, monomial-like
+expansion, Hall-Littlewood generator conversion, one-sided conversion for a
+multiplicative target, identity multiplication, or ordinary-product fallback.
+The Hall-Littlewood product route converts both operands to the multiplicative
+`q` or `b` generators, multiplies there, and performs the established
+triangular transition to `Q`, `P`, `B`, or `R`.
+
+Potentially expensive profile facts are requested lazily. Density is derived
+from homogeneous weight and support size only if a future selector asks for it;
+the current Hall-Littlewood grouped selector needs only structural guarantees.
+Maximum partition length likewise remains unevaluated until requested. Exact
+negation and nonzero scalar multiplication preserve metadata, compatible
+additions merge it, and products preserve the facts implied by a shared
+multiplicative basis.
+
 Concrete formulas, straightening, and pair-level source-target kernels live in
 `basis-conversion-kernels.cpp`; multiplication algorithms live in
 `basis-conversion-products.cpp`; and pipeline selection and orchestration live
 in `basis-conversion-dispatch.cpp`.  This separation is intended to make the
 mathematical route visible from the dispatch code while keeping each algorithm
 independently maintainable and benchmarkable.
+
+Raising-operator Hall-Littlewood expansions process first indices in
+descending order, so a coordinate is replenished before any operator whose
+finite expansion drains it. This ordering is required once an index has at
+least three parts.
 
 #### Dispatch And Naming Policy
 

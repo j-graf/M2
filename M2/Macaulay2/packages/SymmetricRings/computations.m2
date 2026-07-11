@@ -262,13 +262,6 @@ multiplyToBasis(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, tar
     rememberRingBasisData R0;
     B := targetBasisOnRing(R0, target);
     P := basis(R0, p);
-    if B#"MultiplicativeIndex" then (
-        targetId := B#"BasisId";
-        leftBasisId := rawSymmetricRingsSingleBasisId raw f;
-        rightBasisId := rawSymmetricRingsSingleBasisId raw g;
-        if leftBasisId == targetId then return f * toBasis(g, B);
-        if rightBasisId == targetId then return toBasis(f, B) * g;
-        );
     if needsM2PowerSumConversion f or needsM2PowerSumConversion g or B#"FromPowerSums" =!= null then return toBasisFallback(f*g, B);
     engineResultWithRingBasisSymbols(R0, rawSymmetricRingsProductToBasisDispatch(
         raw(elementWithDefaultBasisSymbols f),
