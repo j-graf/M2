@@ -40,7 +40,7 @@ class SymmetricEngineRing : public Ring
     ViaBorderStrips,
     ViaLittlewoodRichardsonExpansion
   };
-  enum class ProductToTargetMethod
+  enum class ProductToTargetRoute
   {
     ViaSchurCompatibleFactors,
     ViaMonomialLikeExpansion,
@@ -48,14 +48,14 @@ class SymmetricEngineRing : public Ring
     ViaConvertRightFactor,
     ViaConvertLeftFactor,
     AlreadyInTarget,
-    NoApplicableMethod
+    NoApplicableRoute
   };
-  enum class ExpressionToTargetMethod
+  enum class ExpressionToTargetRoute
   {
     ViaSchurTriangularReduction,
     ViaHallLittlewoodTriangularReduction,
     ViaFactorwiseConversion,
-    NoApplicableMethod
+    NoApplicableRoute
   };
 
   const Ring *coefficientRing;

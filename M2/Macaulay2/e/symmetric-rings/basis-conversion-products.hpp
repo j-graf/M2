@@ -118,14 +118,14 @@
                                    const std::string& targetDisplay,
                                    int targetDisplayOrder,
                                    ring_elem& result) const;
-  ProductToTargetMethod selectProductToTargetMethod(
+  ProductToTargetRoute selectProductToTargetRoute(
                                    ring_elem f,
                                    ring_elem g,
                                    int targetBasisId,
                                    const std::string& targetDisplay,
                                    bool targetIsMultiplicative) const;
-  bool executeProductToTargetMethod(
-                                   ProductToTargetMethod method,
+  bool executeProductToTargetRoute(
+                                   ProductToTargetRoute route,
                                    ring_elem f,
                                    ring_elem g,
                                    int targetBasisId,
@@ -133,9 +133,9 @@
                                    int targetDisplayOrder,
                                    bool targetIsMultiplicative,
                                    ring_elem& result) const;
-  const char *productToTargetMethodName(ProductToTargetMethod method) const;
+  const char *productToTargetRouteName(ProductToTargetRoute route) const;
   void traceProductToTargetSelection(
-                                   ProductToTargetMethod method,
+                                   ProductToTargetRoute route,
                                    const std::string& targetDisplay) const;
   bool tryProductToTargetDispatch(ring_elem f,
                              ring_elem g,

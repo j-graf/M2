@@ -1989,24 +1989,24 @@ bool SymmetricEngineRing::tryMonomialToTarget(const SymmetricMonomial& monomial,
     return true;
   }
 
-SymmetricEngineRing::ExpressionToTargetMethod
-SymmetricEngineRing::selectExpressionToTargetMethod(
+SymmetricEngineRing::ExpressionToTargetRoute
+SymmetricEngineRing::selectExpressionToTargetRoute(
     const std::string& targetDisplay,
     bool targetIsMultiplicative) const
 {
     if (targetDisplay == "S" || targetDisplay == "Somega")
-      return ExpressionToTargetMethod::ViaSchurTriangularReduction;
+      return ExpressionToTargetRoute::ViaSchurTriangularReduction;
     if (targetDisplay == "Q" || targetDisplay == "P" ||
         targetDisplay == "B" || targetDisplay == "R")
-      return ExpressionToTargetMethod::ViaHallLittlewoodTriangularReduction;
+      return ExpressionToTargetRoute::ViaHallLittlewoodTriangularReduction;
     if (targetDisplay == "h" || targetDisplay == "e" ||
         targetIsMultiplicative)
-      return ExpressionToTargetMethod::ViaFactorwiseConversion;
-    return ExpressionToTargetMethod::NoApplicableMethod;
+      return ExpressionToTargetRoute::ViaFactorwiseConversion;
+    return ExpressionToTargetRoute::NoApplicableRoute;
   }
 
-bool SymmetricEngineRing::executeExpressionToTargetMethod(
-    ExpressionToTargetMethod method,
+bool SymmetricEngineRing::executeExpressionToTargetRoute(
+    ExpressionToTargetRoute route,
     ring_elem f,
     int targetBasisId,
     const std::string& targetDisplay,
@@ -2014,13 +2014,13 @@ bool SymmetricEngineRing::executeExpressionToTargetMethod(
     bool targetIsMultiplicative,
     ring_elem& result) const
 {
-    if (method == ExpressionToTargetMethod::ViaSchurTriangularReduction)
+    if (route == ExpressionToTargetRoute::ViaSchurTriangularReduction)
       return tryExpressionToSchurViaTriangularReduction(
           f, targetBasisId, targetDisplay, targetDisplayOrder, result);
-    if (method == ExpressionToTargetMethod::ViaHallLittlewoodTriangularReduction)
+    if (route == ExpressionToTargetRoute::ViaHallLittlewoodTriangularReduction)
       return tryExpressionToHallLittlewoodViaTriangularReduction(
           f, targetBasisId, targetDisplay, targetDisplayOrder, result);
-    if (method != ExpressionToTargetMethod::ViaFactorwiseConversion)
+    if (route != ExpressionToTargetRoute::ViaFactorwiseConversion)
       return false;
     result = zero();
     const auto *poly = polyValue(f);
@@ -2039,32 +2039,32 @@ bool SymmetricEngineRing::executeExpressionToTargetMethod(
     return true;
   }
 
-const char *SymmetricEngineRing::expressionToTargetMethodName(
-    ExpressionToTargetMethod method) const
+const char *SymmetricEngineRing::expressionToTargetRouteName(
+    ExpressionToTargetRoute route) const
 {
-    switch (method)
+    switch (route)
       {
-        case ExpressionToTargetMethod::ViaSchurTriangularReduction:
+        case ExpressionToTargetRoute::ViaSchurTriangularReduction:
           return "Schur-triangular-reduction";
-        case ExpressionToTargetMethod::ViaHallLittlewoodTriangularReduction:
+        case ExpressionToTargetRoute::ViaHallLittlewoodTriangularReduction:
           return "Hall-Littlewood-triangular-reduction";
-        case ExpressionToTargetMethod::ViaFactorwiseConversion:
+        case ExpressionToTargetRoute::ViaFactorwiseConversion:
           return "factorwise-conversion";
-        case ExpressionToTargetMethod::NoApplicableMethod:
+        case ExpressionToTargetRoute::NoApplicableRoute:
           return "not-applicable";
       }
     return "unknown";
   }
 
 void SymmetricEngineRing::traceExpressionToTargetSelection(
-    ExpressionToTargetMethod method,
+    ExpressionToTargetRoute route,
     const std::string& targetDisplay) const
 {
     if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
     std::fprintf(stderr,
-                 "SymmetricRings expression-target: target=%s method=%s\n",
+                 "SymmetricRings expression-target: target=%s route=%s\n",
                  targetDisplay.c_str(),
-                 expressionToTargetMethodName(method));
+                 expressionToTargetRouteName(route));
   }
 
 bool SymmetricEngineRing::tryExpressionToTarget(ring_elem f,
@@ -2074,10 +2074,10 @@ bool SymmetricEngineRing::tryExpressionToTarget(ring_elem f,
                              bool targetIsMultiplicative,
                              ring_elem& result) const
 {
-    ExpressionToTargetMethod method = selectExpressionToTargetMethod(
+    ExpressionToTargetRoute route = selectExpressionToTargetRoute(
         targetDisplay, targetIsMultiplicative);
-    traceExpressionToTargetSelection(method, targetDisplay);
-    return executeExpressionToTargetMethod(method,
+    traceExpressionToTargetSelection(route, targetDisplay);
+    return executeExpressionToTargetRoute(route,
                                            f,
                                            targetBasisId,
                                            targetDisplay,

@@ -214,21 +214,21 @@
                                 int targetDisplayOrder,
                                 bool targetIsMultiplicative,
                                 ring_elem& result) const;
-  ExpressionToTargetMethod selectExpressionToTargetMethod(
+  ExpressionToTargetRoute selectExpressionToTargetRoute(
                                const std::string& targetDisplay,
                                bool targetIsMultiplicative) const;
-  bool executeExpressionToTargetMethod(
-                               ExpressionToTargetMethod method,
+  bool executeExpressionToTargetRoute(
+                               ExpressionToTargetRoute route,
                                ring_elem f,
                                int targetBasisId,
                                const std::string& targetDisplay,
                                int targetDisplayOrder,
                                bool targetIsMultiplicative,
                                ring_elem& result) const;
-  const char *expressionToTargetMethodName(
-                               ExpressionToTargetMethod method) const;
+  const char *expressionToTargetRouteName(
+                               ExpressionToTargetRoute route) const;
   void traceExpressionToTargetSelection(
-                               ExpressionToTargetMethod method,
+                               ExpressionToTargetRoute route,
                                const std::string& targetDisplay) const;
   bool tryExpressionToTarget(ring_elem f,
                                int targetBasisId,

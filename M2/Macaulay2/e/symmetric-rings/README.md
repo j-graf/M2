@@ -63,11 +63,11 @@ The selector currently chooses one of eight pipelines:
   whole expression. Comparative benchmarks showed that grouping wins even for
   one sparse generator term, so this route has no density threshold.
 - `PowerSum` handles expressions guaranteed to be expanded in the power-sum
-  basis. `selectPowerSumsToTargetMethod` makes the pair-level route explicit
-  for `h`, `e`, `S`, `Somega`, `Q/P/B/R`, `m`, and `ff` targets. For a Schur
-  target, `selectPowerSumsToSchurMethod` then selects a clearly named implementation:
-  border-strip expansion, conversion through `h` followed by the recursive
-  `h -> S` transition, or grouped character conversion.
+  basis. `selectPowerSumsToTargetRoute` selects one concrete route for `h`,
+  `e`, `S`, `Somega`, `Q/P/B/R`, `m`, and `ff` targets. Schur routes such as
+  border-strip expansion, conversion through `h`, and grouped characters are
+  values of the same `PowerSumsToTargetRoute` enum as Hall-Littlewood and other
+  target routes; there is no nested target-specific selector.
 - `PostPlethysmPowerSum` handles a materialized power-sum expression whose
   provenance identifies it as the result of plethysm. It keeps that context
   available to conversion selection while using the power-sum kernels.
@@ -145,11 +145,13 @@ algorithms and composed routes.  The programmatic suffixes have fixed meanings:
 
 - `...Dispatch` selects and executes an implementation of one mathematical
   operation.
-- `select...Method` inspects guarantees and returns an enum without performing
-  algebra.
+- `select...Route` inspects guarantees and returns a complete basis-conversion
+  route without performing algebra.
+- `select...Method` chooses a lower-level multiplication or combinatorial
+  method rather than a basis-conversion route.
 - `run...Pipeline` executes a multi-stage expression workflow.
 - `try...` is an applicability probe that returns success and an output value.
-- `...Via<Method>` executes one named mathematical algorithm or one named
+- `...Via<Algorithm>` executes one named mathematical algorithm or one named
   intermediate-basis route.
 
 Use full basis names in identifiers (`powerSums`, `complete`, `elementary`,

@@ -23,17 +23,15 @@
     FactorizedProduct,
     PostPlethysm
   };
-  enum class PowerSumsToSchurMethod
-  {
-    ViaBorderStrips,
-    ViaComplete,
-    ViaCharacters
-  };
-  enum class PowerSumsToTargetMethod
+  enum class PowerSumsToTargetRoute
   {
     AlreadyInTarget,
-    ViaSchurDispatch,
-    ViaOmegaSchurDispatch,
+    ViaSchurBorderStrips,
+    ViaSchurComplete,
+    ViaSchurCharacters,
+    ViaOmegaThenSchurBorderStrips,
+    ViaOmegaThenSchurComplete,
+    ViaOmegaThenSchurCharacters,
     ViaCompleteLogarithmFormula,
     ViaElementaryLogarithmFormula,
     ViaHallLittlewoodGeneratorLogarithmFormula,
@@ -44,7 +42,7 @@
     ViaForgottenTransition,
     ViaTermwiseFallback
   };
-  enum class SourceToTargetMethod
+  enum class SourceToTargetRoute
   {
     AlreadyInTarget,
     ViaHallLittlewoodNormalization,
@@ -64,7 +62,7 @@
     ViaFactorwiseConversion,
     NoApplicableMethod
   };
-  enum class WholeExpressionMethod
+  enum class WholeExpressionRoute
   {
     AlreadyInTarget,
     ViaCompleteRecursiveTransition,
@@ -73,7 +71,7 @@
     ViaHallLittlewoodNormalization,
     ViaSchurOmegaConjugation,
     ViaHallLittlewoodTriangularReduction,
-    NoApplicableMethod
+    NoApplicableRoute
   };
   enum class ConversionProfileFact
   {
@@ -258,25 +256,23 @@
   bool canUseGroupedHallLittlewoodPipeline(
         const ConversionGuarantees& guarantees,
         const std::string& targetDisplay) const;
-  WholeExpressionMethod selectWholeExpressionMethod(
+  WholeExpressionRoute selectWholeExpressionRoute(
         const ConversionInput& input,
         int targetBasisId,
         const std::string& targetDisplay) const;
-  bool executeWholeExpressionMethod(
-        WholeExpressionMethod method,
+  bool executeWholeExpressionRoute(
+        WholeExpressionRoute route,
         const ConversionInput& input,
         int targetBasisId,
         const std::string& targetDisplay,
         int targetOrder,
         ring_elem& result) const;
-  PowerSumsToSchurMethod selectPowerSumsToSchurMethod(
-        const ConversionGuarantees& guarantees) const;
-  PowerSumsToTargetMethod selectPowerSumsToTargetMethod(
+  PowerSumsToTargetRoute selectPowerSumsToTargetRoute(
         const ConversionInput& input,
         int pBasisId,
         int targetBasisId,
         const std::string& targetDisplay) const;
-  SourceToTargetMethod selectSourceToTargetMethod(
+  SourceToTargetRoute selectSourceToTargetRoute(
         const ConversionInput& input,
         int pBasisId,
         int targetBasisId,
@@ -291,11 +287,6 @@
         const std::string& targetDisplay,
         int targetOrder,
         bool targetIsMultiplicative) const;
-  ring_elem powerSumsToSchurDispatch(
-        const ConversionInput& input,
-        int targetBasisId,
-        const std::string& targetDisplay,
-        int targetOrder) const;
   ring_elem powerSumsToTargetDispatch(
         const ConversionInput& input,
         int pBasisId,
@@ -308,27 +299,25 @@
         int targetBasisId,
         const std::string& targetDisplay,
         int targetOrder) const;
-  const char *powerSumsToSchurMethodName(
-        PowerSumsToSchurMethod method) const;
-  const char *powerSumsToTargetMethodName(
-        PowerSumsToTargetMethod method) const;
-  const char *sourceToTargetMethodName(SourceToTargetMethod method) const;
+  const char *powerSumsToTargetRouteName(
+        PowerSumsToTargetRoute route) const;
+  const char *sourceToTargetRouteName(SourceToTargetRoute route) const;
   const char *productExpansionMethodName(ProductExpansionMethod method) const;
-  const char *wholeExpressionMethodName(WholeExpressionMethod method) const;
+  const char *wholeExpressionRouteName(WholeExpressionRoute route) const;
   const char *conversionPipelineName(ConversionPipeline pipeline) const;
   void traceConversionSelection(
         ConversionPipeline pipeline,
         const ConversionRequest& request,
         const std::string& targetDisplay) const;
   void traceSourceToTargetSelection(
-        SourceToTargetMethod method,
+        SourceToTargetRoute route,
         const ConversionInput& input,
         const std::string& targetDisplay) const;
   void traceProductExpansionSelection(
         ProductExpansionMethod method,
         const TermConversionClassification& classification) const;
   void traceWholeExpressionSelection(
-        WholeExpressionMethod method,
+        WholeExpressionRoute route,
         const ConversionInput& input,
         const std::string& targetDisplay) const;
   ring_elem runProductToBasisPipeline(

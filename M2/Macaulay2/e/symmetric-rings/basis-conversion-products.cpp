@@ -1271,8 +1271,8 @@ bool SymmetricEngineRing::tryProductToHallLittlewoodViaGenerators(
         targetDisplayOrder, result);
   }
 
-SymmetricEngineRing::ProductToTargetMethod
-SymmetricEngineRing::selectProductToTargetMethod(
+SymmetricEngineRing::ProductToTargetRoute
+SymmetricEngineRing::selectProductToTargetRoute(
     ring_elem f,
     ring_elem g,
     int targetBasisId,
@@ -1280,31 +1280,31 @@ SymmetricEngineRing::selectProductToTargetMethod(
     bool targetIsMultiplicative) const
 {
     if (targetDisplay == "S")
-      return ProductToTargetMethod::ViaSchurCompatibleFactors;
+      return ProductToTargetRoute::ViaSchurCompatibleFactors;
     if (targetDisplay == "m" || isForgottenDisplay(targetDisplay))
-      return ProductToTargetMethod::ViaMonomialLikeExpansion;
+      return ProductToTargetRoute::ViaMonomialLikeExpansion;
     if (targetDisplay == "Q" || targetDisplay == "P" ||
         targetDisplay == "B" || targetDisplay == "R")
-      return ProductToTargetMethod::ViaHallLittlewoodGenerators;
+      return ProductToTargetRoute::ViaHallLittlewoodGenerators;
 
     int leftBasis = singleBasisId(f);
     int rightBasis = singleBasisId(g);
     if (targetIsMultiplicative && leftBasis == targetBasisId &&
         rightBasis == targetBasisId)
-      return ProductToTargetMethod::AlreadyInTarget;
+      return ProductToTargetRoute::AlreadyInTarget;
     if (targetIsMultiplicative && leftBasis == targetBasisId)
-      return ProductToTargetMethod::ViaConvertRightFactor;
+      return ProductToTargetRoute::ViaConvertRightFactor;
     if (targetIsMultiplicative && rightBasis == targetBasisId)
-      return ProductToTargetMethod::ViaConvertLeftFactor;
+      return ProductToTargetRoute::ViaConvertLeftFactor;
     bool leftNative = leftBasis == 0 || leftBasis == targetBasisId;
     bool rightNative = rightBasis == 0 || rightBasis == targetBasisId;
     if (leftNative && rightNative)
-      return ProductToTargetMethod::AlreadyInTarget;
-    return ProductToTargetMethod::NoApplicableMethod;
+      return ProductToTargetRoute::AlreadyInTarget;
+    return ProductToTargetRoute::NoApplicableRoute;
   }
 
-bool SymmetricEngineRing::executeProductToTargetMethod(
-    ProductToTargetMethod method,
+bool SymmetricEngineRing::executeProductToTargetRoute(
+    ProductToTargetRoute route,
     ring_elem f,
     ring_elem g,
     int targetBasisId,
@@ -1313,17 +1313,17 @@ bool SymmetricEngineRing::executeProductToTargetMethod(
     bool targetIsMultiplicative,
     ring_elem& result) const
 {
-    if (method == ProductToTargetMethod::ViaSchurCompatibleFactors)
+    if (route == ProductToTargetRoute::ViaSchurCompatibleFactors)
       return tryProductToSchurViaCompatibleFactors(
           f, g, targetBasisId, targetDisplay, targetDisplayOrder, result);
-    if (method == ProductToTargetMethod::ViaMonomialLikeExpansion)
+    if (route == ProductToTargetRoute::ViaMonomialLikeExpansion)
       return tryProductToMonomialLikeTarget(
           f, g, targetBasisId, targetDisplay, targetDisplayOrder,
           targetIsMultiplicative, result);
-    if (method == ProductToTargetMethod::ViaHallLittlewoodGenerators)
+    if (route == ProductToTargetRoute::ViaHallLittlewoodGenerators)
       return tryProductToHallLittlewoodViaGenerators(
           f, g, targetBasisId, targetDisplay, targetDisplayOrder, result);
-    if (method == ProductToTargetMethod::ViaConvertRightFactor)
+    if (route == ProductToTargetRoute::ViaConvertRightFactor)
       {
         ring_elem converted;
         if (!tryExpressionToTarget(g, targetBasisId, targetDisplay,
@@ -1333,7 +1333,7 @@ bool SymmetricEngineRing::executeProductToTargetMethod(
         result = mult(f, converted);
         return !error();
       }
-    if (method == ProductToTargetMethod::ViaConvertLeftFactor)
+    if (route == ProductToTargetRoute::ViaConvertLeftFactor)
       {
         ring_elem converted;
         if (!tryExpressionToTarget(f, targetBasisId, targetDisplay,
@@ -1343,7 +1343,7 @@ bool SymmetricEngineRing::executeProductToTargetMethod(
         result = mult(converted, g);
         return !error();
       }
-    if (method == ProductToTargetMethod::AlreadyInTarget)
+    if (route == ProductToTargetRoute::AlreadyInTarget)
       {
         result = mult(f, g);
         return !error();
@@ -1351,38 +1351,38 @@ bool SymmetricEngineRing::executeProductToTargetMethod(
     return false;
   }
 
-const char *SymmetricEngineRing::productToTargetMethodName(
-    ProductToTargetMethod method) const
+const char *SymmetricEngineRing::productToTargetRouteName(
+    ProductToTargetRoute route) const
 {
-    switch (method)
+    switch (route)
       {
-        case ProductToTargetMethod::ViaSchurCompatibleFactors:
+        case ProductToTargetRoute::ViaSchurCompatibleFactors:
           return "Schur-compatible-factors";
-        case ProductToTargetMethod::ViaMonomialLikeExpansion:
+        case ProductToTargetRoute::ViaMonomialLikeExpansion:
           return "monomial-like-expansion";
-        case ProductToTargetMethod::ViaHallLittlewoodGenerators:
+        case ProductToTargetRoute::ViaHallLittlewoodGenerators:
           return "Hall-Littlewood-generators";
-        case ProductToTargetMethod::ViaConvertRightFactor:
+        case ProductToTargetRoute::ViaConvertRightFactor:
           return "convert-right-factor";
-        case ProductToTargetMethod::ViaConvertLeftFactor:
+        case ProductToTargetRoute::ViaConvertLeftFactor:
           return "convert-left-factor";
-        case ProductToTargetMethod::AlreadyInTarget:
+        case ProductToTargetRoute::AlreadyInTarget:
           return "already-in-target";
-        case ProductToTargetMethod::NoApplicableMethod:
+        case ProductToTargetRoute::NoApplicableRoute:
           return "ordinary-product-fallback";
       }
     return "unknown";
   }
 
 void SymmetricEngineRing::traceProductToTargetSelection(
-    ProductToTargetMethod method,
+    ProductToTargetRoute route,
     const std::string& targetDisplay) const
 {
     if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
     std::fprintf(stderr,
-                 "SymmetricRings product-target: target=%s method=%s\n",
+                 "SymmetricRings product-target: target=%s route=%s\n",
                  targetDisplay.c_str(),
-                 productToTargetMethodName(method));
+                 productToTargetRouteName(route));
   }
 
 bool SymmetricEngineRing::tryProductToTargetDispatch(ring_elem f,
@@ -1398,10 +1398,10 @@ bool SymmetricEngineRing::tryProductToTargetDispatch(ring_elem f,
                   targetDisplayOrder,
                   targetIsMultiplicative);
 
-    ProductToTargetMethod method = selectProductToTargetMethod(
+    ProductToTargetRoute route = selectProductToTargetRoute(
         f, g, targetBasisId, targetDisplay, targetIsMultiplicative);
-    traceProductToTargetSelection(method, targetDisplay);
-    return executeProductToTargetMethod(method,
+    traceProductToTargetSelection(route, targetDisplay);
+    return executeProductToTargetRoute(route,
                                         f,
                                         g,
                                         targetBasisId,
