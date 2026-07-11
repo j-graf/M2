@@ -112,11 +112,11 @@
                                   size_t pos,
                                   int first,
                                   int second) const;
-  ring_elem straightenSchurAtom(const Partition& alpha,
+  ring_elem straightenSchurBasisElement(const Partition& alpha,
                                   const std::string& display) const;
-  ring_elem straightenHallCapitalAtom(const Partition& alpha,
+  ring_elem straightenHallCapitalBasisElement(const Partition& alpha,
                                         const std::string& display) const;
-  ring_elem straightenAtom(const SymmetricMonomial& monomial, size_t pos) const;
+  ring_elem straightenBasisElement(const SymmetricMonomial& monomial, size_t pos) const;
   ring_elem straightenMonomial(const SymmetricMonomial& monomial) const;
   ring_elem straightenElement(ring_elem f) const;
   int requiredBasisIdForDisplay(const std::string& display) const;
@@ -157,12 +157,33 @@
                                         const std::string& targetDisplay,
                                         int targetDisplayOrder,
                                         ring_elem& result) const;
-  Partition atomIndex(const SymmetricMonomial& monomial, size_t pos) const;
-  Partition atomOuterIndex(const SymmetricMonomial& monomial, size_t pos) const;
-  Partition atomInnerIndex(const SymmetricMonomial& monomial, size_t pos) const;
-  ring_elem atomToPowerSumsDispatch(const SymmetricMonomial& monomial, size_t pos) const;
-  ring_elem monomialToPowerSumsDispatch(const SymmetricMonomial& monomial) const;
-  ring_elem expressionToPowerSumsDispatch(ring_elem f) const;
+  Partition basisElementIndex(
+      const SymmetricMonomial& monomial,
+      size_t pos) const;
+  Partition basisElementOuterIndex(
+      const SymmetricMonomial& monomial,
+      size_t pos) const;
+  Partition basisElementInnerIndex(
+      const SymmetricMonomial& monomial,
+      size_t pos) const;
+  BasisElementToPowerSumsRoute selectBasisElementToPowerSumsRoute(
+      const SymmetricMonomial& monomial,
+      size_t pos) const;
+  ring_elem executeBasisElementToPowerSumsRoute(
+      BasisElementToPowerSumsRoute route,
+      const SymmetricMonomial& monomial,
+      size_t pos) const;
+  const char *basisElementToPowerSumsRouteName(
+      BasisElementToPowerSumsRoute route) const;
+  void traceBasisElementToPowerSumsSelection(
+      BasisElementToPowerSumsRoute route,
+      const std::string& sourceDisplay) const;
+  ring_elem basisElementToPowerSumsDispatch(
+      const SymmetricMonomial& monomial,
+      size_t pos) const;
+  ring_elem monomialToPowerSumsViaBasisElementRoutes(
+      const SymmetricMonomial& monomial) const;
+  ring_elem expressionToPowerSumsViaBasisElementRoutes(ring_elem f) const;
   ring_elem skewQOrBFunction(const Partition& lambda,
                              const Partition& mu,
                              bool omega) const;
@@ -180,7 +201,7 @@
   int singleBasisId(ring_elem f) const;
   bool powerSumIndexFromMonomial(const SymmetricMonomial& monomial,
                                    Partition& index) const;
-  ring_elem powerSumIndexToTargetDispatch(const Partition& index,
+  ring_elem powerSumIndexToTargetViaTermwiseKernel(const Partition& index,
                                        const std::string& targetDisplay,
                                        int targetBasisId,
                                        int targetDisplayOrder,
@@ -201,7 +222,7 @@
       int targetBasisId,
       const std::string& targetDisplay,
       int targetDisplayOrder) const;
-  bool tryAtomToTarget(const SymmetricMonomial& monomial,
+  bool tryBasisElementToTarget(const SymmetricMonomial& monomial,
                             size_t pos,
                             int targetBasisId,
                             const std::string& targetDisplay,

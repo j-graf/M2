@@ -68,7 +68,7 @@ The selector currently chooses one of eight pipelines:
   border-strip expansion, conversion through `h`, and grouped characters are
   values of the same `PowerSumsToTargetRoute` enum as Hall-Littlewood and other
   target routes; there is no nested target-specific selector.
-- `PostPlethysmPowerSum` handles a materialized power-sum expression whose
+- `PostPlethysmPowerSums` handles a materialized power-sum expression whose
   provenance identifies it as the result of plethysm. It keeps that context
   available to conversion selection while using the power-sum kernels.
 - `FallbackTerm` is the general correctness pipeline.  It normalizes and
@@ -89,7 +89,8 @@ are kept in `basis-conversion-products.cpp`.  Within the fallback pipeline,
 Schur-compatible product expansion; the latter can use Littlewood-Richardson,
 Pieri, border-strip, skew-expansion, and related rules.  Multiplicative bases
 are stored canonically, so products such as `p_a p_b` are represented by a
-single indexed power-sum atom rather than left as factors requiring a later
+single indexed power-sum basis element rather than left as factors requiring a
+later
 multiplication check.
 
 The `productToBasisDispatch` entry point creates a factorized-product request
@@ -147,6 +148,9 @@ algorithms and composed routes.  The programmatic suffixes have fixed meanings:
   operation.
 - `select...Route` inspects guarantees and returns a complete basis-conversion
   route without performing algebra.
+- `trace...Selection` reports the chosen route without performing algebra.
+- `execute...Route` performs a previously selected route without making
+  another hidden route choice.
 - `select...Method` chooses a lower-level multiplication or combinatorial
   method rather than a basis-conversion route.
 - `run...Pipeline` executes a multi-stage expression workflow.

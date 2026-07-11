@@ -269,7 +269,9 @@ std::string SymmetricEngineRing::displayIndex(const SymmetricMonomial& monomial,
     return "{" + join(parts, ",") + "}";
   }
 
-std::string SymmetricEngineRing::displayAtom(const SymmetricMonomial& monomial, size_t pos) const
+std::string SymmetricEngineRing::displayBasisElement(
+    const SymmetricMonomial& monomial,
+    size_t pos) const
 {
     return displayForBasis(atomBasisIdAt(monomial, pos)) + "_" +
            displayIndex(monomial, pos);
@@ -282,7 +284,7 @@ std::string SymmetricEngineRing::displayMonomial(const SymmetricMonomial& monomi
     size_t pos = 0;
     while (pos < monomial.data.size())
       {
-        factors.push_back(displayAtom(monomial, pos));
+        factors.push_back(displayBasisElement(monomial, pos));
         pos += atomLengthAt(monomial, pos);
       }
     return join(factors, "*");
@@ -557,7 +559,7 @@ ring_elem SymmetricEngineRing::add(const ring_elem f, const ring_elem g) const
       const auto *resultPoly = polyValue(value);
       metadata.termCount = resultPoly->terms.size();
       metadata.singleTerm = resultPoly->terms.size() == 1;
-      metadata.singleAtom = resultPoly->terms.size() == 1 &&
+      metadata.singleBasisElement = resultPoly->terms.size() == 1 &&
                             !resultPoly->terms[0].monomial.data.empty();
       if (leftMetadata.noProducts && rightMetadata.noProducts)
         metadata.noProducts = *leftMetadata.noProducts &&
@@ -666,7 +668,7 @@ ring_elem SymmetricEngineRing::mult(const ring_elem f, const ring_elem g) const
       const auto *resultPoly = polyValue(value);
       metadata.termCount = resultPoly->terms.size();
       metadata.singleTerm = resultPoly->terms.size() == 1;
-      metadata.singleAtom = resultPoly->terms.size() == 1 &&
+      metadata.singleBasisElement = resultPoly->terms.size() == 1 &&
                             !resultPoly->terms[0].monomial.data.empty();
       metadata.collected = true;
       mutablePolyValue(value)->conversionMetadata = std::move(metadata);

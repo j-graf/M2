@@ -258,7 +258,7 @@ ring_elem SymmetricEngineRing::plethysm(ring_elem f,
     metadata.factorBases = std::vector<int>{pBasisId};
     metadata.singleTerm = polyValue(result)->terms.size() == 1;
     metadata.noProducts = true;
-    metadata.singleAtom = polyValue(result)->terms.size() == 1 &&
+    metadata.singleBasisElement = polyValue(result)->terms.size() == 1 &&
                           !polyValue(result)->terms[0].monomial.data.empty();
     metadata.normalized = true;
     metadata.skewFree = true;

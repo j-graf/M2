@@ -57,6 +57,23 @@ class SymmetricEngineRing : public Ring
     ViaFactorwiseConversion,
     NoApplicableRoute
   };
+  enum class BasisElementToPowerSumsRoute
+  {
+    AlreadyPowerSums,
+    ViaCompleteClassicalFormula,
+    ViaElementaryClassicalFormula,
+    ViaHallLittlewoodGeneratorClassicalFormula,
+    ViaSchurCharacters,
+    ViaOmegaSchurCharacters,
+    ViaMonomialTransition,
+    ViaForgottenTransition,
+    ViaHallLittlewoodRaisingOperators,
+    ViaHallLittlewoodCapitalNormalization,
+    ViaSkewSchurJacobiTrudiComplete,
+    ViaSkewOmegaSchurJacobiTrudiElementary,
+    ViaSkewHallLittlewood,
+    NoApplicableRoute
+  };
 
   const Ring *coefficientRing;
   mutable std::map<int, std::string> basisDisplays;
@@ -195,7 +212,7 @@ class SymmetricEngineRing : public Ring
   bool getScalar(const SymmetricRingPoly *f, ring_elem &result) const;
   bool hasPowerSumConversionHook(const SymmetricMonomial& monomial, size_t pos) const;
   std::string displayIndex(const SymmetricMonomial& monomial, size_t pos) const;
-  std::string displayAtom(const SymmetricMonomial& monomial, size_t pos) const;
+  std::string displayBasisElement(const SymmetricMonomial& monomial, size_t pos) const;
   std::string displayMonomial(const SymmetricMonomial& monomial) const;
   std::string elementString(ring_elem f, int maxTerms = -1) const;
   int elementWeight(ring_elem f) const;

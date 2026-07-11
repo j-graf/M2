@@ -60,9 +60,9 @@ SymmetricEngineRing::ConversionPipeline SymmetricEngineRing::selectConversionPip
     const ConversionInput& input = request.input;
     if (input.origin == SymmetricConversionOrigin::Plethysm &&
         input.guarantees.expandedBasis == pBasisId)
-      return ConversionPipeline::PostPlethysmPowerSum;
+      return ConversionPipeline::PostPlethysmPowerSums;
     if (input.guarantees.expandedBasis == pBasisId)
-      return ConversionPipeline::PowerSum;
+      return ConversionPipeline::PowerSums;
 
     if (targetIsMultiplicative &&
         input.guarantees.normalized == KnownState::True &&
@@ -126,8 +126,8 @@ ring_elem SymmetricEngineRing::executeConversionPipeline(
                                          targetDisplay,
                                          targetOrder,
                                          targetIsMultiplicative);
-        case ConversionPipeline::PowerSum:
-          return runPowerSumPipeline(input,
+        case ConversionPipeline::PowerSums:
+          return runPowerSumsPipeline(input,
                                   pBasisId,
                                   pDisplay,
                                   pOrder,
@@ -136,8 +136,8 @@ ring_elem SymmetricEngineRing::executeConversionPipeline(
                                   targetDisplay,
                                   targetOrder,
                                   targetIsMultiplicative);
-        case ConversionPipeline::PostPlethysmPowerSum:
-          return runPostPlethysmPowerSumPipeline(input,
+        case ConversionPipeline::PostPlethysmPowerSums:
+          return runPostPlethysmPowerSumsPipeline(input,
                                   pBasisId,
                                   pDisplay,
                                   pOrder,
@@ -162,7 +162,7 @@ ring_elem SymmetricEngineRing::executeConversionPipeline(
               ERROR("factorized-product conversion requires two operands");
               return zero();
             }
-          return runProductToBasisPipeline(*request.leftOperand,
+          return runFactorizedProductPipeline(*request.leftOperand,
                                            *request.rightOperand,
                                            pBasisId,
                                            pDisplay,
@@ -276,7 +276,7 @@ SymmetricEngineRing::selectPowerSumsToTargetRoute(
           {
             std::string route(forcedRoute);
             if (route == "green-duality" && hasSinglePowerSumIndex)
-              return PowerSumsToTargetRoute::ViaHallLittlewoodGreenPolynomialsViaDuality;
+              return PowerSumsToTargetRoute::ViaHallLittlewoodGreenPolynomialsAndDuality;
             if (route == "triangular")
               return PowerSumsToTargetRoute::ViaHallLittlewoodTriangularReduction;
           }
@@ -294,7 +294,7 @@ SymmetricEngineRing::selectPowerSumsToTargetRoute(
         if (allTermsAreSingleCycles)
           return PowerSumsToTargetRoute::ViaHallLittlewoodSingleCycleGreenPolynomials;
         if (hasSinglePowerSumIndex)
-          return PowerSumsToTargetRoute::ViaHallLittlewoodGreenPolynomialsViaDuality;
+          return PowerSumsToTargetRoute::ViaHallLittlewoodGreenPolynomialsAndDuality;
         return PowerSumsToTargetRoute::ViaHallLittlewoodTriangularReduction;
       }
     if (targetDisplay == "m")
@@ -331,40 +331,29 @@ SymmetricEngineRing::selectSourceToTargetRoute(
       }
 
     if (input.guarantees.expandedBasis == pBasisId)
-      return SourceToTargetRoute::ViaPowerSumKernels;
+      return SourceToTargetRoute::ViaSelectedPowerSumsToTargetRoute;
 
     if (targetDisplay == "S")
       {
         int completeId = requiredBasisIdForDisplay("h");
-        if (error()) return SourceToTargetRoute::ViaComplete;
+        if (error()) return SourceToTargetRoute::ViaPowerSumsThenCompleteThenSchur;
         if (input.guarantees.pureBasis == completeId)
-          return SourceToTargetRoute::ViaCompleteRecursiveTransition;
-        return SourceToTargetRoute::ViaComplete;
+          return SourceToTargetRoute::ViaCompleteToSchurRecursiveTransition;
+        return SourceToTargetRoute::ViaPowerSumsThenCompleteThenSchur;
       }
 
-    return SourceToTargetRoute::ViaPowerSums;
+    return SourceToTargetRoute::ViaSourceToPowerSumsThenTarget;
   }
 
-ring_elem SymmetricEngineRing::sourceToTargetDispatch(
+ring_elem SymmetricEngineRing::executeSourceToTargetRoute(
+        SourceToTargetRoute route,
         const ConversionInput& input,
         int pBasisId,
-        const std::string& pDisplay,
-        int pOrder,
-        bool pIsMultiplicative,
         int targetBasisId,
         const std::string& targetDisplay,
         int targetOrder,
         bool targetIsMultiplicative) const
 {
-    rememberBasis(pBasisId, pDisplay, pOrder, pIsMultiplicative);
-    rememberBasis(targetBasisId,
-                  targetDisplay,
-                  targetOrder,
-                  targetIsMultiplicative);
-    SourceToTargetRoute route = selectSourceToTargetRoute(
-        input, pBasisId, targetBasisId, targetDisplay);
-    if (error()) return zero();
-    traceSourceToTargetSelection(route, input, targetDisplay);
     auto finish = [&](ring_elem result) {
       if (!error())
         {
@@ -401,7 +390,7 @@ ring_elem SymmetricEngineRing::sourceToTargetDispatch(
           targetDisplay,
           targetOrder));
 
-    if (route == SourceToTargetRoute::ViaPowerSumKernels)
+    if (route == SourceToTargetRoute::ViaSelectedPowerSumsToTargetRoute)
       {
         return finish(powerSumsToTargetDispatch(input,
                                                 pBasisId,
@@ -411,7 +400,7 @@ ring_elem SymmetricEngineRing::sourceToTargetDispatch(
                                                 targetIsMultiplicative));
       }
 
-    if (route == SourceToTargetRoute::ViaCompleteRecursiveTransition)
+    if (route == SourceToTargetRoute::ViaCompleteToSchurRecursiveTransition)
       {
         int completeId = requiredBasisIdForDisplay("h");
         if (error()) return zero();
@@ -426,7 +415,8 @@ ring_elem SymmetricEngineRing::sourceToTargetDispatch(
             targetOrder));
       }
 
-    ring_elem inPowerSums = expressionToPowerSumsDispatch(input.expression);
+    ring_elem inPowerSums =
+        expressionToPowerSumsViaBasisElementRoutes(input.expression);
     if (error()) return zero();
     ConversionInput powerSumInput{
         inPowerSums,
@@ -441,7 +431,7 @@ ring_elem SymmetricEngineRing::sourceToTargetDispatch(
     powerSumInput.guarantees = strengthenConversionGuarantees(
         std::move(powerSumInput.guarantees), targetBasisId);
 
-    if (route == SourceToTargetRoute::ViaComplete)
+    if (route == SourceToTargetRoute::ViaPowerSumsThenCompleteThenSchur)
       {
         int completeId = requiredBasisIdForDisplay("h");
         if (error()) return zero();
@@ -467,6 +457,35 @@ ring_elem SymmetricEngineRing::sourceToTargetDispatch(
                                             targetDisplay,
                                             targetOrder,
                                             targetIsMultiplicative));
+  }
+
+ring_elem SymmetricEngineRing::sourceToTargetDispatch(
+        const ConversionInput& input,
+        int pBasisId,
+        const std::string& pDisplay,
+        int pOrder,
+        bool pIsMultiplicative,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetOrder,
+        bool targetIsMultiplicative) const
+{
+    rememberBasis(pBasisId, pDisplay, pOrder, pIsMultiplicative);
+    rememberBasis(targetBasisId,
+                  targetDisplay,
+                  targetOrder,
+                  targetIsMultiplicative);
+    SourceToTargetRoute route = selectSourceToTargetRoute(
+        input, pBasisId, targetBasisId, targetDisplay);
+    if (error()) return zero();
+    traceSourceToTargetSelection(route, input, targetDisplay);
+    return executeSourceToTargetRoute(route,
+                                      input,
+                                      pBasisId,
+                                      targetBasisId,
+                                      targetDisplay,
+                                      targetOrder,
+                                      targetIsMultiplicative);
   }
 
 const char *SymmetricEngineRing::powerSumsToTargetRouteName(
@@ -496,7 +515,7 @@ const char *SymmetricEngineRing::powerSumsToTargetRouteName(
           return "p->q/b:logarithm-formula";
         case PowerSumsToTargetRoute::ViaHallLittlewoodSingleCycleGreenPolynomials:
           return "single-cycle-p-terms->Hall-Littlewood:Green-polynomials";
-        case PowerSumsToTargetRoute::ViaHallLittlewoodGreenPolynomialsViaDuality:
+        case PowerSumsToTargetRoute::ViaHallLittlewoodGreenPolynomialsAndDuality:
           return "p_mu->Hall-Littlewood:Green-polynomials-via-duality";
         case PowerSumsToTargetRoute::ViaHallLittlewoodTriangularReduction:
           return "p->Hall-Littlewood:triangular-reduction";
@@ -521,13 +540,13 @@ const char *SymmetricEngineRing::sourceToTargetRouteName(
           return "Hall-Littlewood-capital-normalized:diagonal-scaling";
         case SourceToTargetRoute::ViaSchurOmegaConjugation:
           return "Schur-omega:partition-conjugation";
-        case SourceToTargetRoute::ViaPowerSumKernels:
-          return "power-sum-kernels";
-        case SourceToTargetRoute::ViaCompleteRecursiveTransition:
+        case SourceToTargetRoute::ViaSelectedPowerSumsToTargetRoute:
+          return "expanded-p->selected-p-target-route";
+        case SourceToTargetRoute::ViaCompleteToSchurRecursiveTransition:
           return "h->S:recursive-transition";
-        case SourceToTargetRoute::ViaComplete:
+        case SourceToTargetRoute::ViaPowerSumsThenCompleteThenSchur:
           return "source->p->h->S";
-        case SourceToTargetRoute::ViaPowerSums:
+        case SourceToTargetRoute::ViaSourceToPowerSumsThenTarget:
           return "source->p->target";
       }
     return "unknown";
@@ -566,9 +585,9 @@ const char *SymmetricEngineRing::conversionPipelineName(
           return "grouped-multiplicative-target";
         case ConversionPipeline::GroupedHallLittlewood:
           return "grouped-hall-littlewood";
-        case ConversionPipeline::PowerSum: return "power-sum";
-        case ConversionPipeline::PostPlethysmPowerSum:
-          return "post-plethysm-power-sum";
+        case ConversionPipeline::PowerSums: return "power-sums";
+        case ConversionPipeline::PostPlethysmPowerSums:
+          return "post-plethysm-power-sums";
         case ConversionPipeline::FallbackTerm: return "fallback-term";
         case ConversionPipeline::FactorizedProduct: return "factorized-product";
         case ConversionPipeline::PostPlethysm: return "post-plethysm";
@@ -594,8 +613,8 @@ void SymmetricEngineRing::traceConversionSelection(
       return value ? std::to_string(*value) : std::string("unknown");
     };
     const char *route = "pipeline-defined";
-    if ((pipeline == ConversionPipeline::PowerSum ||
-         pipeline == ConversionPipeline::PostPlethysmPowerSum))
+    if ((pipeline == ConversionPipeline::PowerSums ||
+         pipeline == ConversionPipeline::PostPlethysmPowerSums))
       {
         int pBasisId = basisIdForDisplay("p");
         int targetBasisId = basisIdForDisplay(targetDisplay);
@@ -638,6 +657,17 @@ void SymmetricEngineRing::traceSourceToTargetSelection(
                  sourceToTargetRouteName(route));
   }
 
+void SymmetricEngineRing::tracePowerSumsToTargetSelection(
+        PowerSumsToTargetRoute route,
+        const std::string& targetDisplay) const
+{
+    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
+    std::fprintf(stderr,
+                 "SymmetricRings power-sums-target: target=%s route=%s\n",
+                 targetDisplay.c_str(),
+                 powerSumsToTargetRouteName(route));
+  }
+
 void SymmetricEngineRing::traceProductExpansionSelection(
         ProductExpansionMethod method,
         const TermConversionClassification& classification) const
@@ -674,8 +704,8 @@ SymmetricEngineRing::inferConversionGuarantees(
         guarantees.maximumPartitionLength = metadata.maximumPartitionLength;
         guarantees.density = metadata.density;
         guarantees.factorBases = metadata.factorBases;
-        if (metadata.singleAtom)
-          guarantees.singleAtom = *metadata.singleAtom
+        if (metadata.singleBasisElement)
+          guarantees.singleBasisElement = *metadata.singleBasisElement
               ? KnownState::True : KnownState::False;
         if (metadata.singleTerm)
           guarantees.singleTerm = *metadata.singleTerm
@@ -695,20 +725,20 @@ SymmetricEngineRing::inferConversionGuarantees(
     bool skewFree = true;
     int pureBasis = 0;
     bool mixedBases = false;
-    size_t totalAtoms = 0;
+    size_t totalBasisElements = 0;
     std::optional<int> homogeneousWeight;
     bool weightsAgree = true;
     std::vector<int> factorBases;
 
     for (const auto& term : poly->terms)
       {
-        size_t termAtoms = 0;
+        size_t termBasisElements = 0;
         int termWeight = 0;
         size_t pos = 0;
         while (pos < term.monomial.data.size())
           {
-            ++termAtoms;
-            ++totalAtoms;
+            ++termBasisElements;
+            ++totalBasisElements;
             int basisId = atomBasisIdAt(term.monomial, pos);
             if (std::find(factorBases.begin(), factorBases.end(), basisId) ==
                 factorBases.end())
@@ -721,22 +751,24 @@ SymmetricEngineRing::inferConversionGuarantees(
             if (atomIsSkewAt(term.monomial, pos))
               {
                 skewFree = false;
-                Partition outer = atomOuterIndex(term.monomial, pos);
-                Partition inner = atomInnerIndex(term.monomial, pos);
+                Partition outer =
+                    basisElementOuterIndex(term.monomial, pos);
+                Partition inner =
+                    basisElementInnerIndex(term.monomial, pos);
                 termWeight += partitionWeight(outer) - partitionWeight(inner);
                 normalized = normalized && isPartitionIndex(outer) &&
                              isPartitionIndex(inner);
               }
             else
               {
-                Partition index = atomIndex(term.monomial, pos);
+                Partition index = basisElementIndex(term.monomial, pos);
                 termWeight += partitionWeight(index);
                 if (!isMultiplicativeBasis(basisId))
                   normalized = normalized && isPartitionIndex(index);
               }
             pos += atomLengthAt(term.monomial, pos);
           }
-        if (termAtoms > 1) noProducts = false;
+        if (termBasisElements > 1) noProducts = false;
         if (!homogeneousWeight)
           homogeneousWeight = termWeight;
         else if (*homogeneousWeight != termWeight)
@@ -746,7 +778,8 @@ SymmetricEngineRing::inferConversionGuarantees(
     guarantees.singleTerm = poly->terms.size() == 1
         ? KnownState::True
         : KnownState::False;
-    guarantees.singleAtom = poly->terms.size() == 1 && totalAtoms == 1
+    guarantees.singleBasisElement =
+        poly->terms.size() == 1 && totalBasisElements == 1
         ? KnownState::True
         : KnownState::False;
     guarantees.noProducts = noProducts ? KnownState::True : KnownState::False;
@@ -762,7 +795,7 @@ SymmetricEngineRing::inferConversionGuarantees(
     if (guarantees.pureBasis && noProducts && skewFree)
       guarantees.expandedBasis = guarantees.pureBasis;
 
-    if (poly->terms.empty() || totalAtoms == 0)
+    if (poly->terms.empty() || totalBasisElements == 0)
       guarantees.targetClosed = KnownState::True;
     else if (guarantees.expandedBasis == targetBasisId && normalized)
       guarantees.targetClosed = KnownState::True;
@@ -781,7 +814,7 @@ SymmetricEngineRing::strengthenConversionGuarantees(
       if (state == KnownState::Unknown) state = value;
     };
 
-    if (guarantees.singleAtom == KnownState::True)
+    if (guarantees.singleBasisElement == KnownState::True)
       {
         setIfUnknown(guarantees.singleTerm, KnownState::True);
         setIfUnknown(guarantees.noProducts, KnownState::True);
@@ -846,13 +879,15 @@ SymmetricEngineRing::ensureConversionProfile(
               maximum = std::max(
                   maximum,
                   static_cast<size_t>(std::max(
-                      partitionLength(atomOuterIndex(term.monomial, pos)),
-                      partitionLength(atomInnerIndex(term.monomial, pos)))));
+                      partitionLength(
+                          basisElementOuterIndex(term.monomial, pos)),
+                      partitionLength(
+                          basisElementInnerIndex(term.monomial, pos)))));
             else
               maximum = std::max(
                   maximum,
                   static_cast<size_t>(partitionLength(
-                      atomIndex(term.monomial, pos))));
+                      basisElementIndex(term.monomial, pos))));
             pos += atomLengthAt(term.monomial, pos);
           }
       }
@@ -945,7 +980,7 @@ SymmetricEngineRing::guaranteesAfterSourceTargetConversion(
     guarantees.termCount = poly->terms.size();
     guarantees.singleTerm = poly->terms.size() == 1
         ? KnownState::True : KnownState::False;
-    guarantees.singleAtom = poly->terms.size() == 1 &&
+    guarantees.singleBasisElement = poly->terms.size() == 1 &&
                             !poly->terms[0].monomial.data.empty()
         ? KnownState::True : KnownState::False;
     guarantees.noProducts = KnownState::True;
@@ -980,8 +1015,9 @@ void SymmetricEngineRing::attachConversionGuarantees(
     metadata.maximumPartitionLength = guarantees.maximumPartitionLength;
     metadata.density = guarantees.density;
     metadata.factorBases = guarantees.factorBases;
-    if (guarantees.singleAtom != KnownState::Unknown)
-      metadata.singleAtom = guarantees.singleAtom == KnownState::True;
+    if (guarantees.singleBasisElement != KnownState::Unknown)
+      metadata.singleBasisElement =
+          guarantees.singleBasisElement == KnownState::True;
     if (guarantees.singleTerm != KnownState::Unknown)
       metadata.singleTerm = guarantees.singleTerm == KnownState::True;
     if (guarantees.noProducts != KnownState::Unknown)
@@ -1098,7 +1134,7 @@ SymmetricEngineRing::selectWholeExpressionRoute(
         int completeId = requiredBasisIdForDisplay("h");
         if (error()) return WholeExpressionRoute::NoApplicableRoute;
         if (input.guarantees.pureBasis == completeId)
-          return WholeExpressionRoute::ViaCompleteRecursiveTransition;
+          return WholeExpressionRoute::ViaCompleteToSchurRecursiveTransition;
         return WholeExpressionRoute::ViaSchurCompatibleProducts;
       }
     if (targetDisplay == "Somega")
@@ -1123,7 +1159,7 @@ bool SymmetricEngineRing::executeWholeExpressionRoute(
         result = copyPolyValue(polyValue(input.expression));
         return true;
       }
-    if (route == WholeExpressionRoute::ViaCompleteRecursiveTransition)
+    if (route == WholeExpressionRoute::ViaCompleteToSchurRecursiveTransition)
       {
         int completeId = requiredBasisIdForDisplay("h");
         if (error()) return false;
@@ -1190,7 +1226,7 @@ const char *SymmetricEngineRing::wholeExpressionRouteName(
       {
         case WholeExpressionRoute::AlreadyInTarget:
           return "already-in-target";
-        case WholeExpressionRoute::ViaCompleteRecursiveTransition:
+        case WholeExpressionRoute::ViaCompleteToSchurRecursiveTransition:
           return "h->S:recursive-transition";
         case WholeExpressionRoute::ViaSchurCompatibleProducts:
           return "Schur-compatible-products";
@@ -1338,7 +1374,7 @@ ring_elem SymmetricEngineRing::runGroupedHallLittlewoodPipeline(
                                   targetIsMultiplicative);
   }
 
-ring_elem SymmetricEngineRing::runPowerSumPipeline(
+ring_elem SymmetricEngineRing::runPowerSumsPipeline(
         const ConversionInput& input,
         int pBasisId,
         const std::string& pDisplay,
@@ -1360,7 +1396,7 @@ ring_elem SymmetricEngineRing::runPowerSumPipeline(
                                   targetIsMultiplicative);
   }
 
-ring_elem SymmetricEngineRing::runPostPlethysmPowerSumPipeline(
+ring_elem SymmetricEngineRing::runPostPlethysmPowerSumsPipeline(
         const ConversionInput& input,
         int pBasisId,
         const std::string& pDisplay,
@@ -1382,7 +1418,8 @@ ring_elem SymmetricEngineRing::runPostPlethysmPowerSumPipeline(
                                   targetIsMultiplicative);
   }
 
-ring_elem SymmetricEngineRing::powerSumsToTargetDispatch(
+ring_elem SymmetricEngineRing::executePowerSumsToTargetRoute(
+        PowerSumsToTargetRoute route,
         const ConversionInput& input,
         int pBasisId,
         int targetBasisId,
@@ -1390,14 +1427,6 @@ ring_elem SymmetricEngineRing::powerSumsToTargetDispatch(
         int targetDisplayOrder,
         bool targetIsMultiplicative) const
 {
-    PowerSumsToTargetRoute route = selectPowerSumsToTargetRoute(
-        input, pBasisId, targetBasisId, targetDisplay);
-    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") != nullptr)
-      std::fprintf(stderr,
-                   "SymmetricRings power-sums-target: target=%s route=%s\n",
-                   targetDisplay.c_str(),
-                   powerSumsToTargetRouteName(route));
-
     if (route == PowerSumsToTargetRoute::AlreadyInTarget)
       return copyPolyValue(polyValue(input.expression));
     if (route == PowerSumsToTargetRoute::ViaSchurBorderStrips)
@@ -1461,7 +1490,7 @@ ring_elem SymmetricEngineRing::powerSumsToTargetDispatch(
           targetBasisId,
           targetDisplay,
           targetDisplayOrder);
-    if (route == PowerSumsToTargetRoute::ViaHallLittlewoodGreenPolynomialsViaDuality)
+    if (route == PowerSumsToTargetRoute::ViaHallLittlewoodGreenPolynomialsAndDuality)
       return powerSumIndexToHallLittlewoodViaGreenPolynomialsAndDuality(
           input.expression,
           targetBasisId,
@@ -1482,6 +1511,26 @@ ring_elem SymmetricEngineRing::powerSumsToTargetDispatch(
 
     ERROR("unknown power-sums-to-target conversion route");
     return zero();
+  }
+
+ring_elem SymmetricEngineRing::powerSumsToTargetDispatch(
+        const ConversionInput& input,
+        int pBasisId,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetDisplayOrder,
+        bool targetIsMultiplicative) const
+{
+    PowerSumsToTargetRoute route = selectPowerSumsToTargetRoute(
+        input, pBasisId, targetBasisId, targetDisplay);
+    tracePowerSumsToTargetSelection(route, targetDisplay);
+    return executePowerSumsToTargetRoute(route,
+                                         input,
+                                         pBasisId,
+                                         targetBasisId,
+                                         targetDisplay,
+                                         targetDisplayOrder,
+                                         targetIsMultiplicative);
   }
 
 ring_elem SymmetricEngineRing::powerSumsToSchurViaComplete(
@@ -1578,7 +1627,7 @@ ring_elem SymmetricEngineRing::runFallbackTermPipeline(
     return result;
   }
 
-ring_elem SymmetricEngineRing::runProductToBasisPipeline(
+ring_elem SymmetricEngineRing::runFactorizedProductPipeline(
         ring_elem f,
         ring_elem g,
         int pBasisId,
@@ -1591,7 +1640,7 @@ ring_elem SymmetricEngineRing::runProductToBasisPipeline(
         bool targetIsMultiplicative) const
 {
     ring_elem direct;
-    if (tryProductToTargetDispatch(f,
+    if (tryProductToTarget(f,
                                  g,
                                  targetBasisId,
                                  targetDisplay,
@@ -1669,7 +1718,7 @@ ring_elem SymmetricEngineRing::runPostPlethysmPipeline(
         result,
         inferConversionGuarantees(result, targetBasisId),
         SymmetricConversionOrigin::Plethysm};
-    return runPostPlethysmPowerSumPipeline(input,
+    return runPostPlethysmPowerSumsPipeline(input,
                                            pBasisId,
                                            pDisplay,
                                            pOrder,

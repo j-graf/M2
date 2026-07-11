@@ -612,7 +612,7 @@ ring_elem SymmetricEngineRing::multiplySchurExpansionsViaLittlewoodRichardson(ri
     return coeffMapToElement(result, schurId, schurDisplay, schurOrder, false);
   }
 
-bool SymmetricEngineRing::tryAtomToSchurFactors(
+bool SymmetricEngineRing::tryBasisElementToSchurFactors(
     const SymmetricMonomial& monomial,
     size_t pos,
     int targetBasisId,
@@ -621,7 +621,7 @@ bool SymmetricEngineRing::tryAtomToSchurFactors(
     if (atomIsSkewAt(monomial, pos)) return false;
 
     int basisId = atomBasisIdAt(monomial, pos);
-    Partition index = atomIndex(monomial, pos);
+    Partition index = basisElementIndex(monomial, pos);
     if (basisId == targetBasisId)
       {
         if (!isPartitionIndex(index)) return false;
@@ -663,7 +663,8 @@ bool SymmetricEngineRing::trySchurProductMonomialToSchurViaLittlewoodRichardson(
     while (pos < monomial.data.size())
       {
         std::vector<Partition> factors;
-        if (!tryAtomToSchurFactors(monomial, pos, targetBasisId, factors))
+        if (!tryBasisElementToSchurFactors(
+                monomial, pos, targetBasisId, factors))
           return false;
 
         for (const auto& index : factors)
@@ -722,10 +723,13 @@ bool SymmetricEngineRing::trySchurCompatibleFactorsFromMonomial(
           {
             if (basisId != targetBasisId) return false;
             CoeffMap expansion;
-            int weight = partitionWeight(atomOuterIndex(monomial, pos)) -
-                         partitionWeight(atomInnerIndex(monomial, pos));
-            for (const auto& item : skewSchurToSchurViaLittlewoodRichardson(atomOuterIndex(monomial, pos),
-                                                       atomInnerIndex(monomial, pos)))
+            int weight =
+                partitionWeight(basisElementOuterIndex(monomial, pos)) -
+                partitionWeight(basisElementInnerIndex(monomial, pos));
+            for (const auto& item :
+                 skewSchurToSchurViaLittlewoodRichardson(
+                     basisElementOuterIndex(monomial, pos),
+                     basisElementInnerIndex(monomial, pos)))
               addCoeff(expansion, item.nu, cachedInteger(item.coefficient));
             factors.push_back({SchurCompatibleFactor::SchurExpansion,
                                Partition{},
@@ -735,7 +739,7 @@ bool SymmetricEngineRing::trySchurCompatibleFactorsFromMonomial(
             continue;
           }
 
-        Partition index = atomIndex(monomial, pos);
+        Partition index = basisElementIndex(monomial, pos);
         if (basisId == targetBasisId)
           {
             auto straightened = straightenSchurIndex(index);
@@ -1016,7 +1020,7 @@ ring_elem SymmetricEngineRing::powerSumsToSchurViaBorderStrips(
         std::vector<SchurCompatibleFactor> factors;
         if (!term.monomial.data.empty())
           {
-            Partition index = atomIndex(term.monomial, 0);
+            Partition index = basisElementIndex(term.monomial, 0);
             factors.reserve(index.size());
             for (int part : index)
               if (part > 0)
@@ -1083,7 +1087,7 @@ bool SymmetricEngineRing::tryProductToSchurViaCompatibleFactors(ring_elem f,
     return true;
   }
 
-bool SymmetricEngineRing::tryMonomialLikeAtomToCoeffMap(
+bool SymmetricEngineRing::tryMonomialLikeBasisElementToCoeffMap(
     const SymmetricMonomial& monomial,
     size_t pos,
     const std::string& targetDisplay,
@@ -1094,7 +1098,7 @@ bool SymmetricEngineRing::tryMonomialLikeAtomToCoeffMap(
     if (targetDisplay != "m" && !forgottenTarget) return false;
 
     std::string display = displayForBasis(atomBasisIdAt(monomial, pos));
-    Partition index = atomIndex(monomial, pos);
+    Partition index = basisElementIndex(monomial, pos);
 
     auto partMap = [&](const std::string& kind, int part, long sign) {
       CoeffMap map;
@@ -1179,7 +1183,8 @@ bool SymmetricEngineRing::tryMonomialLikeMonomialToTarget(
     while (pos < monomial.data.size())
       {
         CoeffMap factor;
-        if (!tryMonomialLikeAtomToCoeffMap(monomial, pos, targetDisplay, factor))
+        if (!tryMonomialLikeBasisElementToCoeffMap(
+                monomial, pos, targetDisplay, factor))
           return false;
         current = multiplyMonomialCoeffMaps(current, factor);
         pos += atomLengthAt(monomial, pos);
@@ -1385,7 +1390,7 @@ void SymmetricEngineRing::traceProductToTargetSelection(
                  productToTargetRouteName(route));
   }
 
-bool SymmetricEngineRing::tryProductToTargetDispatch(ring_elem f,
+bool SymmetricEngineRing::tryProductToTarget(ring_elem f,
                           ring_elem g,
                           int targetBasisId,
                           const std::string& targetDisplay,

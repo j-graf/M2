@@ -48,7 +48,7 @@
                                     int schurId,
                                     const std::string& schurDisplay,
                                     int schurOrder) const;
-  bool tryAtomToSchurFactors(const SymmetricMonomial& monomial,
+  bool tryBasisElementToSchurFactors(const SymmetricMonomial& monomial,
                             size_t pos,
                             int targetBasisId,
                             std::vector<Partition>& factors) const;
@@ -94,7 +94,7 @@
                             const std::string& targetDisplay,
                             int targetDisplayOrder,
                             ring_elem& result) const;
-  bool tryMonomialLikeAtomToCoeffMap(const SymmetricMonomial& monomial,
+  bool tryMonomialLikeBasisElementToCoeffMap(const SymmetricMonomial& monomial,
                                     size_t pos,
                                     const std::string& targetDisplay,
                                     CoeffMap& result) const;
@@ -137,7 +137,7 @@
   void traceProductToTargetSelection(
                                    ProductToTargetRoute route,
                                    const std::string& targetDisplay) const;
-  bool tryProductToTargetDispatch(ring_elem f,
+  bool tryProductToTarget(ring_elem f,
                              ring_elem g,
                              int targetBasisId,
                              const std::string& targetDisplay,

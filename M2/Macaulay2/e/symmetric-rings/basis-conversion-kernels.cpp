@@ -1113,7 +1113,7 @@ ring_elem SymmetricEngineRing::skewPOrRToPowerSums(
                                               capitalId,
                                               omega ? "R" : "P");
     if (error()) return zero();
-    return expressionToPowerSumsDispatch(normalized);
+    return expressionToPowerSumsViaBasisElementRoutes(normalized);
   }
 
 ring_elem SymmetricEngineRing::skewHallLittlewoodToPowerSums(
@@ -1122,11 +1122,11 @@ ring_elem SymmetricEngineRing::skewHallLittlewoodToPowerSums(
     const std::string& display) const
 {
     if (display == "Q" || display == "B")
-      return expressionToPowerSumsDispatch(
+      return expressionToPowerSumsViaBasisElementRoutes(
           skewQOrBFunction(lambda, mu, display == "B"));
     if (display == "P" || display == "R")
       return skewPOrRToPowerSums(lambda, mu, display == "R");
-    ERROR("expected a skew Hall-Littlewood basis atom");
+    ERROR("expected a skew Hall-Littlewood basis element");
     return zero();
   }
 
@@ -1453,7 +1453,9 @@ bool SymmetricEngineRing::tryExpressionToHallLittlewoodViaTriangularReduction(ri
     return true;
   }
 
-Partition SymmetricEngineRing::atomIndex(const SymmetricMonomial& monomial, size_t pos) const
+Partition SymmetricEngineRing::basisElementIndex(
+    const SymmetricMonomial& monomial,
+    size_t pos) const
 {
     Partition result;
     int n = atomIndexLengthAt(monomial, pos);
@@ -1462,7 +1464,9 @@ Partition SymmetricEngineRing::atomIndex(const SymmetricMonomial& monomial, size
     return result;
   }
 
-Partition SymmetricEngineRing::atomOuterIndex(const SymmetricMonomial& monomial, size_t pos) const
+Partition SymmetricEngineRing::basisElementOuterIndex(
+    const SymmetricMonomial& monomial,
+    size_t pos) const
 {
     Partition result;
     int n = atomOuterLengthAt(monomial, pos);
@@ -1471,7 +1475,9 @@ Partition SymmetricEngineRing::atomOuterIndex(const SymmetricMonomial& monomial,
     return result;
   }
 
-Partition SymmetricEngineRing::atomInnerIndex(const SymmetricMonomial& monomial, size_t pos) const
+Partition SymmetricEngineRing::basisElementInnerIndex(
+    const SymmetricMonomial& monomial,
+    size_t pos) const
 {
     Partition result;
     int outerLength = atomOuterLengthAt(monomial, pos);
@@ -1482,105 +1488,182 @@ Partition SymmetricEngineRing::atomInnerIndex(const SymmetricMonomial& monomial,
     return result;
   }
 
-ring_elem SymmetricEngineRing::atomToPowerSumsDispatch(const SymmetricMonomial& monomial, size_t pos) const
+SymmetricEngineRing::BasisElementToPowerSumsRoute
+SymmetricEngineRing::selectBasisElementToPowerSumsRoute(
+    const SymmetricMonomial& monomial,
+    size_t pos) const
 {
-    int basisId = atomBasisIdAt(monomial, pos);
-    std::string display = displayForBasis(basisId);
+    std::string display = displayForBasis(atomBasisIdAt(monomial, pos));
     if (atomIsSkewAt(monomial, pos))
       {
-        Partition outer = atomOuterIndex(monomial, pos);
-        Partition inner = atomInnerIndex(monomial, pos);
         if (display == "S")
-          {
-            int hId = requiredBasisIdForDisplay("h");
-            if (error()) return zero();
-            return expressionToPowerSumsDispatch(jacobiTrudi(outer,
-                                                  inner,
-                                                  hId,
-                                                  "h",
-                                                  basisOrderForId(hId),
-                                                  isMultiplicativeBasis(hId)));
-          }
+          return BasisElementToPowerSumsRoute::ViaSkewSchurJacobiTrudiComplete;
         if (display == "Somega")
-          {
-            int eId = requiredBasisIdForDisplay("e");
-            if (error()) return zero();
-            return expressionToPowerSumsDispatch(jacobiTrudi(outer,
-                                                  inner,
-                                                  eId,
-                                                  "e",
-                                                  basisOrderForId(eId),
-                                                  isMultiplicativeBasis(eId)));
-          }
+          return BasisElementToPowerSumsRoute::ViaSkewOmegaSchurJacobiTrudiElementary;
         if (display == "Q" || display == "B" || display == "P" || display == "R")
-          return skewHallLittlewoodToPowerSums(outer, inner, display);
-        ERROR("basis conversion for skew ", display.c_str(), " atoms is not implemented yet");
-        return zero();
+          return BasisElementToPowerSumsRoute::ViaSkewHallLittlewood;
+        return BasisElementToPowerSumsRoute::NoApplicableRoute;
       }
-    Partition index = atomIndex(monomial, pos);
-
     if (display == "p")
-      return basisElementFromIndex(powerSumBasisId, "p", 10, true, index);
+      return BasisElementToPowerSumsRoute::AlreadyPowerSums;
+    if (display == "h")
+      return BasisElementToPowerSumsRoute::ViaCompleteClassicalFormula;
+    if (display == "e")
+      return BasisElementToPowerSumsRoute::ViaElementaryClassicalFormula;
+    if (display == "q" || display == "b")
+      return BasisElementToPowerSumsRoute::ViaHallLittlewoodGeneratorClassicalFormula;
+    if (display == "S")
+      return BasisElementToPowerSumsRoute::ViaSchurCharacters;
+    if (display == "Somega")
+      return BasisElementToPowerSumsRoute::ViaOmegaSchurCharacters;
+    if (display == "m")
+      return BasisElementToPowerSumsRoute::ViaMonomialTransition;
+    if (isForgottenDisplay(display))
+      return BasisElementToPowerSumsRoute::ViaForgottenTransition;
+    if (display == "Q" || display == "B")
+      return BasisElementToPowerSumsRoute::ViaHallLittlewoodRaisingOperators;
+    if (display == "P" || display == "R")
+      return BasisElementToPowerSumsRoute::ViaHallLittlewoodCapitalNormalization;
+    return BasisElementToPowerSumsRoute::NoApplicableRoute;
+  }
 
-    if (display == "h" || display == "e")
+ring_elem SymmetricEngineRing::executeBasisElementToPowerSumsRoute(
+    BasisElementToPowerSumsRoute route,
+    const SymmetricMonomial& monomial,
+    size_t pos) const
+{
+    std::string display = displayForBasis(atomBasisIdAt(monomial, pos));
+    if (route == BasisElementToPowerSumsRoute::ViaSkewSchurJacobiTrudiComplete ||
+        route == BasisElementToPowerSumsRoute::ViaSkewOmegaSchurJacobiTrudiElementary)
+      {
+        const char *generatorDisplay =
+            route == BasisElementToPowerSumsRoute::ViaSkewSchurJacobiTrudiComplete
+                ? "h" : "e";
+        int generatorId = requiredBasisIdForDisplay(generatorDisplay);
+        if (error()) return zero();
+        return expressionToPowerSumsViaBasisElementRoutes(
+            jacobiTrudi(basisElementOuterIndex(monomial, pos),
+                        basisElementInnerIndex(monomial, pos),
+                        generatorId,
+                        generatorDisplay,
+                        basisOrderForId(generatorId),
+                        isMultiplicativeBasis(generatorId)));
+      }
+    if (route == BasisElementToPowerSumsRoute::ViaSkewHallLittlewood)
+      return skewHallLittlewoodToPowerSums(
+                                           basisElementOuterIndex(monomial, pos),
+                                           basisElementInnerIndex(monomial, pos),
+                                           display);
+
+    Partition index = basisElementIndex(monomial, pos);
+    if (route == BasisElementToPowerSumsRoute::AlreadyPowerSums)
+      return basisElementFromIndex(powerSumBasisId, "p", 10, true, index);
+    if (route == BasisElementToPowerSumsRoute::ViaCompleteClassicalFormula ||
+        route == BasisElementToPowerSumsRoute::ViaElementaryClassicalFormula)
       {
         ring_elem result = one();
         for (int part : index)
           {
-            ring_elem factor = (display == "h") ? completePartToPowerSumsViaClassicalFormula(part)
-                                                : elementaryPartToPowerSumsViaClassicalFormula(part);
+            ring_elem factor =
+                route == BasisElementToPowerSumsRoute::ViaCompleteClassicalFormula
+                    ? completePartToPowerSumsViaClassicalFormula(part)
+                    : elementaryPartToPowerSumsViaClassicalFormula(part);
             result = mult(result, factor);
           }
         return result;
       }
-
-    if (display == "q" || display == "b")
+    if (route == BasisElementToPowerSumsRoute::ViaHallLittlewoodGeneratorClassicalFormula)
       {
         ring_elem result = one();
         for (int part : index)
           result = mult(result, hallLittlewoodGeneratorPartToPowerSumsViaClassicalFormula(part, display == "b"));
         return result;
       }
-
-    if (display == "S")
+    if (route == BasisElementToPowerSumsRoute::ViaSchurCharacters)
       return schurLikeToPowerSumsViaCharacters(index, false);
-
-    if (display == "Somega")
+    if (route == BasisElementToPowerSumsRoute::ViaOmegaSchurCharacters)
       return schurLikeToPowerSumsViaCharacters(index, true);
-
-    if (display == "m" || isForgottenDisplay(display))
-      return monomialToPowerSumsViaTransitionMatrix(index, isForgottenDisplay(display));
-
-    if (display == "Q" || display == "B")
+    if (route == BasisElementToPowerSumsRoute::ViaMonomialTransition ||
+        route == BasisElementToPowerSumsRoute::ViaForgottenTransition)
+      return monomialToPowerSumsViaTransitionMatrix(
+          index, route == BasisElementToPowerSumsRoute::ViaForgottenTransition);
+    if (route == BasisElementToPowerSumsRoute::ViaHallLittlewoodRaisingOperators)
       return hallLittlewoodCapitalToPowerSumsViaRaisingOperators(index, display == "B");
-
-    if (display == "P" || display == "R")
+    if (route == BasisElementToPowerSumsRoute::ViaHallLittlewoodCapitalNormalization)
       return hallLittlewoodNormalizedToPowerSumsViaCapitalNormalization(index, display == "R");
-
-    ERROR("basis conversion to power sums is not implemented for basis ", display.c_str());
+    if (atomIsSkewAt(monomial, pos))
+      ERROR("basis conversion for skew ", display.c_str(), " basis elements is not implemented yet");
+    else
+      ERROR("basis conversion to power sums is not implemented for basis ", display.c_str());
     return zero();
   }
 
-ring_elem SymmetricEngineRing::monomialToPowerSumsDispatch(const SymmetricMonomial& monomial) const
+const char *SymmetricEngineRing::basisElementToPowerSumsRouteName(
+    BasisElementToPowerSumsRoute route) const
+{
+    switch (route)
+      {
+        case BasisElementToPowerSumsRoute::AlreadyPowerSums: return "p:identity";
+        case BasisElementToPowerSumsRoute::ViaCompleteClassicalFormula: return "h->p:classical-formula";
+        case BasisElementToPowerSumsRoute::ViaElementaryClassicalFormula: return "e->p:classical-formula";
+        case BasisElementToPowerSumsRoute::ViaHallLittlewoodGeneratorClassicalFormula: return "q/b->p:classical-formula";
+        case BasisElementToPowerSumsRoute::ViaSchurCharacters: return "S->p:characters";
+        case BasisElementToPowerSumsRoute::ViaOmegaSchurCharacters: return "Somega->p:characters";
+        case BasisElementToPowerSumsRoute::ViaMonomialTransition: return "m->p:transition";
+        case BasisElementToPowerSumsRoute::ViaForgottenTransition: return "ff->p:transition";
+        case BasisElementToPowerSumsRoute::ViaHallLittlewoodRaisingOperators: return "Q/B->p:raising-operators";
+        case BasisElementToPowerSumsRoute::ViaHallLittlewoodCapitalNormalization: return "P/R->Q/B->p";
+        case BasisElementToPowerSumsRoute::ViaSkewSchurJacobiTrudiComplete: return "skew-S->h->p:Jacobi-Trudi";
+        case BasisElementToPowerSumsRoute::ViaSkewOmegaSchurJacobiTrudiElementary: return "skew-Somega->e->p:Jacobi-Trudi";
+        case BasisElementToPowerSumsRoute::ViaSkewHallLittlewood: return "skew-Hall-Littlewood->p";
+        case BasisElementToPowerSumsRoute::NoApplicableRoute: return "not-applicable";
+      }
+    return "unknown";
+  }
+
+void SymmetricEngineRing::traceBasisElementToPowerSumsSelection(
+    BasisElementToPowerSumsRoute route,
+    const std::string& sourceDisplay) const
+{
+    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
+    std::fprintf(stderr,
+                 "SymmetricRings basis-element-to-power-sums: source=%s route=%s\n",
+                 sourceDisplay.c_str(),
+                 basisElementToPowerSumsRouteName(route));
+  }
+
+ring_elem SymmetricEngineRing::basisElementToPowerSumsDispatch(
+    const SymmetricMonomial& monomial,
+    size_t pos) const
+{
+    BasisElementToPowerSumsRoute route =
+        selectBasisElementToPowerSumsRoute(monomial, pos);
+    std::string sourceDisplay = displayForBasis(atomBasisIdAt(monomial, pos));
+    traceBasisElementToPowerSumsSelection(route, sourceDisplay);
+    return executeBasisElementToPowerSumsRoute(route, monomial, pos);
+  }
+
+ring_elem SymmetricEngineRing::monomialToPowerSumsViaBasisElementRoutes(const SymmetricMonomial& monomial) const
 {
     ring_elem result = one();
     size_t pos = 0;
     while (pos < monomial.data.size())
       {
-        result = mult(result, atomToPowerSumsDispatch(monomial, pos));
+        result = mult(result, basisElementToPowerSumsDispatch(monomial, pos));
         if (error()) return zero();
         pos += atomLengthAt(monomial, pos);
       }
     return result;
   }
 
-ring_elem SymmetricEngineRing::expressionToPowerSumsDispatch(ring_elem f) const
+ring_elem SymmetricEngineRing::expressionToPowerSumsViaBasisElementRoutes(ring_elem f) const
 {
     const auto *poly = polyValue(f);
     ring_elem result = zero();
     for (const auto& term : poly->terms)
       {
-        ring_elem converted = monomialToPowerSumsDispatch(term.monomial);
+        ring_elem converted =
+            monomialToPowerSumsViaBasisElementRoutes(term.monomial);
         if (error()) return zero();
         result = add(result, scaled(term.coeff, converted));
       }
@@ -1735,11 +1818,11 @@ bool SymmetricEngineRing::powerSumIndexFromMonomial(const SymmetricMonomial& mon
     index.clear();
     if (monomial.data.empty()) return true;
     if (!isSinglePowerSumBlock(monomial)) return false;
-    index = atomIndex(monomial, 0);
+    index = basisElementIndex(monomial, 0);
     return true;
   }
 
-ring_elem SymmetricEngineRing::powerSumIndexToTargetDispatch(const Partition& index,
+ring_elem SymmetricEngineRing::powerSumIndexToTargetViaTermwiseKernel(const Partition& index,
                                      const std::string& targetDisplay,
                                      int targetBasisId,
                                      int targetDisplayOrder,
@@ -1820,7 +1903,7 @@ ring_elem SymmetricEngineRing::powerSumsToTargetViaTermwiseConversion(ring_elem 
             ERROR("expected a pure power-sum expression during basis conversion");
             return zero();
           }
-        ring_elem converted = powerSumIndexToTargetDispatch(index,
+        ring_elem converted = powerSumIndexToTargetViaTermwiseKernel(index,
                                                        targetDisplay,
                                                        targetBasisId,
                                                        targetDisplayOrder,
@@ -1884,7 +1967,7 @@ ring_elem SymmetricEngineRing::powerSumsToHallLittlewoodViaTriangularReduction(
                                         targetDisplayOrder);
   }
 
-bool SymmetricEngineRing::tryAtomToTarget(const SymmetricMonomial& monomial,
+bool SymmetricEngineRing::tryBasisElementToTarget(const SymmetricMonomial& monomial,
                           size_t pos,
                           int targetBasisId,
                           const std::string& targetDisplay,
@@ -1894,7 +1977,7 @@ bool SymmetricEngineRing::tryAtomToTarget(const SymmetricMonomial& monomial,
 {
     int basisId = atomBasisIdAt(monomial, pos);
     std::string display = displayForBasis(basisId);
-    Partition index = atomIndex(monomial, pos);
+    Partition index = basisElementIndex(monomial, pos);
 
     if (!atomIsSkewAt(monomial, pos) && display == targetDisplay)
       {
@@ -1908,9 +1991,9 @@ bool SymmetricEngineRing::tryAtomToTarget(const SymmetricMonomial& monomial,
 
     if (targetDisplay == "h" && display == "S")
       {
-        Partition outer = atomIsSkewAt(monomial, pos) ? atomOuterIndex(monomial, pos)
+        Partition outer = atomIsSkewAt(monomial, pos) ? basisElementOuterIndex(monomial, pos)
                                                       : index;
-        Partition inner = atomIsSkewAt(monomial, pos) ? atomInnerIndex(monomial, pos)
+        Partition inner = atomIsSkewAt(monomial, pos) ? basisElementInnerIndex(monomial, pos)
                                                       : Partition{};
         result = jacobiTrudi(outer,
                              inner,
@@ -1923,9 +2006,9 @@ bool SymmetricEngineRing::tryAtomToTarget(const SymmetricMonomial& monomial,
 
     if (targetDisplay == "e" && display == "Somega")
       {
-        Partition outer = atomIsSkewAt(monomial, pos) ? atomOuterIndex(monomial, pos)
+        Partition outer = atomIsSkewAt(monomial, pos) ? basisElementOuterIndex(monomial, pos)
                                                       : index;
-        Partition inner = atomIsSkewAt(monomial, pos) ? atomInnerIndex(monomial, pos)
+        Partition inner = atomIsSkewAt(monomial, pos) ? basisElementInnerIndex(monomial, pos)
                                                       : Partition{};
         result = jacobiTrudi(outer,
                              inner,
@@ -1942,7 +2025,7 @@ bool SymmetricEngineRing::tryAtomToTarget(const SymmetricMonomial& monomial,
         !isForgottenDisplay(display) && display != "S" && display != "Somega" &&
         display != "Q" && display != "B" && display != "P" && display != "R")
       return false;
-    ring_elem inPowerSums = atomToPowerSumsDispatch(monomial, pos);
+    ring_elem inPowerSums = basisElementToPowerSumsDispatch(monomial, pos);
     if (error()) return false;
     int pBasisId = requiredBasisIdForDisplay("p");
     if (error()) return false;
@@ -1975,7 +2058,7 @@ bool SymmetricEngineRing::tryMonomialToTarget(const SymmetricMonomial& monomial,
     while (pos < monomial.data.size())
       {
         ring_elem factor;
-        if (!tryAtomToTarget(monomial,
+        if (!tryBasisElementToTarget(monomial,
                                 pos,
                                 targetBasisId,
                                 targetDisplay,
@@ -2097,7 +2180,7 @@ Partition SymmetricEngineRing::replaceAdjacentPair(const Partition& alpha,
     return result;
   }
 
-ring_elem SymmetricEngineRing::straightenSchurAtom(const Partition& alpha,
+ring_elem SymmetricEngineRing::straightenSchurBasisElement(const Partition& alpha,
                                 const std::string& display) const
 {
     auto straightened = straightenSchurIndex(alpha);
@@ -2113,7 +2196,7 @@ ring_elem SymmetricEngineRing::straightenSchurAtom(const Partition& alpha,
     return term;
   }
 
-ring_elem SymmetricEngineRing::straightenHallCapitalAtom(const Partition& alpha,
+ring_elem SymmetricEngineRing::straightenHallCapitalBasisElement(const Partition& alpha,
                                       const std::string& display) const
 {
     Partition trimmed = trimTrailingZerosPartition(alpha);
@@ -2134,7 +2217,7 @@ ring_elem SymmetricEngineRing::straightenHallCapitalAtom(const Partition& alpha,
     int top = diff / 2;
     ring_elem result =
         scaled(hallLittlewoodParameter,
-               straightenHallCapitalAtom(replaceAdjacentPair(trimmed, bad, r, s),
+               straightenHallCapitalBasisElement(replaceAdjacentPair(trimmed, bad, r, s),
                                           display));
     for (int i = 1; i <= top; ++i)
       {
@@ -2149,14 +2232,14 @@ ring_elem SymmetricEngineRing::straightenHallCapitalAtom(const Partition& alpha,
               coefficientRing->power(hallLittlewoodParameter, i - 1));
         result = add(result,
                      scaled(coeff,
-                            straightenHallCapitalAtom(
+                            straightenHallCapitalBasisElement(
                                 replaceAdjacentPair(trimmed, bad, r - i, s + i),
                                 display)));
       }
     return result;
   }
 
-ring_elem SymmetricEngineRing::straightenAtom(const SymmetricMonomial& monomial, size_t pos) const
+ring_elem SymmetricEngineRing::straightenBasisElement(const SymmetricMonomial& monomial, size_t pos) const
 {
     std::string display = displayForBasis(atomBasisIdAt(monomial, pos));
     if (atomIsSkewAt(monomial, pos))
@@ -2165,11 +2248,11 @@ ring_elem SymmetricEngineRing::straightenAtom(const SymmetricMonomial& monomial,
         poly->terms.push_back({coefficientRing->one(), monomialFromKey(atomBlockAt(monomial, pos))});
         return makePolyValue(poly);
       }
-    Partition index = atomIndex(monomial, pos);
+    Partition index = basisElementIndex(monomial, pos);
     if (display == "S" || display == "Somega")
-      return straightenSchurAtom(index, display);
+      return straightenSchurBasisElement(index, display);
     if (display == "Q" || display == "B")
-      return straightenHallCapitalAtom(index, display);
+      return straightenHallCapitalBasisElement(index, display);
     if (display == "P" || display == "R")
       {
         if (isPartitionIndex(index))
@@ -2179,14 +2262,15 @@ ring_elem SymmetricEngineRing::straightenAtom(const SymmetricMonomial& monomial,
                                        false,
                                        index);
         std::string capitalDisplay = display == "P" ? "Q" : "B";
-        ring_elem straightCapital = straightenHallCapitalAtom(index, capitalDisplay);
+        ring_elem straightCapital =
+            straightenHallCapitalBasisElement(index, capitalDisplay);
         if (error()) return zero();
         ring_elem normalizedCapital = scaled(
             coefficientQuotient(coefficientRing->one(),
                                 hallLittlewoodCFactor(index)),
             straightCapital);
         if (error()) return zero();
-        return powerSumsToHallLittlewoodCapitalViaTriangularReduction(expressionToPowerSumsDispatch(normalizedCapital),
+        return powerSumsToHallLittlewoodCapitalViaTriangularReduction(expressionToPowerSumsViaBasisElementRoutes(normalizedCapital),
                                             requiredBasisIdForDisplay(display),
                                             display,
                                             basisOrderForId(requiredBasisIdForDisplay(display)));
@@ -2204,7 +2288,7 @@ ring_elem SymmetricEngineRing::straightenMonomial(const SymmetricMonomial& monom
     size_t pos = 0;
     while (pos < monomial.data.size())
       {
-        ring_elem factor = straightenAtom(monomial, pos);
+        ring_elem factor = straightenBasisElement(monomial, pos);
         if (error()) return zero();
         result = mult(result, factor);
         pos += atomLengthAt(monomial, pos);

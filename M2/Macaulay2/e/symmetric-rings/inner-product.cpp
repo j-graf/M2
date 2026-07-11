@@ -25,7 +25,7 @@ bool SymmetricEngineRing::singleBasisIndexFromMonomial(const SymmetricMonomial& 
     if (atomIsSkewAt(monomial, 0)) return false;
     if (atomBasisIdAt(monomial, 0) != basisId) return false;
     if (atomLengthAt(monomial, 0) != monomial.data.size()) return false;
-    index = atomIndex(monomial, 0);
+    index = basisElementIndex(monomial, 0);
     return true;
   }
 

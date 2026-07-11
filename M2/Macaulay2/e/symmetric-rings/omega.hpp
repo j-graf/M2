@@ -6,8 +6,8 @@
 // Declaration fragment included inside SymmetricEngineRing.
 
   ring_elem omegaPowerSums(ring_elem f) const;
-  ring_elem omegaSchurAtomAsSchur(const Partition& alpha) const;
-  ring_elem omegaDirectAtom(const SymmetricMonomial& monomial,
+  ring_elem omegaSchurBasisElementAsSchur(const Partition& alpha) const;
+  ring_elem omegaBasisElementDirect(const SymmetricMonomial& monomial,
                               size_t pos,
                               const std::map<int, OmegaTarget>& omegaTargets,
                               bool useSomega) const;

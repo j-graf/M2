@@ -37,7 +37,8 @@ ring_elem SymmetricEngineRing::omegaPowerSums(ring_elem f) const
     return fromTermVector(terms, true);
   }
 
-ring_elem SymmetricEngineRing::omegaSchurAtomAsSchur(const Partition& alpha) const
+ring_elem SymmetricEngineRing::omegaSchurBasisElementAsSchur(
+    const Partition& alpha) const
 {
     auto straightened = straightenSchurIndex(alpha);
     if (straightened.first == 0) return zero();
@@ -52,7 +53,8 @@ ring_elem SymmetricEngineRing::omegaSchurAtomAsSchur(const Partition& alpha) con
     return term;
   }
 
-ring_elem SymmetricEngineRing::omegaDirectAtom(const SymmetricMonomial& monomial,
+ring_elem SymmetricEngineRing::omegaBasisElementDirect(
+                                               const SymmetricMonomial& monomial,
                             size_t pos,
                             const std::map<int, OmegaTarget>& omegaTargets,
                             bool useSomega) const
@@ -61,7 +63,7 @@ ring_elem SymmetricEngineRing::omegaDirectAtom(const SymmetricMonomial& monomial
     std::string display = displayForBasis(basisId);
     if (basisId == powerSumBasisId)
       {
-        Partition index = atomIndex(monomial, pos);
+        Partition index = basisElementIndex(monomial, pos);
         long sign = ((partitionWeight(index) - partitionLength(index)) % 2 == 0) ? 1 : -1;
         ring_elem term = basisElementFromIndex(powerSumBasisId,
                                                "p",
@@ -80,18 +82,22 @@ ring_elem SymmetricEngineRing::omegaDirectAtom(const SymmetricMonomial& monomial
                                            "S",
                                            basisOrderForId(schurId),
                                            false,
-                                           conjugatePartition(atomOuterIndex(monomial, pos)),
-                                           conjugatePartition(atomInnerIndex(monomial, pos)));
-        return omegaSchurAtomAsSchur(atomIndex(monomial, pos));
+                                           conjugatePartition(
+                                               basisElementOuterIndex(monomial, pos)),
+                                           conjugatePartition(
+                                               basisElementInnerIndex(monomial, pos)));
+        return omegaSchurBasisElementAsSchur(
+            basisElementIndex(monomial, pos));
       }
 
     if (!useSomega && display == "Somega" && !atomIsSkewAt(monomial, pos))
-      return straightenSchurAtom(atomIndex(monomial, pos), "S");
+      return straightenSchurBasisElement(
+          basisElementIndex(monomial, pos), "S");
 
     auto target = omegaTargets.find(basisId);
     if (target != omegaTargets.end())
       {
-        Partition payload = atomIndex(monomial, pos);
+        Partition payload = basisElementIndex(monomial, pos);
         std::string targetDisplay = displayForBasis(target->second.basisId);
         rememberBasis(target->second.basisId,
                       targetDisplay,
@@ -109,7 +115,7 @@ ring_elem SymmetricEngineRing::omegaDirectAtom(const SymmetricMonomial& monomial
         return makePolyValue(poly);
       }
 
-    ring_elem inPowerSums = atomToPowerSumsDispatch(monomial, pos);
+    ring_elem inPowerSums = basisElementToPowerSumsDispatch(monomial, pos);
     if (error()) return zero();
     return omegaPowerSums(inPowerSums);
   }
@@ -122,7 +128,8 @@ ring_elem SymmetricEngineRing::omegaMonomial(const SymmetricMonomial& monomial,
     size_t pos = 0;
     while (pos < monomial.data.size())
       {
-        ring_elem factor = omegaDirectAtom(monomial, pos, omegaTargets, useSomega);
+        ring_elem factor =
+            omegaBasisElementDirect(monomial, pos, omegaTargets, useSomega);
         if (error()) return zero();
         result = mult(result, factor);
         pos += atomLengthAt(monomial, pos);

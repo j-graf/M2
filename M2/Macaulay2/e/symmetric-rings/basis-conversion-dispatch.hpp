@@ -11,8 +11,8 @@
     WholeExpression,
     GroupedMultiplicativeTarget,
     GroupedHallLittlewood,
-    PowerSum,
-    PostPlethysmPowerSum,
+    PowerSums,
+    PostPlethysmPowerSums,
     FallbackTerm,
     FactorizedProduct,
     PostPlethysm
@@ -36,7 +36,7 @@
     ViaElementaryLogarithmFormula,
     ViaHallLittlewoodGeneratorLogarithmFormula,
     ViaHallLittlewoodSingleCycleGreenPolynomials,
-    ViaHallLittlewoodGreenPolynomialsViaDuality,
+    ViaHallLittlewoodGreenPolynomialsAndDuality,
     ViaHallLittlewoodTriangularReduction,
     ViaMonomialTransition,
     ViaForgottenTransition,
@@ -47,10 +47,10 @@
     AlreadyInTarget,
     ViaHallLittlewoodNormalization,
     ViaSchurOmegaConjugation,
-    ViaPowerSumKernels,
-    ViaCompleteRecursiveTransition,
-    ViaComplete,
-    ViaPowerSums
+    ViaSelectedPowerSumsToTargetRoute,
+    ViaCompleteToSchurRecursiveTransition,
+    ViaPowerSumsThenCompleteThenSchur,
+    ViaSourceToPowerSumsThenTarget
   };
   enum class ProductExpansionMethod
   {
@@ -65,7 +65,7 @@
   enum class WholeExpressionRoute
   {
     AlreadyInTarget,
-    ViaCompleteRecursiveTransition,
+    ViaCompleteToSchurRecursiveTransition,
     ViaSchurCompatibleProducts,
     ViaSchurTriangularReduction,
     ViaHallLittlewoodNormalization,
@@ -89,7 +89,7 @@
     std::optional<double> density;
     std::optional<std::vector<int>> factorBases;
 
-    KnownState singleAtom = KnownState::Unknown;
+    KnownState singleBasisElement = KnownState::Unknown;
     KnownState singleTerm = KnownState::Unknown;
     KnownState noProducts = KnownState::Unknown;
     KnownState normalized = KnownState::Unknown;
@@ -174,7 +174,7 @@
         const std::string& targetDisplay,
         int targetOrder,
         bool targetIsMultiplicative) const;
-  ring_elem runPowerSumPipeline(
+  ring_elem runPowerSumsPipeline(
         const ConversionInput& input,
         int pBasisId,
         const std::string& pDisplay,
@@ -184,7 +184,7 @@
         const std::string& targetDisplay,
         int targetOrder,
         bool targetIsMultiplicative) const;
-  ring_elem runPostPlethysmPowerSumPipeline(
+  ring_elem runPostPlethysmPowerSumsPipeline(
         const ConversionInput& input,
         int pBasisId,
         const std::string& pDisplay,
@@ -277,6 +277,14 @@
         int pBasisId,
         int targetBasisId,
         const std::string& targetDisplay) const;
+  ring_elem executeSourceToTargetRoute(
+        SourceToTargetRoute route,
+        const ConversionInput& input,
+        int pBasisId,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetOrder,
+        bool targetIsMultiplicative) const;
   ring_elem sourceToTargetDispatch(
         const ConversionInput& input,
         int pBasisId,
@@ -288,6 +296,14 @@
         int targetOrder,
         bool targetIsMultiplicative) const;
   ring_elem powerSumsToTargetDispatch(
+        const ConversionInput& input,
+        int pBasisId,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetDisplayOrder,
+        bool targetIsMultiplicative) const;
+  ring_elem executePowerSumsToTargetRoute(
+        PowerSumsToTargetRoute route,
         const ConversionInput& input,
         int pBasisId,
         int targetBasisId,
@@ -313,6 +329,9 @@
         SourceToTargetRoute route,
         const ConversionInput& input,
         const std::string& targetDisplay) const;
+  void tracePowerSumsToTargetSelection(
+        PowerSumsToTargetRoute route,
+        const std::string& targetDisplay) const;
   void traceProductExpansionSelection(
         ProductExpansionMethod method,
         const TermConversionClassification& classification) const;
@@ -320,7 +339,7 @@
         WholeExpressionRoute route,
         const ConversionInput& input,
         const std::string& targetDisplay) const;
-  ring_elem runProductToBasisPipeline(
+  ring_elem runFactorizedProductPipeline(
         ring_elem f,
         ring_elem g,
         int pBasisId,

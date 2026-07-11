@@ -52,7 +52,7 @@ struct SymmetricConversionMetadata
   std::optional<size_t> maximumPartitionLength;
   std::optional<double> density;
   std::optional<std::vector<int>> factorBases;
-  std::optional<bool> singleAtom;
+  std::optional<bool> singleBasisElement;
   std::optional<bool> singleTerm;
   std::optional<bool> noProducts;
   bool normalized = false;
