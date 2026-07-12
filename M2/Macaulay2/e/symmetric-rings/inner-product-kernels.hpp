@@ -50,11 +50,11 @@
   ring_elem schurElementaryInnerProductViaConjugateKostkaNumbers(
       ring_elem schurBasisElement,
       ring_elem elementaryBasisElement) const;
-  ring_elem omegaSchurCompleteInnerProductViaConjugateKostkaNumbers(
-      ring_elem omegaSchurBasisElement,
+  ring_elem schurOmegaCompleteInnerProductViaConjugateKostkaNumbers(
+      ring_elem schurOmegaBasisElement,
       ring_elem completeBasisElement) const;
-  ring_elem omegaSchurElementaryInnerProductViaKostkaNumbers(
-      ring_elem omegaSchurBasisElement,
+  ring_elem schurOmegaElementaryInnerProductViaKostkaNumbers(
+      ring_elem schurOmegaBasisElement,
       ring_elem elementaryBasisElement) const;
 
   // ============================================================================

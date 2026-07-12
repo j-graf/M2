@@ -12,6 +12,7 @@ bool rawSymmetricRingsSetHallLittlewoodParameter(const Ring *R,
                                                  const RingElement *t);
 bool rawSymmetricRingsRememberBasis(const Ring *R,
                                     int basisId,
+                                    M2_string canonicalBasisKey,
                                     M2_string displaySymbol,
                                     int displayOrder,
                                     bool isMultiplicative);
@@ -91,6 +92,10 @@ const RingElement *rawSymmetricRingsBasisCoefficient(
 int rawSymmetricRingsTermCount(const RingElement *f);
 const RingElement *rawSymmetricRingsTermCoefficient(const RingElement *f, int i);
 M2_arrayint rawSymmetricRingsTermMonomial(const RingElement *f, int i);
+M2_arrayint rawSymmetricRingsPresentationTermIndices(const RingElement *f,
+                                                     int maxTerms);
+M2_arrayint rawSymmetricRingsPresentationTermMonomial(const RingElement *f,
+                                                      int i);
 M2_string rawSymmetricRingsElementToString(const RingElement *f);
 M2_string rawSymmetricRingsElementToStringLimited(const RingElement *f,
                                                   int maxTerms);

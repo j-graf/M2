@@ -9,6 +9,7 @@
 #include "rings/ring.hpp"
 #include "rings/ringelem.hpp"
 
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <optional>
@@ -37,11 +38,27 @@ struct SymmetricTerm
   SymmetricMonomial monomial;
 };
 
-enum class SymmetricConversionOrigin
+enum class CombinatorialTag : uint32_t
 {
-  Unknown,
-  Plethysm
+  Plethysm = 1u << 0,
+  LittlewoodRichardson = 1u << 1,
+  HorizontalPieri = 1u << 2,
+  VerticalPieri = 1u << 3,
+  BorderStrips = 1u << 4
 };
+
+using CombinatorialTags = uint32_t;
+
+constexpr CombinatorialTags combinatorialTagMask(CombinatorialTag tag)
+{
+  return static_cast<CombinatorialTags>(tag);
+}
+
+constexpr bool hasCombinatorialTag(CombinatorialTags tags,
+                                   CombinatorialTag tag)
+{
+  return (tags & combinatorialTagMask(tag)) != 0;
+}
 
 struct SymmetricConversionMetadata
 {
@@ -58,13 +75,15 @@ struct SymmetricConversionMetadata
   bool normalized = false;
   bool skewFree = false;
   bool collected = false;
-  SymmetricConversionOrigin origin = SymmetricConversionOrigin::Unknown;
 };
 
 class SymmetricRingPoly : public our_new_delete
 {
  public:
   VECTOR(SymmetricTerm) terms;
+  // Semantic operation tags are independent of conversion-profile metadata:
+  // ordinary arithmetic can create them even when no conversion has run.
+  CombinatorialTags combinatorialTags = 0;
   std::optional<SymmetricConversionMetadata> conversionMetadata;
 };
 
@@ -106,10 +125,16 @@ struct OmegaTarget
   bool isMultiplicative;
 };
 
+enum class InnerProductPairingKind
+{
+  Dual = 1,
+  PowerSum = 2
+};
+
 struct InnerProductTarget
 {
   int dualBasisId;
-  int kind;
+  InnerProductPairingKind kind;
 };
 
 std::string fromM2String(M2_string s);

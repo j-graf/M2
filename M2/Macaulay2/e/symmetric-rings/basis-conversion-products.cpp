@@ -540,6 +540,110 @@ ring_elem SymmetricEngineRing::powerSumsToSchurViaBorderStrips(
     return fromTermVector(terms, false);
   }
 
+const std::vector<LRProductTerm>&
+SymmetricEngineRing::schurTimesPowerSumViaAbacusRimHooks(
+    const Partition& lambda0,
+    int part) const
+{
+    Partition lambda = normalizePartition(lambda0);
+    std::pair<Partition, int> key{lambda, part};
+    auto cached = schurTimesPowerSumViaAbacusRimHooksCache.find(key);
+    if (cached != schurTimesPowerSumViaAbacusRimHooksCache.end())
+      return cached->second;
+
+    std::vector<LRProductTerm> result;
+    if (part < 0)
+      {
+        auto inserted = schurTimesPowerSumViaAbacusRimHooksCache.emplace(
+            key, std::move(result));
+        return inserted.first->second;
+      }
+    if (part == 0)
+      {
+        result.push_back({lambda, 1});
+        auto inserted = schurTimesPowerSumViaAbacusRimHooksCache.emplace(
+            key, std::move(result));
+        return inserted.first->second;
+      }
+
+    // With length(lambda) + part beads, every addable part-r rim hook is a
+    // unique legal move b -> b + part in the beta set.  The number of beads
+    // crossed is the rim-hook height and therefore determines its sign.
+    const size_t beadCount = lambda.size() + static_cast<size_t>(part);
+    std::vector<int> beta;
+    beta.reserve(beadCount);
+    for (size_t i = 0; i < beadCount; ++i)
+      beta.push_back(partitionPart(lambda, i) +
+                     static_cast<int>(beadCount - 1 - i));
+
+    for (size_t movedBead = 0; movedBead < beta.size(); ++movedBead)
+      {
+        int source = beta[movedBead];
+        int target = source + part;
+        if (std::find(beta.begin(), beta.end(), target) != beta.end()) continue;
+
+        int crossed = 0;
+        for (int bead : beta)
+          if (source < bead && bead < target) ++crossed;
+
+        std::vector<int> moved = beta;
+        moved[movedBead] = target;
+        std::sort(moved.begin(), moved.end(), std::greater<int>());
+        Partition nu;
+        nu.reserve(beadCount);
+        for (size_t i = 0; i < beadCount; ++i)
+          {
+            int row = moved[i] - static_cast<int>(beadCount - 1 - i);
+            if (row > 0) nu.push_back(row);
+          }
+        result.push_back({nu, (crossed % 2 == 0) ? 1 : -1});
+      }
+
+    auto inserted = schurTimesPowerSumViaAbacusRimHooksCache.emplace(
+        key, std::move(result));
+    return inserted.first->second;
+  }
+
+ring_elem SymmetricEngineRing::powerSumsToSchurViaAbacusRimHooks(
+    ring_elem f,
+    int targetBasisId,
+    const std::string& targetDisplay,
+    int targetDisplayOrder) const
+{
+    const auto *poly = polyValue(f);
+    VECTOR(SymmetricTerm) terms;
+    for (const auto& term : poly->terms)
+      {
+        std::vector<SchurCompatibleFactor> factors;
+        if (!term.monomial.data.empty())
+          {
+            Partition index = basisElementIndex(term.monomial, 0);
+            factors.reserve(index.size());
+            for (int part : index)
+              if (part > 0)
+                factors.push_back({SchurCompatibleFactor::PowerSumAbacus,
+                                   Partition{part},
+                                   CoeffMap{},
+                                   part});
+          }
+
+        ring_elem converted;
+        if (!schurCompatibleFactorsToSchurDispatch(std::move(factors),
+                                                    targetBasisId,
+                                                    targetDisplay,
+                                                    targetDisplayOrder,
+                                                    converted))
+          return zero();
+        const auto *convertedPoly = polyValue(converted);
+        terms.reserve(terms.size() + convertedPoly->terms.size());
+        for (const auto& convertedTerm : convertedPoly->terms)
+          terms.push_back({coefficientRing->mult(term.coeff,
+                                                 convertedTerm.coeff),
+                           convertedTerm.monomial});
+      }
+    return fromTermVector(terms, false);
+  }
+
 // ============================================================================
 // Schur Product Planning And Execution
 // ============================================================================
@@ -591,14 +695,15 @@ bool SymmetricEngineRing::tryBasisElementToSchurFactors(
         return true;
       }
 
-    std::string display = displayForBasis(basisId);
-    if (display != "h" && display != "e") return false;
+    BasisKind kind = basisKindForId(basisId);
+    if (kind != BasisKind::Complete && kind != BasisKind::Elementary)
+      return false;
 
     for (int part : index)
       {
         if (part < 0) return false;
         if (part == 0) continue;
-        if (display == "h")
+        if (kind == BasisKind::Complete)
           factors.push_back(Partition{part});
         else
           factors.push_back(Partition(static_cast<size_t>(part), 1));
@@ -613,7 +718,7 @@ bool SymmetricEngineRing::trySchurProductMonomialToSchurViaLittlewoodRichardson(
     int targetDisplayOrder,
     ring_elem& result) const
 {
-    if (targetDisplay != "S") return false;
+    if (!hasBasisKind(targetBasisId, BasisKind::Schur)) return false;
     if (monomial.data.empty())
       {
         result = one();
@@ -661,7 +766,7 @@ bool SymmetricEngineRing::trySchurCompatibleMonomialToSchur(
     int targetDisplayOrder,
     ring_elem& result) const
 {
-    if (targetDisplay != "S") return false;
+    if (!hasBasisKind(targetBasisId, BasisKind::Schur)) return false;
     std::vector<SchurCompatibleFactor> factors;
     if (!trySchurCompatibleFactorsFromMonomial(monomial, targetBasisId, factors))
       return false;
@@ -727,16 +832,19 @@ bool SymmetricEngineRing::trySchurCompatibleFactorsFromMonomial(
           }
         else
           {
-            std::string display = displayForBasis(basisId);
-            if (display != "h" && display != "e" && display != "p") return false;
+            BasisKind basisKind = basisKindForId(basisId);
+            if (basisKind != BasisKind::Complete &&
+                basisKind != BasisKind::Elementary &&
+                basisKind != BasisKind::PowerSum)
+              return false;
             for (int part : index)
               {
                 if (part < 0) return false;
                 if (part == 0) continue;
                 SchurCompatibleFactor::Kind kind = SchurCompatibleFactor::PowerSum;
-                if (display == "h")
+                if (basisKind == BasisKind::Complete)
                   kind = SchurCompatibleFactor::Horizontal;
-                else if (display == "e")
+                else if (basisKind == BasisKind::Elementary)
                   kind = SchurCompatibleFactor::Vertical;
                 factors.push_back({kind, Partition{part}, CoeffMap{}, part});
               }
@@ -758,6 +866,8 @@ SymmetricEngineRing::selectSchurFactorMethod(
           return SchurFactorMethod::ViaVerticalPieri;
         case SchurCompatibleFactor::PowerSum:
           return SchurFactorMethod::ViaBorderStrips;
+        case SchurCompatibleFactor::PowerSumAbacus:
+          return SchurFactorMethod::ViaAbacusRimHooks;
         case SchurCompatibleFactor::SchurExpansion:
           return SchurFactorMethod::ViaLittlewoodRichardsonExpansion;
         case SchurCompatibleFactor::General:
@@ -781,6 +891,8 @@ const char *SymmetricEngineRing::schurFactorMethodName(
           return "vertical-pieri";
         case SchurFactorMethod::ViaBorderStrips:
           return "border-strips";
+        case SchurFactorMethod::ViaAbacusRimHooks:
+          return "abacus-rim-hooks";
         case SchurFactorMethod::ViaLittlewoodRichardsonExpansion:
           return "littlewood-richardson-expansion";
       }
@@ -805,7 +917,7 @@ bool SymmetricEngineRing::schurCompatibleFactorsToSchurDispatch(
     int targetDisplayOrder,
     ring_elem& result) const
 {
-    if (targetDisplay != "S") return false;
+    if (!hasBasisKind(targetBasisId, BasisKind::Schur)) return false;
     if (factors.empty())
       {
         result = one();
@@ -858,11 +970,13 @@ bool SymmetricEngineRing::schurCompatibleFactorsToSchurDispatch(
                        int aRank =
                            (a.kind == SchurCompatibleFactor::General ||
                             a.kind == SchurCompatibleFactor::SchurExpansion) ? 0 :
-                           a.kind == SchurCompatibleFactor::PowerSum ? 2 : 1;
+                           (a.kind == SchurCompatibleFactor::PowerSum ||
+                            a.kind == SchurCompatibleFactor::PowerSumAbacus) ? 2 : 1;
                        int bRank =
                            (b.kind == SchurCompatibleFactor::General ||
                             b.kind == SchurCompatibleFactor::SchurExpansion) ? 0 :
-                           b.kind == SchurCompatibleFactor::PowerSum ? 2 : 1;
+                           (b.kind == SchurCompatibleFactor::PowerSum ||
+                            b.kind == SchurCompatibleFactor::PowerSumAbacus) ? 2 : 1;
                        if (aRank != bRank) return aRank < bRank;
                        if (a.kind != b.kind) return a.kind < b.kind;
                        return lexLessPartition(a.index, b.index);
@@ -892,6 +1006,19 @@ bool SymmetricEngineRing::schurCompatibleFactorsToSchurDispatch(
               {
                 int part = factor.index.empty() ? 0 : factor.index.front();
                 for (const auto& product : schurTimesPowerSumViaBorderStrips(term.first, part))
+                  {
+                    ring_elem coeff = product.coefficient == 1
+                        ? term.second
+                        : coefficientRing->mult(cachedInteger(product.coefficient),
+                                                term.second);
+                    addCoeff(next, product.nu, coeff);
+                  }
+              }
+            else if (method == SchurFactorMethod::ViaAbacusRimHooks)
+              {
+                int part = factor.index.empty() ? 0 : factor.index.front();
+                for (const auto& product :
+                     schurTimesPowerSumViaAbacusRimHooks(term.first, part))
                   {
                     ring_elem coeff = product.coefficient == 1
                         ? term.second
@@ -947,7 +1074,7 @@ bool SymmetricEngineRing::trySchurCompatibleExpressionToSchur(ring_elem f,
                           int targetDisplayOrder,
                           ring_elem& result) const
 {
-    if (targetDisplay != "S") return false;
+    if (!hasBasisKind(targetBasisId, BasisKind::Schur)) return false;
     const auto *poly = polyValue(f);
     VECTOR(SymmetricTerm) terms;
     for (const auto& term : poly->terms)
@@ -976,7 +1103,7 @@ bool SymmetricEngineRing::tryProductToSchurViaCompatibleFactors(ring_elem f,
                           int targetDisplayOrder,
                           ring_elem& result) const
 {
-    if (targetDisplay != "S") return false;
+    if (!hasBasisKind(targetBasisId, BasisKind::Schur)) return false;
     const auto *left = polyValue(f);
     const auto *right = polyValue(g);
     VECTOR(SymmetricTerm) terms;
@@ -1115,17 +1242,18 @@ const std::vector<LRProductTerm>& SymmetricEngineRing::monomialProductViaExponen
 bool SymmetricEngineRing::tryMonomialLikeBasisElementToCoeffMap(
     const SymmetricMonomial& monomial,
     size_t pos,
-    const std::string& targetDisplay,
+    int targetBasisId,
     CoeffMap& result) const
 {
     if (atomIsSkewAt(monomial, pos)) return false;
-    bool forgottenTarget = isForgottenDisplay(targetDisplay);
-    if (targetDisplay != "m" && !forgottenTarget) return false;
+    const BasisKind targetKind = basisKindForId(targetBasisId);
+    bool forgottenTarget = targetKind == BasisKind::Forgotten;
+    if (targetKind != BasisKind::Monomial && !forgottenTarget) return false;
 
-    std::string display = displayForBasis(atomBasisIdAt(monomial, pos));
+    BasisKind sourceKind = basisKindForId(atomBasisIdAt(monomial, pos));
     Partition index = basisElementIndex(monomial, pos);
 
-    auto partMap = [&](const std::string& kind, int part, long sign) {
+    auto partMap = [&](BasisKind kind, int part, long sign) {
       CoeffMap map;
       if (part < 0) return map;
       if (part == 0)
@@ -1133,51 +1261,53 @@ bool SymmetricEngineRing::tryMonomialLikeBasisElementToCoeffMap(
           addCoeff(map, Partition{}, cachedInteger(sign));
           return map;
         }
-      if (kind == "h")
+      if (kind == BasisKind::Complete)
         {
           for (const auto& lambda : partitionsOf(part))
             addCoeff(map, lambda, cachedInteger(sign));
         }
-      else if (kind == "e")
+      else if (kind == BasisKind::Elementary)
         {
           addCoeff(map, Partition(static_cast<size_t>(part), 1),
                    cachedInteger(sign));
         }
-      else if (kind == "p")
+      else if (kind == BasisKind::PowerSum)
         {
           addCoeff(map, Partition{part}, cachedInteger(sign));
         }
       return map;
     };
 
-    if (!forgottenTarget && display == "m")
+    if (!forgottenTarget && sourceKind == BasisKind::Monomial)
       {
         addCoeff(result, index, coefficientRing->one());
         return true;
       }
-    if (forgottenTarget && isForgottenDisplay(display))
+    if (forgottenTarget && sourceKind == BasisKind::Forgotten)
       {
         addCoeff(result, index, coefficientRing->one());
         return true;
       }
 
-    std::string mappedDisplay = display;
+    BasisKind mappedKind = sourceKind;
     bool powerSumOmegaSign = false;
     if (forgottenTarget)
       {
-        if (display == "h")
-          mappedDisplay = "e";
-        else if (display == "e")
-          mappedDisplay = "h";
-        else if (display == "p")
+        if (sourceKind == BasisKind::Complete)
+          mappedKind = BasisKind::Elementary;
+        else if (sourceKind == BasisKind::Elementary)
+          mappedKind = BasisKind::Complete;
+        else if (sourceKind == BasisKind::PowerSum)
           {
-            mappedDisplay = "p";
+            mappedKind = BasisKind::PowerSum;
             powerSumOmegaSign = true;
           }
         else
           return false;
       }
-    else if (display != "h" && display != "e" && display != "p")
+    else if (sourceKind != BasisKind::Complete &&
+             sourceKind != BasisKind::Elementary &&
+             sourceKind != BasisKind::PowerSum)
       return false;
 
     result = oneCoeffMap();
@@ -1186,7 +1316,7 @@ bool SymmetricEngineRing::tryMonomialLikeBasisElementToCoeffMap(
         if (part < 0) return false;
         long sign = 1;
         if (powerSumOmegaSign && part % 2 == 0) sign = -1;
-        CoeffMap factor = partMap(mappedDisplay, part, sign);
+        CoeffMap factor = partMap(mappedKind, part, sign);
         result = multiplyMonomialCoeffMaps(result, factor);
       }
     return true;
@@ -1200,7 +1330,9 @@ bool SymmetricEngineRing::tryMonomialLikeMonomialToTarget(
     bool targetIsMultiplicative,
     ring_elem& result) const
 {
-    if (targetDisplay != "m" && !isForgottenDisplay(targetDisplay))
+    const BasisKind targetKind = basisKindForId(targetBasisId);
+    if (targetKind != BasisKind::Monomial &&
+        targetKind != BasisKind::Forgotten)
       return false;
 
     CoeffMap current = oneCoeffMap();
@@ -1209,7 +1341,7 @@ bool SymmetricEngineRing::tryMonomialLikeMonomialToTarget(
       {
         CoeffMap factor;
         if (!tryMonomialLikeBasisElementToCoeffMap(
-                monomial, pos, targetDisplay, factor))
+                monomial, pos, targetBasisId, factor))
           return false;
         current = multiplyMonomialCoeffMaps(current, factor);
         pos += atomLengthAt(monomial, pos);
@@ -1232,7 +1364,9 @@ bool SymmetricEngineRing::tryProductToMonomialLikeTarget(
     bool targetIsMultiplicative,
     ring_elem& result) const
 {
-    if (targetDisplay != "m" && !isForgottenDisplay(targetDisplay))
+    const BasisKind targetKind = basisKindForId(targetBasisId);
+    if (targetKind != BasisKind::Monomial &&
+        targetKind != BasisKind::Forgotten)
       return false;
 
     const auto *left = polyValue(f);
@@ -1281,13 +1415,20 @@ bool SymmetricEngineRing::tryProductToHallLittlewoodViaGenerators(
     int targetDisplayOrder,
     ring_elem& result) const
 {
-    if (targetDisplay != "Q" && targetDisplay != "P" &&
-        targetDisplay != "B" && targetDisplay != "R")
+    const BasisKind targetKind = basisKindForId(targetBasisId);
+    if (targetKind != BasisKind::HallLittlewoodQ &&
+        targetKind != BasisKind::HallLittlewoodP &&
+        targetKind != BasisKind::HallLittlewoodB &&
+        targetKind != BasisKind::HallLittlewoodPOmega)
       return false;
-    const std::string generatorDisplay =
-        targetDisplay == "Q" || targetDisplay == "P" ? "q" : "b";
-    int generatorId = requiredBasisIdForDisplay(generatorDisplay);
+    const BasisKind generatorKind =
+        targetKind == BasisKind::HallLittlewoodQ ||
+        targetKind == BasisKind::HallLittlewoodP
+            ? BasisKind::HallLittlewoodQGenerator
+            : BasisKind::HallLittlewoodBGenerator;
+    int generatorId = requiredBasisIdForKind(generatorKind);
     if (error()) return false;
+    const std::string generatorDisplay = displayForBasis(generatorId);
     int generatorOrder = basisOrderForId(generatorId);
     ring_elem leftGenerators;
     ring_elem rightGenerators;
@@ -1319,13 +1460,21 @@ SymmetricEngineRing::selectProductToTargetRoute(
     const std::string& targetDisplay,
     bool targetIsMultiplicative) const
 {
-    if (targetDisplay == "S")
-      return ProductToTargetRoute::ViaSchurCompatibleFactors;
-    if (targetDisplay == "m" || isForgottenDisplay(targetDisplay))
-      return ProductToTargetRoute::ViaMonomialLikeExpansion;
-    if (targetDisplay == "Q" || targetDisplay == "P" ||
-        targetDisplay == "B" || targetDisplay == "R")
-      return ProductToTargetRoute::ViaHallLittlewoodGenerators;
+    switch (basisKindForId(targetBasisId))
+      {
+      case BasisKind::Schur:
+        return ProductToTargetRoute::ViaSchurCompatibleFactors;
+      case BasisKind::Monomial:
+      case BasisKind::Forgotten:
+        return ProductToTargetRoute::ViaMonomialLikeExpansion;
+      case BasisKind::HallLittlewoodQ:
+      case BasisKind::HallLittlewoodP:
+      case BasisKind::HallLittlewoodB:
+      case BasisKind::HallLittlewoodPOmega:
+        return ProductToTargetRoute::ViaHallLittlewoodGenerators;
+      default:
+        break;
+      }
 
     int leftBasis = singleBasisId(f);
     int rightBasis = singleBasisId(g);
@@ -1387,40 +1536,43 @@ bool SymmetricEngineRing::executeProductToTargetRoute(
     bool targetIsMultiplicative,
     ring_elem& result) const
 {
-    if (route == ProductToTargetRoute::ViaSchurCompatibleFactors)
-      return tryProductToSchurViaCompatibleFactors(
-          f, g, targetBasisId, targetDisplay, targetDisplayOrder, result);
-    if (route == ProductToTargetRoute::ViaMonomialLikeExpansion)
-      return tryProductToMonomialLikeTarget(
-          f, g, targetBasisId, targetDisplay, targetDisplayOrder,
-          targetIsMultiplicative, result);
-    if (route == ProductToTargetRoute::ViaHallLittlewoodGenerators)
-      return tryProductToHallLittlewoodViaGenerators(
-          f, g, targetBasisId, targetDisplay, targetDisplayOrder, result);
-    if (route == ProductToTargetRoute::ViaConvertRightFactor)
+    switch (route)
       {
-        ring_elem converted;
-        if (!tryExpressionToTarget(g, targetBasisId, targetDisplay,
-                                   targetDisplayOrder,
-                                   targetIsMultiplicative, converted))
+        case ProductToTargetRoute::ViaSchurCompatibleFactors:
+          return tryProductToSchurViaCompatibleFactors(
+              f, g, targetBasisId, targetDisplay, targetDisplayOrder, result);
+        case ProductToTargetRoute::ViaMonomialLikeExpansion:
+          return tryProductToMonomialLikeTarget(
+              f, g, targetBasisId, targetDisplay, targetDisplayOrder,
+              targetIsMultiplicative, result);
+        case ProductToTargetRoute::ViaHallLittlewoodGenerators:
+          return tryProductToHallLittlewoodViaGenerators(
+              f, g, targetBasisId, targetDisplay, targetDisplayOrder, result);
+        case ProductToTargetRoute::ViaConvertRightFactor:
+          {
+            ring_elem converted;
+            if (!tryExpressionToTarget(g, targetBasisId, targetDisplay,
+                                       targetDisplayOrder,
+                                       targetIsMultiplicative, converted))
+              return false;
+            result = mult(f, converted);
+            return !error();
+          }
+        case ProductToTargetRoute::ViaConvertLeftFactor:
+          {
+            ring_elem converted;
+            if (!tryExpressionToTarget(f, targetBasisId, targetDisplay,
+                                       targetDisplayOrder,
+                                       targetIsMultiplicative, converted))
+              return false;
+            result = mult(converted, g);
+            return !error();
+          }
+        case ProductToTargetRoute::AlreadyInTarget:
+          result = mult(f, g);
+          return !error();
+        case ProductToTargetRoute::NoApplicableRoute:
           return false;
-        result = mult(f, converted);
-        return !error();
-      }
-    if (route == ProductToTargetRoute::ViaConvertLeftFactor)
-      {
-        ring_elem converted;
-        if (!tryExpressionToTarget(f, targetBasisId, targetDisplay,
-                                   targetDisplayOrder,
-                                   targetIsMultiplicative, converted))
-          return false;
-        result = mult(converted, g);
-        return !error();
-      }
-    if (route == ProductToTargetRoute::AlreadyInTarget)
-      {
-        result = mult(f, g);
-        return !error();
       }
     return false;
   }

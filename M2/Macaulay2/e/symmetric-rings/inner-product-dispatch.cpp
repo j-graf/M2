@@ -198,14 +198,14 @@ SymmetricEngineRing::innerProductTransitionCacheState(
         candidate.route ==
             InnerProductRoute::ViaSchurElementaryConjugateKostkaNumbers ||
         candidate.route ==
-            InnerProductRoute::ViaOmegaSchurCompleteConjugateKostkaNumbers ||
-        candidate.route == InnerProductRoute::ViaOmegaSchurElementaryKostkaNumbers)
+            InnerProductRoute::ViaSchurOmegaCompleteConjugateKostkaNumbers ||
+        candidate.route == InnerProductRoute::ViaSchurOmegaElementaryKostkaNumbers)
       {
         Partition shape = expansionProfile.singleIndex;
         if (candidate.route ==
                 InnerProductRoute::ViaSchurElementaryConjugateKostkaNumbers ||
             candidate.route ==
-                InnerProductRoute::ViaOmegaSchurCompleteConjugateKostkaNumbers)
+                InnerProductRoute::ViaSchurOmegaCompleteConjugateKostkaNumbers)
           shape = conjugatePartition(shape);
         return kostkaNumberCache.find(
                    std::make_pair(normalizePartition(shape),
@@ -214,13 +214,16 @@ SymmetricEngineRing::innerProductTransitionCacheState(
             ? KnownState::True : KnownState::False;
       }
 
-    int pId = basisIdForDisplay("p");
+    int pId = basisIdForKind(BasisKind::PowerSum);
     if (candidate.route != InnerProductRoute::ViaDualBasisCoefficient ||
         expansionProfile.expandedBasis != pId || !probeProfile.singleBasisId)
       return KnownState::Unknown;
     std::string targetDisplay = displayForBasis(candidate.coefficientBasisId);
-    if (targetDisplay != "Q" && targetDisplay != "P" &&
-        targetDisplay != "B" && targetDisplay != "R")
+    BasisKind targetKind = basisKindForId(candidate.coefficientBasisId);
+    if (targetKind != BasisKind::HallLittlewoodQ &&
+        targetKind != BasisKind::HallLittlewoodP &&
+        targetKind != BasisKind::HallLittlewoodB &&
+        targetKind != BasisKind::HallLittlewoodPOmega)
       return KnownState::Unknown;
 
     CoeffMap powerSums;
@@ -270,8 +273,8 @@ size_t SymmetricEngineRing::estimateInnerProductCandidateCost(
           return std::min(expansionTerms, probeTerms);
         case InnerProductRoute::ViaSchurCompleteKostkaNumbers:
         case InnerProductRoute::ViaSchurElementaryConjugateKostkaNumbers:
-        case InnerProductRoute::ViaOmegaSchurCompleteConjugateKostkaNumbers:
-        case InnerProductRoute::ViaOmegaSchurElementaryKostkaNumbers:
+        case InnerProductRoute::ViaSchurOmegaCompleteConjugateKostkaNumbers:
+        case InnerProductRoute::ViaSchurOmegaElementaryKostkaNumbers:
           if (candidate.transitionCached == KnownState::True) return 1;
           return weight * std::max(
               innerProductMaximumPartitionLength(expansion, expansionProfile),
@@ -281,9 +284,12 @@ size_t SymmetricEngineRing::estimateInnerProductCandidateCost(
             return expansionTerms;
           if (candidate.transitionCached == KnownState::True)
             return expansionTerms + 1;
-          if (expansionProfile.expandedBasis == basisIdForDisplay("p"))
+          if (expansionProfile.expandedBasis == basisIdForKind(BasisKind::PowerSum))
+            // A single dual coefficient evaluates one targeted transition
+            // functional on each p-term.  It does not construct the complete
+            // transition column, so weight is not an appropriate multiplier.
             return expansionTerms *
-                (weight + innerProductMaximumPartitionLength(probe, probeProfile));
+                (1 + innerProductMaximumPartitionLength(probe, probeProfile));
           return 100 + expansionTerms * weight;
         case InnerProductRoute::ViaWeightedSchurCharacters:
           return expansionTerms * probeTerms *
@@ -351,10 +357,10 @@ const char *SymmetricEngineRing::innerProductRouteName(
           return "Schur-complete:Kostka-numbers";
         case InnerProductRoute::ViaSchurElementaryConjugateKostkaNumbers:
           return "Schur-elementary:conjugate-Kostka-numbers";
-        case InnerProductRoute::ViaOmegaSchurCompleteConjugateKostkaNumbers:
-          return "omega-Schur-complete:conjugate-Kostka-numbers";
-        case InnerProductRoute::ViaOmegaSchurElementaryKostkaNumbers:
-          return "omega-Schur-elementary:Kostka-numbers";
+        case InnerProductRoute::ViaSchurOmegaCompleteConjugateKostkaNumbers:
+          return "Schur Omega-complete:conjugate-Kostka-numbers";
+        case InnerProductRoute::ViaSchurOmegaElementaryKostkaNumbers:
+          return "Schur Omega-elementary:Kostka-numbers";
         case InnerProductRoute::ViaWeightedSchurCharacters:
           return "power-sums-Schur:weighted-characters";
         case InnerProductRoute::ViaPowerSumDiagonalPairing:
@@ -392,62 +398,65 @@ ring_elem SymmetricEngineRing::executeInnerProductRoute(
     ring_elem probe = candidate.orientation == InnerProductOrientation::Original
         ? request.right : request.left;
 
-    if (candidate.route == InnerProductRoute::ViaRegisteredDiagonalPairing ||
-        candidate.route == InnerProductRoute::ViaPowerSumDiagonalPairing)
+    switch (candidate.route)
       {
-        CoeffMap sourceCoefficients =
-            coefficientsInBasis(expansion, candidate.pairingSourceBasisId);
-        if (error()) return coefficientRing->zero();
-        CoeffMap dualCoefficients =
-            coefficientsInBasis(probe, candidate.pairingDualBasisId);
-        if (error()) return coefficientRing->zero();
-        return candidate.pairingKind == 2
-            ? powerSumPairing(sourceCoefficients,
-                              dualCoefficients,
-                              request.context)
-            : coefficientPairing(sourceCoefficients, dualCoefficients);
-      }
-    if (candidate.route == InnerProductRoute::ViaDualBasisCoefficient)
-      {
-        Partition index;
-        ring_elem probeCoefficient;
-        if (!singleScaledBasisElement(probe,
-                                      candidate.pairingDualBasisId,
-                                      index,
-                                      probeCoefficient))
+        case InnerProductRoute::ViaRegisteredDiagonalPairing:
+        case InnerProductRoute::ViaPowerSumDiagonalPairing:
           {
-            ERROR("dual-basis coefficient route requires one basis element");
-            return coefficientRing->zero();
+            CoeffMap sourceCoefficients =
+                coefficientsInBasis(expansion, candidate.pairingSourceBasisId);
+            if (error()) return coefficientRing->zero();
+            CoeffMap dualCoefficients =
+                coefficientsInBasis(probe, candidate.pairingDualBasisId);
+            if (error()) return coefficientRing->zero();
+            return candidate.pairingKind == InnerProductPairingKind::PowerSum
+                ? powerSumPairing(sourceCoefficients,
+                                  dualCoefficients,
+                                  request.context)
+                : coefficientPairing(sourceCoefficients, dualCoefficients);
           }
-        int basisId = candidate.coefficientBasisId;
-        ring_elem coefficient = basisCoefficientDispatch(
-            expansion,
-            basisId,
-            displayForBasis(basisId),
-            basisOrderForId(basisId),
-            isMultiplicativeBasis(basisId),
-            index);
-        if (error()) return coefficientRing->zero();
-        return coefficientRing->mult(probeCoefficient, coefficient);
+        case InnerProductRoute::ViaDualBasisCoefficient:
+          {
+            Partition index;
+            ring_elem probeCoefficient;
+            if (!singleScaledBasisElement(probe,
+                                          candidate.pairingDualBasisId,
+                                          index,
+                                          probeCoefficient))
+              {
+                ERROR("dual-basis coefficient route requires one basis element");
+                return coefficientRing->zero();
+              }
+            int basisId = candidate.coefficientBasisId;
+            ring_elem coefficient = basisCoefficientDispatch(
+                expansion,
+                basisId,
+                displayForBasis(basisId),
+                basisOrderForId(basisId),
+                isMultiplicativeBasis(basisId),
+                index);
+            if (error()) return coefficientRing->zero();
+            return coefficientRing->mult(probeCoefficient, coefficient);
+          }
+        case InnerProductRoute::ViaSchurCompleteKostkaNumbers:
+          return schurCompleteInnerProductViaKostkaNumbers(expansion, probe);
+        case InnerProductRoute::ViaSchurElementaryConjugateKostkaNumbers:
+          return schurElementaryInnerProductViaConjugateKostkaNumbers(
+              expansion, probe);
+        case InnerProductRoute::ViaSchurOmegaCompleteConjugateKostkaNumbers:
+          return schurOmegaCompleteInnerProductViaConjugateKostkaNumbers(
+              expansion, probe);
+        case InnerProductRoute::ViaSchurOmegaElementaryKostkaNumbers:
+          return schurOmegaElementaryInnerProductViaKostkaNumbers(
+              expansion, probe);
+        case InnerProductRoute::ViaWeightedSchurCharacters:
+          return powerSumsSchurInnerProductViaWeightedCharacters(
+              expansion, probe, request.context);
+        case InnerProductRoute::ViaConvertBothToPowerSums:
+          return runFallbackPowerSumsPipeline(request);
       }
-    if (candidate.route == InnerProductRoute::ViaSchurCompleteKostkaNumbers)
-      return schurCompleteInnerProductViaKostkaNumbers(expansion, probe);
-    if (candidate.route ==
-        InnerProductRoute::ViaSchurElementaryConjugateKostkaNumbers)
-      return schurElementaryInnerProductViaConjugateKostkaNumbers(
-          expansion, probe);
-    if (candidate.route ==
-        InnerProductRoute::ViaOmegaSchurCompleteConjugateKostkaNumbers)
-      return omegaSchurCompleteInnerProductViaConjugateKostkaNumbers(
-          expansion, probe);
-    if (candidate.route ==
-        InnerProductRoute::ViaOmegaSchurElementaryKostkaNumbers)
-      return omegaSchurElementaryInnerProductViaKostkaNumbers(
-          expansion, probe);
-    if (candidate.route == InnerProductRoute::ViaWeightedSchurCharacters)
-      return powerSumsSchurInnerProductViaWeightedCharacters(
-          expansion, probe, request.context);
-    return runFallbackPowerSumsPipeline(request);
+    ERROR("unknown inner product route");
+    return coefficientRing->zero();
   }
 
 
@@ -484,7 +493,7 @@ SymmetricEngineRing::selectInnerProductPipeline(
     if (request.leftProfile.singleBasisElement == KnownState::True ||
         request.rightProfile.singleBasisElement == KnownState::True)
       return InnerProductPipeline::SingleBasisElement;
-    int pId = basisIdForDisplay("p");
+    int pId = basisIdForKind(BasisKind::PowerSum);
     if (request.leftProfile.expandedBasis == pId ||
         request.rightProfile.expandedBasis == pId)
       return InnerProductPipeline::PowerSumsStructured;
@@ -603,7 +612,7 @@ SymmetricEngineRing::selectDiagonalBasisRoute(
           {
             InnerProductCandidate candidate{
               InnerProductPipeline::DiagonalBasis,
-              pairing.second.kind == 2
+              pairing.second.kind == InnerProductPairingKind::PowerSum
                   ? InnerProductRoute::ViaPowerSumDiagonalPairing
                   : InnerProductRoute::ViaRegisteredDiagonalPairing,
               InnerProductOrientation::Original};
@@ -617,7 +626,7 @@ SymmetricEngineRing::selectDiagonalBasisRoute(
           {
             InnerProductCandidate candidate{
               InnerProductPipeline::DiagonalBasis,
-              pairing.second.kind == 2
+              pairing.second.kind == InnerProductPairingKind::PowerSum
                   ? InnerProductRoute::ViaPowerSumDiagonalPairing
                   : InnerProductRoute::ViaRegisteredDiagonalPairing,
               InnerProductOrientation::Swapped};
@@ -651,11 +660,11 @@ SymmetricEngineRing::selectSingleBasisElementRoute(
     const InnerProductRequest& request) const
 {
     std::vector<InnerProductCandidate> candidates;
-    int schurId = basisIdForDisplay("S");
-    int completeId = basisIdForDisplay("h");
-    int elementaryId = basisIdForDisplay("e");
-    int omegaSchurId = basisIdForDisplay("Somega");
-    int pId = basisIdForDisplay("p");
+    int schurId = basisIdForKind(BasisKind::Schur);
+    int completeId = basisIdForKind(BasisKind::Complete);
+    int elementaryId = basisIdForKind(BasisKind::Elementary);
+    int schurOmegaId = basisIdForKind(BasisKind::SchurOmega);
+    int pId = basisIdForKind(BasisKind::PowerSum);
 
     if (request.context.kind == InnerProductKind::OrdinaryHall &&
         request.leftProfile.singleBasisElement == KnownState::True &&
@@ -692,14 +701,14 @@ SymmetricEngineRing::selectSingleBasisElementRoute(
                 InnerProductRoute::ViaSchurElementaryConjugateKostkaNumbers,
                 orientation);
             addKostkaCandidate(
-                omegaSchurId,
+                schurOmegaId,
                 completeId,
-                InnerProductRoute::ViaOmegaSchurCompleteConjugateKostkaNumbers,
+                InnerProductRoute::ViaSchurOmegaCompleteConjugateKostkaNumbers,
                 orientation);
             addKostkaCandidate(
-                omegaSchurId,
+                schurOmegaId,
                 elementaryId,
-                InnerProductRoute::ViaOmegaSchurElementaryKostkaNumbers,
+                InnerProductRoute::ViaSchurOmegaElementaryKostkaNumbers,
                 orientation);
           }
       }
@@ -712,7 +721,7 @@ SymmetricEngineRing::selectSingleBasisElementRoute(
         return;
       for (const auto& pairing : request.context.pairings)
         {
-          if (pairing.second.kind != 1 ||
+          if (pairing.second.kind != InnerProductPairingKind::Dual ||
               pairing.second.dualBasisId != *probe.singleBasisId)
             continue;
           InnerProductCandidate candidate{
@@ -772,8 +781,8 @@ SymmetricEngineRing::InnerProductCandidate
 SymmetricEngineRing::selectPowerSumsStructuredRoute(
     const InnerProductRequest& request) const
 {
-    int pId = basisIdForDisplay("p");
-    int schurId = basisIdForDisplay("S");
+    int pId = basisIdForKind(BasisKind::PowerSum);
+    int schurId = basisIdForKind(BasisKind::Schur);
     std::vector<InnerProductCandidate> candidates;
     if (request.leftProfile.expandedBasis == pId &&
         request.rightProfile.expandedBasis == schurId)
@@ -812,26 +821,26 @@ ring_elem SymmetricEngineRing::runPowerSumsStructuredPipeline(
 ring_elem SymmetricEngineRing::runFallbackPowerSumsPipeline(
     const InnerProductRequest& request) const
 {
-    int pId = requiredBasisIdForDisplay("p");
+    int pId = requiredBasisIdForKind(BasisKind::PowerSum);
     if (error()) return coefficientRing->zero();
 
     ring_elem fP = toBasis(request.left,
                            pId,
-                           "p",
+                           displayForBasis(pId),
                            basisOrderForId(pId),
                            isMultiplicativeBasis(pId),
                            pId,
-                           "p",
+                           displayForBasis(pId),
                            basisOrderForId(pId),
                            isMultiplicativeBasis(pId));
     if (error()) return coefficientRing->zero();
     ring_elem gP = toBasis(request.right,
                            pId,
-                           "p",
+                           displayForBasis(pId),
                            basisOrderForId(pId),
                            isMultiplicativeBasis(pId),
                            pId,
-                           "p",
+                           displayForBasis(pId),
                            basisOrderForId(pId),
                            isMultiplicativeBasis(pId));
     if (error()) return coefficientRing->zero();
@@ -861,9 +870,18 @@ SymmetricEngineRing::innerProductTargetMap(M2_arrayint innerProductMap) const
         return result;
       }
     for (int i = 0; i < innerProductMap->len; i += 3)
-      result[innerProductMap->array[i]] =
-          InnerProductTarget{innerProductMap->array[i + 1],
-                             innerProductMap->array[i + 2]};
+      {
+        int kindCode = innerProductMap->array[i + 2];
+        if (kindCode != static_cast<int>(InnerProductPairingKind::Dual) &&
+            kindCode != static_cast<int>(InnerProductPairingKind::PowerSum))
+          {
+            ERROR("invalid inner product pairing kind");
+            return {};
+          }
+        result[innerProductMap->array[i]] = InnerProductTarget{
+            innerProductMap->array[i + 1],
+            static_cast<InnerProductPairingKind>(kindCode)};
+      }
     return result;
   }
 

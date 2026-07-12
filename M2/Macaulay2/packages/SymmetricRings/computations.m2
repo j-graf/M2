@@ -13,7 +13,7 @@ straighten = method()
 straighten SymmetricRingElement := f -> (
     R0 := ring f;
     rememberRingBasisData R0;
-    engineResultWithRingBasisSymbols(R0, rawSymmetricRingsStraighten raw(elementWithDefaultBasisSymbols f))
+    userSymmetricElement(R0, rawSymmetricRingsStraighten raw f)
     )
 
 -- Falls back to power-sum comparison when raw straightened forms differ.
@@ -40,15 +40,15 @@ SymmetricRingElement == SymmetricRingElement := Boolean => (f, g) -> (
 -- ============================================================================
 
 -- Common implementation for h- and e-Jacobi-Trudi determinants.
-jacobiTrudiInBasis = (basisSymbol, lambda, mu) -> (
+jacobiTrudiInBasis = (basisKeyString, lambda, mu) -> (
     if CurrentSymmetricRing === null then error "no current symmetric ring; call symmetricRing first";
     R0 := CurrentSymmetricRing;
-    B := basis(R0, basisSymbol);
+    B := basis(R0, basisKeyString);
     l := (B#"IndexNormalizer") lambda;
     m := (B#"IndexNormalizer") mu;
-    if not (B#"IndexValidator") l then error("invalid outer index for basis ", basisSymbol);
-    if not (B#"IndexValidator") m then error("invalid inner index for basis ", basisSymbol);
-    engineResultWithRingBasisSymbols(R0, rawSymmetricRingsJacobiTrudi(raw R0, B#"BasisId", basisDefaultSymbol B, B#"DisplayOrder", B#"MultiplicativeIndex", l, m))
+    if not (B#"IndexValidator") l then error("invalid outer index for basis ", B#"BasisSymbol");
+    if not (B#"IndexValidator") m then error("invalid inner index for basis ", B#"BasisSymbol");
+    userSymmetricElement(R0, rawSymmetricRingsJacobiTrudi(raw R0, B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex", l, m))
     )
 
 -- Public method for Schur/skew Schur Jacobi-Trudi in the h basis.
@@ -58,16 +58,16 @@ hJacobiTrudi = method()
 hJacobiTrudi List := lambda -> hJacobiTrudi(lambda, {})
 
 -- Computes skew h-Jacobi-Trudi.
-hJacobiTrudi(List, List) := (lambda, mu) -> jacobiTrudiInBasis("h", lambda, mu)
+hJacobiTrudi(List, List) := (lambda, mu) -> jacobiTrudiInBasis("Complete", lambda, mu)
 
--- Public method for omega-Schur Jacobi-Trudi in the e basis.
+-- Public method for Schur Omega Jacobi-Trudi in the e basis.
 eJacobiTrudi = method()
 
 -- Computes ordinary e-Jacobi-Trudi.
 eJacobiTrudi List := lambda -> eJacobiTrudi(lambda, {})
 
 -- Computes skew e-Jacobi-Trudi.
-eJacobiTrudi(List, List) := (lambda, mu) -> jacobiTrudiInBasis("e", lambda, mu)
+eJacobiTrudi(List, List) := (lambda, mu) -> jacobiTrudiInBasis("Elementary", lambda, mu)
 
 -- Asks the C++ engine to convert between built-in bases.
 -- This path assumes the engine understands the source atoms. Callers must route
@@ -76,10 +76,10 @@ eJacobiTrudi(List, List) := (lambda, mu) -> jacobiTrudiInBasis("e", lambda, mu)
 engineToBasis = (F, B) -> (
     R0 := ring F;
     P := basis(R0, p);
-    engineResultWithRingBasisSymbols(R0, rawSymmetricRingsToBasis(
-        raw(elementWithDefaultBasisSymbols F),
-        P#"BasisId", basisDefaultSymbol P, P#"DisplayOrder", P#"MultiplicativeIndex",
-        B#"BasisId", basisDefaultSymbol B, B#"DisplayOrder", B#"MultiplicativeIndex"))
+    userSymmetricElement(R0, rawSymmetricRingsToBasis(
+        raw F,
+        P#"BasisId", P#"BasisSymbol", P#"DisplayOrder", P#"MultiplicativeIndex",
+        B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex"))
     )
 
 -- Tests whether an atom needs an M2-level ToPowerSums hook.
@@ -183,7 +183,7 @@ hasPlethysmConversionProvenance = F -> rawSymmetricRingsHasPlethysmProvenance ra
 -- coefficient ring rather than doing a partial mixed-ring computation.
 constantQQLiftElement = (F, Rqq) -> (
     rawResult := try rawSymmetricRingsLiftCollected(raw Rqq, raw F) else null;
-    if rawResult =!= null then return engineResultWithRingBasisSymbols(Rqq, rawResult);
+    if rawResult =!= null then return userSymmetricElement(Rqq, rawResult);
     Aqq := coefficientRing Rqq;
     result := 0_Rqq;
     ok := true;
@@ -203,7 +203,7 @@ constantQQLiftElement = (F, Rqq) -> (
 
 constantQQPromoteElement = (Fqq, R0) -> (
     rawResult := try rawSymmetricRingsPromoteCollected(raw R0, raw Fqq) else null;
-    if rawResult =!= null then return engineResultWithRingBasisSymbols(R0, rawResult);
+    if rawResult =!= null then return userSymmetricElement(R0, rawResult);
     A0 := coefficientRing R0;
     result := 0_R0;
     ok := true;
@@ -218,19 +218,86 @@ constantQQPromoteElement = (Fqq, R0) -> (
     if ok then result else null
     )
 
-tryConstantQQOperation = (R0, inputs, compute) -> (
-    if coefficientRing R0 === QQ then return null;
+-- Returns inputs in the cached QQ shadow exactly when every input can be
+-- lifted. Failure is an ordinary native-computation path, so the original
+-- inputs are returned together rather than a partially lifted list.
+toConstantQQIfPossible = method()
+
+toConstantQQIfPossible(List, Boolean) := (inputs, tryQQ) -> (
+    if #inputs == 0 then return inputs;
+    if not all(inputs, F -> instance(F, SymmetricRingElement)) then
+        error "expected symmetric-ring elements";
+    R0 := ring inputs#0;
+    if not all(inputs, F -> ring F === R0) then
+        error "expected elements in the same symmetric ring";
+    if not tryQQ or coefficientRing R0 === QQ then return inputs;
     Rqq := constantQQRingFor R0;
-    if Rqq === null then return null;
+    if Rqq === null then return inputs;
     lifted := {};
     ok := true;
     scan(inputs, F -> if ok then (
             Fqq := constantQQLiftElement(F, Rqq);
-            if Fqq === null then ok = false else lifted = append(lifted, Fqq);
+            if Fqq === null then ok = false
+            else lifted = append(lifted, Fqq);
             ));
-    if not ok then return null;
-    resultQQ := try compute(Rqq, lifted) else null;
-    if resultQQ === null then null else constantQQPromoteElement(resultQQ, R0)
+    if ok then lifted else inputs
+    )
+
+toConstantQQIfPossible List := inputs ->
+    toConstantQQIfPossible(inputs, true)
+
+toConstantQQIfPossible(SymmetricRingElement, Boolean) := (F, tryQQ) ->
+    (toConstantQQIfPossible({F}, tryQQ))#0
+
+toConstantQQIfPossible SymmetricRingElement := F ->
+    toConstantQQIfPossible(F, true)
+
+-- Restores a QQ-shadow result to the caller's original symmetric ring. An
+-- unrelated symmetric ring is rejected so basis ids cannot be misinterpreted.
+returnFromConstantQQ = method()
+
+returnFromConstantQQ(SymmetricRingElement, SymmetricRing) := (F, R0) -> (
+    if ring F === R0 then return F;
+    Rqq := constantQQRingFor R0;
+    if Rqq === null or ring F =!= Rqq then
+        error "expected an element in the corresponding QQ shadow ring";
+    result := constantQQPromoteElement(F, R0);
+    if result === null then error "could not return QQ-shadow result to the original coefficient ring";
+    result
+    )
+
+-- Runs one algorithm in the selected working ring and always returns its
+-- symmetric-function result over the original ring. The Boolean lets callers
+-- apply their own size or shape crossover without duplicating shadow logic.
+withConstantQQIfPossible = method()
+
+withConstantQQIfPossible(List, Boolean, Function) := (inputs, tryQQ, compute) -> (
+    if #inputs == 0 then error "expected at least one symmetric-ring input";
+    R0 := ring inputs#0;
+    workingInputs := toConstantQQIfPossible(inputs, tryQQ);
+    Rwork := ring workingInputs#0;
+    result := compute(Rwork, workingInputs);
+    if not instance(result, SymmetricRingElement) then
+        error "expected the QQ-shadow computation to return a symmetric-ring element";
+    returnFromConstantQQ(result, R0)
+    )
+
+withConstantQQIfPossible(List, Function) := (inputs, compute) ->
+    withConstantQQIfPossible(inputs, true, compute)
+
+withConstantQQIfPossible(SymmetricRingElement, Boolean, Function) := (F, tryQQ, compute) ->
+    withConstantQQIfPossible({F}, tryQQ,
+        (Rwork, inputs) -> compute(Rwork, inputs#0))
+
+withConstantQQIfPossible(SymmetricRingElement, Function) := (F, compute) ->
+    withConstantQQIfPossible(F, true, compute)
+
+tryConstantQQOperation = (R0, inputs, compute) -> (
+    if coefficientRing R0 === QQ then return null;
+    lifted := toConstantQQIfPossible(inputs, true);
+    if #lifted == 0 or ring lifted#0 === R0 then return null;
+    resultQQ := try compute(ring lifted#0, lifted) else null;
+    if resultQQ === null then null else returnFromConstantQQ(resultQQ, R0)
     )
 
 -- Fallback conversion route: convert the whole element through the standard
@@ -263,11 +330,11 @@ multiplyToBasis(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, tar
     B := targetBasisOnRing(R0, target);
     P := basis(R0, p);
     if needsM2PowerSumConversion f or needsM2PowerSumConversion g or B#"FromPowerSums" =!= null then return toBasisFallback(f*g, B);
-    engineResultWithRingBasisSymbols(R0, rawSymmetricRingsProductToBasisDispatch(
-        raw(elementWithDefaultBasisSymbols f),
-        raw(elementWithDefaultBasisSymbols g),
-        P#"BasisId", basisDefaultSymbol P, P#"DisplayOrder", P#"MultiplicativeIndex",
-        B#"BasisId", basisDefaultSymbol B, B#"DisplayOrder", B#"MultiplicativeIndex"))
+    userSymmetricElement(R0, rawSymmetricRingsProductToBasisDispatch(
+        raw f,
+        raw g,
+        P#"BasisId", P#"BasisSymbol", P#"DisplayOrder", P#"MultiplicativeIndex",
+        B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex"))
     )
 
 tryConstantQQBasisConversion = (R0, f, B) -> tryConstantQQOperation(R0, {f}, (Rqq, inputsQQ) -> (
@@ -276,14 +343,46 @@ tryConstantQQBasisConversion = (R0, f, B) -> tryConstantQQOperation(R0, {f}, (Rq
         toBasis(inputsQQ#0, Bqq)
         ))
 
+-- Constant-coefficient p -> S conversions amortize the lift/promotion cost
+-- once the p-support is moderately large. This is deliberately independent
+-- of combinatorial tags: multiplication replaces the Plethysm tag even though
+-- its resulting p-expansion can still benefit from computation over QQ.
+preferConstantQQForPowerSumsToSchur = (R0, f, B) -> (
+    if coefficientRing R0 === QQ then return false;
+    P := basis(R0, p);
+    Schur := basis(R0, S);
+    if B#"BasisId" != Schur#"BasisId" then return false;
+    if rawSymmetricRingsSingleBasisId(raw f) != P#"BasisId" then return false;
+    rawSymmetricRingsTermCount(raw f) >= 8
+    )
+
+-- Large complete/elementary expansions use coefficient-independent formulas
+-- but create many rational coefficients.  Computing those coefficients over
+-- QQ and promoting the collected result is cheaper than performing all
+-- arithmetic in a fraction field.  The weight cutoff is deliberately
+-- conservative: cold crossover sweeps favor the shadow consistently from 30.
+preferConstantQQForOrdinaryToPowerSums = (R0, f, B) -> (
+    if coefficientRing R0 === QQ then return false;
+    P := basis(R0, p);
+    if B#"BasisId" != P#"BasisId" then return false;
+    sourceId := rawSymmetricRingsSingleBasisId raw f;
+    if sourceId <= 0 then return false;
+    sourceKey := basisKey(basisWithId(R0, sourceId));
+    if not member(sourceKey, {"Complete", "Elementary"}) then return false;
+    rawSymmetricRingsElementWeight(raw f) >= 30
+    )
+
 -- Converts a symmetric function to the requested basis. Plethysm provenance
--- makes the constant-QQ shadow the first choice; other inputs remain
--- native-first and use the shadow only when native conversion fails.
+-- and moderately large pure-p support make the constant-QQ shadow the first
+-- choice; other inputs remain native-first and use it only after native failure.
 toBasis(SymmetricRingElement, Thing) := (f, target) -> (
     R0 := ring f;
     rememberRingBasisData R0;
     B := targetBasisOnRing(R0, target);
-    preferConstantQQ := coefficientRing R0 =!= QQ and hasPlethysmConversionProvenance f;
+    preferConstantQQ := coefficientRing R0 =!= QQ and
+        (hasPlethysmConversionProvenance f or
+         preferConstantQQForPowerSumsToSchur(R0, f, B) or
+         preferConstantQQForOrdinaryToPowerSums(R0, f, B));
     if preferConstantQQ then (
         preferredQQ := tryConstantQQBasisConversion(R0, f, B);
         if preferredQQ =!= null then return preferredQQ;
@@ -298,65 +397,6 @@ toBasis(SymmetricRingElement, Thing) := (f, target) -> (
 
 -- Shortcut methods for conversion to the Schur basis.
 toS = method()
-
--- Tests whether all bases on a ring use their default symbols.
-ringUsesDefaultBasisSymbols = R0 -> if R0#?"UsesDefaultBasisSymbols" then R0#"UsesDefaultBasisSymbols" else all(R0#"Bases", B0 -> basisSymbolForRing(R0, B0) == basisDefaultSymbol B0)
-
--- Builds one atom using the basis's default symbol for engine dispatch.
-rawBasisAtomDefaultElement = (R0, B, outer, inner) -> (
-    payload := outer | inner;
-    new R0 from rawSymmetricRingsBasisElement(raw R0, B#"BasisId", basisDefaultSymbol B, B#"DisplayOrder", B#"MultiplicativeIndex", #inner, payload)
-    )
-
--- Converts decoded atom data into an element with default basis symbols.
-atomAsDefaultSymbolElement = (R0, atom) -> (
-    B := basisWithId(R0, atom#"BasisId");
-    rawBasisAtomDefaultElement(R0, B, atom#"Outer", atom#"Inner")
-    )
-
--- Converts a monomial into an element with default basis symbols.
-monomialAsDefaultSymbolElement = (R0, atoms) -> (
-    result := 1_R0;
-    scan(atoms, atom -> result = result * atomAsDefaultSymbolElement(R0, atom));
-    result
-    )
-
--- Gives optimized engine calls an input view with default built-in names.
--- Some engine shortcuts are keyed by built-in display names. Rings with renamed
--- basis symbols are rebuilt using default names before the call, then rebuilt
--- again with ring-local symbols on output.
-elementWithDefaultBasisSymbols = f -> (
-    R0 := ring f;
-    if ringUsesDefaultBasisSymbols R0 then return f;
-    A := coefficientRing R0;
-    result := 0_R0;
-    scan(rawTerms f, term -> (
-            c := promote(term#0, A);
-            if c != 0_A then result = result + promote(c, R0) * monomialAsDefaultSymbolElement(R0, term#1)
-            ));
-    rawSymmetricRingsCopyConversionMetadata(raw f, raw result);
-    result
-    )
-
--- Rebuilds a raw engine result through ring-attached basis records so optimized
--- engine paths that use default basis symbols still display ring-local symbols.
-rebuildWithRingBasisSymbols = (R0, rawValue) -> (
-    A := coefficientRing R0;
-    result := 0_R0;
-    scan(rawTerms(new R0 from rawValue), term -> (
-            c := promote(term#0, A);
-            if c != 0_A then result = result + promote(c, R0) * monomialAsElement(R0, term#1)
-            ));
-    rawSymmetricRingsCopyConversionMetadata(rawValue, raw result);
-    result
-    )
-
--- Keeps the optimized engine result when a ring uses default basis symbols, and
--- only pays the rebuild cost for rings with customized symbols.
-engineResultWithRingBasisSymbols = (R0, rawValue) -> (
-    if ringUsesDefaultBasisSymbols R0 then userSymmetricElement(R0, rawValue)
-    else rebuildWithRingBasisSymbols(R0, rawValue)
-    )
 
 -- Converts to Schur functions through the ordinary basis-conversion entry point.
 toS SymmetricRingElement := f -> toBasis(f, S)
@@ -592,10 +632,10 @@ plethysm(SymmetricRingElement, SymmetricRingElement) := (f, g) -> (
     R0 := ring f;
     rememberRingBasisData R0;
     P := basis(R0, p);
-    engineResultWithRingBasisSymbols(R0, rawSymmetricRingsPlethysm(
-        raw(elementWithDefaultBasisSymbols f),
-        raw(elementWithDefaultBasisSymbols g),
-        P#"BasisId", basisDefaultSymbol P, P#"DisplayOrder", P#"MultiplicativeIndex"))
+    userSymmetricElement(R0, rawSymmetricRingsPlethysm(
+        raw f,
+        raw g,
+        P#"BasisId", P#"BasisSymbol", P#"DisplayOrder", P#"MultiplicativeIndex"))
     )
 
 -- Computes plethysm and converts to a target basis using the combined engine
@@ -603,11 +643,11 @@ plethysm(SymmetricRingElement, SymmetricRingElement) := (f, g) -> (
 plethysmToBasisDispatch = (f, g, B) -> (
     R0 := ring f;
     P := basis(R0, p);
-    engineResultWithRingBasisSymbols(R0, rawSymmetricRingsPlethysmToBasis(
-        raw(elementWithDefaultBasisSymbols f),
-        raw(elementWithDefaultBasisSymbols g),
-        P#"BasisId", basisDefaultSymbol P, P#"DisplayOrder", P#"MultiplicativeIndex",
-        B#"BasisId", basisDefaultSymbol B, B#"DisplayOrder", B#"MultiplicativeIndex"))
+    userSymmetricElement(R0, rawSymmetricRingsPlethysmToBasis(
+        raw f,
+        raw g,
+        P#"BasisId", P#"BasisSymbol", P#"DisplayOrder", P#"MultiplicativeIndex",
+        B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex"))
     )
 
 -- Chooses the output basis for @.  Return null to leave the p-basis plethysm
@@ -655,7 +695,7 @@ installMethod(symbol @, SymmetricRingElement, SymmetricRingElement, (f, g) -> (
 omegaInvolutionOptionDefaults = hashTable {"useSomega" => false}
 
 -- Public wrapper for the omega involution.
--- useSomega controls only the Schur/omega-Schur display policy. The omega map
+-- useSomega controls only the Schur/Schur Omega display policy. The omega map
 -- still comes from basis metadata, so user-created omega companions participate
 -- without adding special cases here.
 omegaInvolution = args -> (
@@ -668,7 +708,7 @@ omegaInvolution = args -> (
     rememberRingBasisData R0;
     useSomega := opts#"useSomega";
     if class useSomega =!= Boolean then error "expected Boolean value for option \"useSomega\"";
-    engineResultWithRingBasisSymbols(R0, rawSymmetricRingsOmega(raw(elementWithDefaultBasisSymbols f), omegaMapData R0, useSomega))
+    userSymmetricElement(R0, rawSymmetricRingsOmega(raw f, omegaMapData R0, useSomega))
     )
 
 -- ============================================================================
@@ -782,7 +822,7 @@ directInnerProductFromMetadata = (F, G, contextName) -> (
 -- Computes the Hall inner product by converting both arguments to power sums.
 powerSumFallbackInnerProduct = (F, G, contextName) -> (
     R0 := ring F;
-    P := basis(R0, "p");
+    P := basis(R0, "PowerSum");
     FP := toBasis(F, P);
     GP := toBasis(G, P);
     result := directInnerProductFromMetadata(FP, GP, contextName);
@@ -813,9 +853,7 @@ basisCoefficient(SymmetricRingElement, SymmetricRingElement) := (F, target) -> (
         B0 -> B0#"BasisId" == targetBasis#"BasisId");
     rememberRingBasisData R0;
     if usesOnlyEngineReadableBases F and targetIsBuiltIn then
-        return new A from rawSymmetricRingsBasisCoefficient(
-            raw(elementWithDefaultBasisSymbols F),
-            raw(elementWithDefaultBasisSymbols target));
+        return new A from rawSymmetricRingsBasisCoefficient(raw F, raw target);
     expanded := toBasis(F, targetBasis);
     coefficients := coefficientsInBasisIfPossibleM2(expanded, targetBasis);
     if coefficients === null then error "could not extract a basis coefficient";
@@ -831,8 +869,8 @@ engineHallInnerProduct = (F, G, contextName) -> (
     pairingData := innerProductMapData(R0, contextName);
     if #pairingData == 0 then return null;
     new A from rawSymmetricRingsHallInnerProduct(
-        raw(elementWithDefaultBasisSymbols F),
-        raw(elementWithDefaultBasisSymbols G),
+        raw F,
+        raw G,
         innerProductContextCode contextName,
         pairingData)
     )

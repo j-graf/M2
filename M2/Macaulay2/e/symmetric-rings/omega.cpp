@@ -37,15 +37,15 @@ ring_elem SymmetricEngineRing::omegaPowerSums(ring_elem f) const
     return fromTermVector(terms, true);
   }
 
-ring_elem SymmetricEngineRing::omegaSchurBasisElementAsSchur(
+ring_elem SymmetricEngineRing::schurOmegaBasisElementAsSchur(
     const Partition& alpha) const
 {
     auto straightened = straightenSchurIndex(alpha);
     if (straightened.first == 0) return zero();
-    int schurId = requiredBasisIdForDisplay("S");
+    int schurId = requiredBasisIdForKind(BasisKind::Schur);
     if (error()) return zero();
     ring_elem term = basisElementFromIndex(schurId,
-                                           "S",
+                                           displayForBasis(schurId),
                                            basisOrderForId(schurId),
                                            isMultiplicativeBasis(schurId),
                                            conjugatePartition(straightened.second));
@@ -60,39 +60,41 @@ ring_elem SymmetricEngineRing::omegaBasisElementDirect(
                             bool useSomega) const
 {
     int basisId = atomBasisIdAt(monomial, pos);
-    std::string display = displayForBasis(basisId);
+    BasisKind kind = basisKindForId(basisId);
     if (basisId == powerSumBasisId)
       {
         Partition index = basisElementIndex(monomial, pos);
         long sign = ((partitionWeight(index) - partitionLength(index)) % 2 == 0) ? 1 : -1;
         ring_elem term = basisElementFromIndex(powerSumBasisId,
-                                               "p",
+                                               displayForBasis(powerSumBasisId),
                                                basisOrderForId(powerSumBasisId),
                                                true,
                                                index);
         return scaled(coefficientRing->from_long(sign), term);
       }
 
-    if (!useSomega && display == "S")
+    if (!useSomega && kind == BasisKind::Schur)
       {
-        int schurId = requiredBasisIdForDisplay("S");
+        int schurId = requiredBasisIdForKind(BasisKind::Schur);
         if (error()) return zero();
         if (atomIsSkewAt(monomial, pos))
           return basisElementFromSkewIndex(schurId,
-                                           "S",
+                                           displayForBasis(schurId),
                                            basisOrderForId(schurId),
                                            false,
                                            conjugatePartition(
                                                basisElementOuterIndex(monomial, pos)),
                                            conjugatePartition(
                                                basisElementInnerIndex(monomial, pos)));
-        return omegaSchurBasisElementAsSchur(
+        return schurOmegaBasisElementAsSchur(
             basisElementIndex(monomial, pos));
       }
 
-    if (!useSomega && display == "Somega" && !atomIsSkewAt(monomial, pos))
+    if (!useSomega && kind == BasisKind::SchurOmega &&
+        !atomIsSkewAt(monomial, pos))
       return straightenSchurBasisElement(
-          basisElementIndex(monomial, pos), "S");
+          basisElementIndex(monomial, pos),
+          requiredBasisIdForKind(BasisKind::Schur));
 
     auto target = omegaTargets.find(basisId);
     if (target != omegaTargets.end())

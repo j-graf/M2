@@ -47,6 +47,7 @@ bool rawSymmetricRingsSetHallLittlewoodParameter(const Ring *R,
 
 bool rawSymmetricRingsRememberBasis(const Ring *R,
                                     int basisId,
+                                    M2_string canonicalBasisKey,
                                     M2_string displaySymbol,
                                     int displayOrder,
                                     bool isMultiplicative)
@@ -56,9 +57,11 @@ bool rawSymmetricRingsRememberBasis(const Ring *R,
       const auto *S = symmetricRingFromRing(R);
       if (error()) return false;
       S->rememberBasisMetadata(basisId,
+                               fromM2String(canonicalBasisKey),
                                fromM2String(displaySymbol),
                                displayOrder,
                                isMultiplicative);
+      if (error()) return false;
       return true;
     }
   catch (const exc::engine_error& e)
@@ -360,15 +363,16 @@ bool rawSymmetricRingsHasPlethysmProvenance(const RingElement *f)
       const auto *S = symmetricRingFromElement(f);
       if (error()) return false;
       (void) S;
-      const auto& metadata = polyValue(f->get_value())->conversionMetadata;
-      return metadata && metadata->origin == SymmetricConversionOrigin::Plethysm;
+      return hasCombinatorialTag(
+          polyValue(f->get_value())->combinatorialTags,
+          CombinatorialTag::Plethysm);
     }
   catch (const exc::engine_error& e)
     {
       ERROR(e.what());
       return false;
     }
-}
+  }
 
 bool rawSymmetricRingsCopyConversionMetadata(const RingElement *source,
                                              const RingElement *target)
@@ -383,6 +387,8 @@ bool rawSymmetricRingsCopyConversionMetadata(const RingElement *source,
       (void) targetRing;
       mutablePolyValue(target->get_value())->conversionMetadata =
           polyValue(source->get_value())->conversionMetadata;
+      mutablePolyValue(target->get_value())->combinatorialTags =
+          polyValue(source->get_value())->combinatorialTags;
       return true;
     }
   catch (const exc::engine_error& e)
@@ -536,6 +542,56 @@ M2_arrayint rawSymmetricRingsTermMonomial(const RingElement *f, int i)
       M2_arrayint result = M2_makearrayint(static_cast<int>(data.size()));
       for (size_t j = 0; j < data.size(); ++j)
         result->array[j] = data[j];
+      return result;
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+M2_arrayint rawSymmetricRingsPresentationTermIndices(const RingElement *f,
+                                                     int maxTerms)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      std::vector<size_t> order = S->presentationTermOrder(f->get_value());
+      // Presentation always sorts the complete view before applying its limit.
+      size_t count = order.size();
+      if (maxTerms >= 0)
+        count = std::min(count, static_cast<size_t>(maxTerms));
+      M2_arrayint result = M2_makearrayint(static_cast<int>(count));
+      for (size_t i = 0; i < count; ++i)
+        result->array[i] = static_cast<int>(order[i]);
+      return result;
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+M2_arrayint rawSymmetricRingsPresentationTermMonomial(const RingElement *f,
+                                                      int i)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      const auto *poly = polyValue(f->get_value());
+      if (i < 0 || static_cast<size_t>(i) >= poly->terms.size())
+        {
+          ERROR("symmetric-ring term index out of range");
+          return nullptr;
+        }
+      std::vector<int> data =
+          S->presentationMonomialData(poly->terms[i].monomial);
+      M2_arrayint result = M2_makearrayint(static_cast<int>(data.size()));
+      for (size_t j = 0; j < data.size(); ++j) result->array[j] = data[j];
       return result;
     }
   catch (const exc::engine_error& e)

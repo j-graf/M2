@@ -27,9 +27,72 @@ bool SymmetricEngineRing::isPowerSumBasis(int basisId) const
     return powerSumBasisId >= 0 && basisId == powerSumBasisId;
   }
 
-bool SymmetricEngineRing::isForgottenDisplay(const std::string& display) const
+SymmetricEngineRing::BasisKind SymmetricEngineRing::basisKindForId(int basisId) const
 {
-    return display == "ff";
+    auto found = basisKinds.find(basisId);
+    return found == basisKinds.end() ? BasisKind::Custom : found->second;
+  }
+
+SymmetricEngineRing::BasisKind
+SymmetricEngineRing::basisKindFromCanonicalKey(const std::string& key) const
+{
+    static const std::map<std::string, BasisKind> kinds = {
+        {"PowerSum", BasisKind::PowerSum},
+        {"Complete", BasisKind::Complete},
+        {"Elementary", BasisKind::Elementary},
+        {"Monomial", BasisKind::Monomial},
+        {"Forgotten", BasisKind::Forgotten},
+        {"Schur", BasisKind::Schur},
+        {"SchurOmega", BasisKind::SchurOmega},
+        {"HallLittlewoodQGenerator", BasisKind::HallLittlewoodQGenerator},
+        {"HallLittlewoodBGenerator", BasisKind::HallLittlewoodBGenerator},
+        {"HallLittlewoodQ", BasisKind::HallLittlewoodQ},
+        {"HallLittlewoodB", BasisKind::HallLittlewoodB},
+        {"HallLittlewoodP", BasisKind::HallLittlewoodP},
+        {"HallLittlewoodPOmega", BasisKind::HallLittlewoodPOmega}};
+    auto found = kinds.find(key);
+    return found == kinds.end() ? BasisKind::Custom : found->second;
+  }
+
+bool SymmetricEngineRing::hasBasisKind(int basisId, BasisKind kind) const
+{
+    return basisKindForId(basisId) == kind;
+  }
+
+int SymmetricEngineRing::basisIdForKind(BasisKind kind) const
+{
+    auto found = basisIdsByKind.find(kind);
+    return found == basisIdsByKind.end() ? -1 : found->second;
+  }
+
+int SymmetricEngineRing::requiredBasisIdForKind(BasisKind kind) const
+{
+    int id = basisIdForKind(kind);
+    if (id < 0)
+      ERROR("basis metadata for ", basisKindName(kind), " is not available");
+    return id;
+  }
+
+const char *SymmetricEngineRing::basisKindName(BasisKind kind) const
+{
+    switch (kind)
+      {
+        case BasisKind::PowerSum: return "PowerSum";
+        case BasisKind::Complete: return "Complete";
+        case BasisKind::Elementary: return "Elementary";
+        case BasisKind::Monomial: return "Monomial";
+        case BasisKind::Forgotten: return "Forgotten";
+        case BasisKind::Schur: return "Schur";
+        case BasisKind::SchurOmega: return "SchurOmega";
+        case BasisKind::HallLittlewoodQGenerator: return "HallLittlewoodQGenerator";
+        case BasisKind::HallLittlewoodBGenerator: return "HallLittlewoodBGenerator";
+        case BasisKind::HallLittlewoodQ: return "HallLittlewoodQ";
+        case BasisKind::HallLittlewoodB: return "HallLittlewoodB";
+        case BasisKind::HallLittlewoodP: return "HallLittlewoodP";
+        case BasisKind::HallLittlewoodPOmega: return "HallLittlewoodPOmega";
+        case BasisKind::Custom: return "Custom";
+      }
+    return "Custom";
   }
 
 void SymmetricEngineRing::rememberBasis(int basisId,
@@ -40,15 +103,17 @@ void SymmetricEngineRing::rememberBasis(int basisId,
     if (!display.empty()) basisDisplays[basisId] = display;
     basisOrders[basisId] = order;
     multiplicativeBases[basisId] = isMultiplicative;
-    if (display == "p") powerSumBasisId = basisId;
   }
 
 void SymmetricEngineRing::rememberBasesFrom(const SymmetricEngineRing *R) const
 {
     for (const auto& item : R->basisDisplays) basisDisplays[item.first] = item.second;
+    for (const auto& item : R->basisKeys) basisKeys[item.first] = item.second;
     for (const auto& item : R->basisOrders) basisOrders[item.first] = item.second;
     for (const auto& item : R->multiplicativeBases)
       multiplicativeBases[item.first] = item.second;
+    for (const auto& item : R->basisKinds) basisKinds[item.first] = item.second;
+    for (const auto& item : R->basisIdsByKind) basisIdsByKind[item.first] = item.second;
     if (powerSumBasisId < 0) powerSumBasisId = R->powerSumBasisId;
   }
 
@@ -59,22 +124,22 @@ std::string SymmetricEngineRing::displayForBasis(int basisId) const
     return "basis" + std::to_string(basisId);
   }
 
-int SymmetricEngineRing::basisIdForDisplay(const std::string& display) const
+std::string SymmetricEngineRing::basisKeyForId(int basisId) const
 {
-    for (const auto& item : basisDisplays)
-      if (item.second == display) return item.first;
-    return -1;
+    auto it = basisKeys.find(basisId);
+    if (it != basisKeys.end()) return it->second;
+    ERROR("stable key metadata for symmetric-function basis id ", basisId,
+          " is not available");
+    return "";
   }
 
 int SymmetricEngineRing::basisOrderForId(int basisId) const
 {
     auto it = basisOrders.find(basisId);
     if (it != basisOrders.end()) return it->second;
-    if (basisId == basisIdForDisplay("p")) return 10;
-    if (basisId == basisIdForDisplay("h")) return 20;
-    if (basisId == basisIdForDisplay("e")) return 30;
-    if (basisId == basisIdForDisplay("S")) return 60;
-    return 100;
+    ERROR("display metadata for symmetric-function basis id ", basisId,
+          " is not available");
+    return 0;
   }
 
 const CharacterTable& SymmetricEngineRing::characterTable(int degree) const
@@ -222,11 +287,17 @@ const Ring *SymmetricEngineRing::getCoefficientRing() const
 { return coefficientRing; }
 
 void SymmetricEngineRing::rememberBasisMetadata(int basisId,
+                             const std::string& canonicalBasisKey,
                              const std::string& display,
                              int order,
                              bool isMultiplicative) const
 {
     rememberBasis(basisId, display, order, isMultiplicative);
+    basisKeys[basisId] = canonicalBasisKey;
+    BasisKind kind = basisKindFromCanonicalKey(canonicalBasisKey);
+    basisKinds[basisId] = kind;
+    if (kind != BasisKind::Custom) basisIdsByKind[kind] = basisId;
+    if (kind == BasisKind::PowerSum) powerSumBasisId = basisId;
   }
 
 bool SymmetricEngineRing::setHallLittlewoodParameter(const RingElement *t) const

@@ -8,6 +8,37 @@ TEST ///
     assert(h_{2,1} == h_2*h_1)
     assert(h_0 == 1)
     assert(e_-1 == 0)
+///
+
+TEST ///
+    R0 = symmetricRing QQ
+    partitionDisplay = p_5 + p_{4,1} + p_{3,2} + p_{3,1,1} +
+        p_{2,2,1} + p_{2,1,1,1} + p_{1,1,1,1,1}
+    assert(toString partitionDisplay ==
+        "p_5 + p_{4,1} + p_{3,2} + p_{3,1,1} + p_{2,2,1} + p_{2,1,1,1} + p_{1,1,1,1,1}")
+    assert(apply(terms partitionDisplay, toString) ==
+        {"p_5", "p_{4,1}", "p_{3,2}", "p_{3,1,1}", "p_{2,2,1}", "p_{2,1,1,1}", "p_{1,1,1,1,1}"})
+    assert(apply(rawTerms partitionDisplay, term -> (term#1#0)#"Outer") ==
+        {{5}, {3,2}, {4,1}, {2,2,1}, {3,1,1}, {2,1,1,1}, {1,1,1,1,1}})
+    gradedDisplay = 3 + p_2 + h_5 + S_3 + p_7
+    assert(toString gradedDisplay == "p_7 + h_5 + S_3 + p_2 + 3")
+    mixedDisplay = S_4 + h_4 + p_4 + S_1*h_3 + h_1*p_3
+    assert(toString mixedDisplay ==
+        "S_4 + S_1*h_3 + h_4 + h_1*p_3 + p_4")
+    assert(toString(p_2*h_1*S_1) == "S_1*h_1*p_2")
+    assert(toString mixedDisplay == toString(S_1*h_3 + p_4 + h_1*p_3 + S_4 + h_4))
+    assert(toString(e_2 + h_2) == "h_2 + e_2")
+    assert(toString(e_1*h_1) == "h_1*e_1")
+    assert(toString(h_3 + h_2*e_1 + h_1*e_2 + e_3) ==
+        "h_3 + h_2*e_1 + h_1*e_2 + e_3")
+    largeDisplay = sum apply(101, i -> p_(i+1))
+    limitedDisplay = toString net largeDisplay
+    assert(match("101", limitedDisplay))
+    assert(match("1 terms", limitedDisplay))
+///
+
+TEST ///
+    R0 = symmetricRing QQ
     assert((basisData "S")#"BasisSymbol" == "S")
     assert((bases R0)#"S" == "Schur basis")
     assert(not ((bases R0)#?"Somega"))
@@ -15,10 +46,13 @@ TEST ///
     assert(try (Q_2; false) else true)
     assert(instance(first bases(R0, "verbose" => true), SymmetricBasis))
     assert(try (bases("verbose" => true); false) else true)
-    Rrenamed = symmetricRing(QQ, "BasisSymbols" => hashTable {"S" => "s"})
-    assert((basis(Rrenamed, "s"))#"BasisKey" == "S")
+///
+
+TEST ///
+    Rrenamed = symmetricRing(QQ, "BasisSymbols" => hashTable {"Schur" => "s"})
+    assert((basis(Rrenamed, "s"))#"BasisKey" == "Schur")
     assert((basis(Rrenamed, "S"))#"BasisSymbol" == "s")
-    assert((basisData "s")#"BasisKey" == "S")
+    assert((basisData "s")#"BasisKey" == "Schur")
     assert(toString s_2 == "s_2")
     assert(toBasis(p_2, "s") == s_2 - s_{1,1})
     assert(toBasis(p_2, "S") == s_2 - s_{1,1})
@@ -26,7 +60,54 @@ TEST ///
     assert(s_2 @ s_2 == toS plethysm(s_2, s_2))
     assert((bases Rrenamed)#"s" == "Schur basis")
     assert(not ((bases Rrenamed)#?"S"))
-    assert(try (symmetricRing(QQ, "BasisSymbols" => hashTable {"S" => "h"}); false) else true)
+///
+
+TEST ///
+    Rroles = symmetricRing(QQ, "BasisSymbols" => hashTable {
+            "PowerSum" => "pp", "Complete" => "hh", "Elementary" => "ee", "Monomial" => "mm",
+            "Forgotten" => "fnew", "Schur" => "ss", "SchurOmega" => "sw"
+            })
+    rolePowerSum = basis(Rroles, "pp")
+    roleComplete = basis(Rroles, "hh")
+    roleElementary = basis(Rroles, "ee")
+    roleMonomial = basis(Rroles, "mm")
+    roleForgotten = basis(Rroles, "fnew")
+    roleSchur = basis(Rroles, "ss")
+    assert(toBasis(rolePowerSum_2, roleComplete) == 2*roleComplete_2 - roleComplete_{1,1})
+    assert(toBasis(rolePowerSum_2, roleElementary) == roleElementary_{1,1} - 2*roleElementary_2)
+    assert(toBasis(rolePowerSum_2, roleSchur) == roleSchur_2 - roleSchur_{1,1})
+    assert(toBasis(rolePowerSum_2, roleMonomial) == roleMonomial_2)
+    assert(toBasis(toBasis(rolePowerSum_2, roleForgotten), rolePowerSum) == rolePowerSum_2)
+///
+
+TEST ///
+    HallA = frac(QQ[t])
+    RallSymbols = symmetricRing(HallA, "BasisSymbols" => hashTable {
+            "PowerSum" => "psx", "Complete" => "hex", "Elementary" => "evx",
+            "Monomial" => "mnx", "Forgotten" => "fgx", "Schur" => "shx",
+            "SchurOmega" => "sox", "HallLittlewoodQGenerator" => "qgx",
+            "HallLittlewoodBGenerator" => "bgx", "HallLittlewoodQ" => "hqx",
+            "HallLittlewoodB" => "hbx", "HallLittlewoodP" => "hpx",
+            "HallLittlewoodPOmega" => "hox"
+            })
+    allPowerSum = basis(RallSymbols, "psx")
+    allComplete = basis(RallSymbols, "hex")
+    allElementary = basis(RallSymbols, "evx")
+    allMonomial = basis(RallSymbols, "mnx")
+    allSchur = basis(RallSymbols, "shx")
+    allHallQ = basis(RallSymbols, "hqx")
+    allHallP = basis(RallSymbols, "hpx")
+    assert(toBasis(allPowerSum_2, allComplete) == 2*allComplete_2 - allComplete_{1,1})
+    assert(toBasis(allPowerSum_2, allElementary) == allElementary_{1,1} - 2*allElementary_2)
+    assert(toBasis(allPowerSum_2, allSchur) == allSchur_2 - allSchur_{1,1})
+    assert(omegaInvolution(allComplete_2) == allElementary_2)
+    assert(toBasis(allHallQ_2, allHallP) == (1-HallA_0)*allHallP_2)
+    assert(hallInnerProduct(allComplete_2, allMonomial_2,
+            "InnerProduct" => "Ordinary") == 1_HallA)
+    assert(try (symmetricRing(QQ, "BasisSymbols" => hashTable {"Schur" => "h"}); false) else true)
+///
+
+TEST ///
     R0 = symmetricRing QQ
     g = raisingOperator "R_{1,2}"
     assert(instance(g, RaisingOperator))
@@ -81,6 +162,9 @@ TEST ///
     assert(match("\\(", displayedAdditiveCoefficient))
     displayedFractionFieldAdditiveCoefficient = toString net ((1-t)*S_1)
     assert(match("\\(", displayedFractionFieldAdditiveCoefficient))
+///
+
+TEST ///
     B = QQ[u]
     Rpoly = symmetricRing B
     displayedPolynomialAdditiveCoefficient = toString net ((1-u)*S_{2,1})
@@ -94,11 +178,16 @@ TEST ///
     registerTransformedBasis("HScaledSolo", "h",
         "DisplayName" => "scaled h test basis without companions",
         "TermTransform" => (lambda, mu) -> 2^(#lambda))
+    assert((basisData "HScaledSolo")#"DisplayOrder" == 100)
+    assert(toString(HScaledSolo_2 + S_2) == "HScaledSolo_2 + S_2")
     assert(HScaledSolo_{2,1} == HScaledSolo_2*HScaledSolo_1)
     assert(toBasis(HScaledSolo_2, p) == 2*toBasis(h_2, p))
     assert(toBasis(p_2, "HScaledSolo") == HScaledSolo_2 - (1/4)*HScaledSolo_{1,1})
     assert(hallInnerProduct(HScaledSolo_{2,1}, m_{2,1}) == 4_QQ)
+///
 
+TEST ///
+    R0 = symmetricRing QQ
     HScaledReport = registerTransformedBasis("HScaled", "h",
         "DisplayName" => "scaled h test basis",
         "TermTransform" => (lambda, mu) -> 2^(#lambda),
@@ -120,7 +209,10 @@ TEST ///
     assert(omegaInvolution MScaled_2 == FFScaled_2)
     assert(hallInnerProduct(HScaled_{2,1}, MScaled_{2,1}) == 1_QQ)
     assert(hallInnerProduct(EScaled_{2,1}, FFScaled_{2,1}) == 1_QQ)
+///
 
+TEST ///
+    R0 = symmetricRing QQ
     registerTransformedBasis("HCopy", "h",
         "DisplayName" => "copy of h test basis",
         "RegisterCompanions" => hashTable {
@@ -138,29 +230,41 @@ TEST ///
     assert(hallInnerProduct(MCopy_{2,1}, HCopy_{2,1}) == 1_QQ)
     assert(hallInnerProduct(ECopy_{2,1}, FFCopy_{2,1}) == 1_QQ)
     assert(toBasis(toBasis(HCopy_{3,1} + 2*HCopy_2, p), "HCopy") == HCopy_{3,1} + 2*HCopy_2)
+///
 
+TEST ///
+    R0 = symmetricRing QQ
     registerTransformedBasis("SDomLower", "S",
         "SumOver" => "DominanceLower")
     assert(toBasis(SDomLower_2, S) == S_2 + S_{1,1})
     assert(toBasis(S_2, "SDomLower") == SDomLower_2 - SDomLower_{1,1})
     assert(not ((basisData "SDomLower")#?"TransformData"))
     SDomLowerData = (basisData "SDomLower")#"TransformedBasisData"
-    assert(SDomLowerData#"SourceBasis" == "S")
+    assert(SDomLowerData#"SourceBasis" == "Schur")
     assert(SDomLowerData#"SumOver" == "DominanceLower")
-    assert(SDomLowerData#"OutputBasis" == "S")
+    assert(SDomLowerData#"OutputBasis" == "Schur")
     assert(toBasis(S_3, "SDomLower") == SDomLower_3 - SDomLower_{2,1})
     assert(toBasis(S_{2,1}, "SDomLower") == SDomLower_{2,1} - SDomLower_{1,1,1})
+///
 
+TEST ///
+    R0 = symmetricRing QQ
     registerTransformedBasis("SDomUpper", "S",
         "SumOver" => "DominanceUpper")
     assert(toBasis(SDomUpper_{1,1}, S) == S_2 + S_{1,1})
     assert(toBasis(S_{1,1}, "SDomUpper") == SDomUpper_{1,1} - SDomUpper_2)
+///
 
+TEST ///
+    R0 = symmetricRing QQ
     registerTransformedBasis("SAllWeight", "S",
         "SumOver" => "AllPartitionsOfWeight")
     assert(toBasis(SAllWeight_2, S) == S_2 + S_{1,1})
     assert(try (toBasis(S_2, "SAllWeight"); false) else true)
+///
 
+TEST ///
+    R0 = symmetricRing QQ
     assert(try (registerTransformedBasis("BadCluster", "h",
                 "RegisterCompanions" => hashTable {
                     "OmegaPartner" => "BadClusterPartner",
@@ -170,7 +274,10 @@ TEST ///
     assert(try (registerTransformedBasis("BadRollback", "h",
                 "AvailableWhen" => "Bogus"); false) else true)
     assert(try (basis "BadRollback"; false) else true)
+///
 
+TEST ///
+    R0 = symmetricRing QQ
     registerTransformedBasis("ZeroDiag", "h",
         "TermTransform" => (lambda, mu) -> if lambda == {2} then 0 else 1)
     assert(try (toBasis(p_2, "ZeroDiag"); false) else true)
@@ -184,23 +291,42 @@ TEST ///
 ///
 
 TEST ///
+    R0 = symmetricRing QQ
+    registerTransformedBasis("StableDisplayBasis", "S",
+        "BasisKey" => "StableTransform")
+    assert((basisData "StableDisplayBasis")#"BasisKey" == "StableTransform")
+    assert(((basisData "StableDisplayBasis")#"TransformedBasisData")#"SourceBasis" == "Schur")
+    Rstable = symmetricRing(QQ, "BasisSymbols" => hashTable {
+            "StableTransform" => "renamedTransform"})
+    assert((basis "renamedTransform")#"BasisKey" == "StableTransform")
+    renamedTransformBasis = basis(Rstable, "renamedTransform")
+    assert(toBasis(renamedTransformBasis_2, "PowerSum") == p_{1,1}/2 + p_2/2)
+///
+
+TEST ///
     A = frac(QQ[t])
     R0 = symmetricRing A
     oldX = value getSymbol "X"
     assert((basis "q")#"Omega" === null)
-    assert((basisData "q")#"Omega" == "b")
+    assert((basisData "q")#"Omega" == "HallLittlewoodBGenerator")
     assert(try (registerTransformedBasis("KnownAlphaH", "h",
                 "Alphabet" => "(1-t)*X"); false) else true)
+///
+
+TEST ///
+    A = frac(QQ[t])
+    R0 = symmetricRing A
+    oldX = value getSymbol "X"
     AlphaAliasReport = registerTransformedBasis("AlphaHAlias", "h",
         "Alphabet" => "X-t*X",
         "OnEquivalentBasis" => "CreateAlias")
-    assert(AlphaAliasReport#"PrimaryBasis" == "q")
+    assert(AlphaAliasReport#"PrimaryBasis" == "HallLittlewoodQGenerator")
     assert(AlphaAliasReport#"RegisteredBases" == {})
-    assert((AlphaAliasReport#"Aliases")#"q" == {"AlphaHAlias"})
+    assert((AlphaAliasReport#"Aliases")#"HallLittlewoodQGenerator" == {"AlphaHAlias"})
     assert(AlphaHAlias_2 == q_2)
     assert(toString AlphaHAlias_2 == "q_2")
     assert((basis "AlphaHAlias")#"BasisSymbol" == "q")
-    assert((basisData "AlphaHAlias")#"BasisAliasOf" == "q")
+    assert((basisData "AlphaHAlias")#"BasisAliasOf" == "HallLittlewoodQGenerator")
     assert(not ((bases R0)#?"AlphaHAlias"))
     assert(not any(bases(R0, "verbose" => true), B0 -> B0#"BasisSymbol" == "AlphaHAlias"))
     assert((aliases R0)#"q" == {"AlphaHAlias"})
@@ -214,6 +340,17 @@ TEST ///
     assert(toBasis(p_2, "AlphaHAlias") == toBasis(p_2, q))
     assert(omegaInvolution AlphaHAlias_2 == b_2)
     assert(specializeParameters(AlphaHAlias_2, {A_0 => 0}) == h_2)
+
+    Rplain = symmetricRing QQ
+    assert(not ((aliases Rplain)#?"q"))
+    assert(not ((omegaPartners Rplain)#?"q"))
+    assert(try (AlphaHAlias_2; false) else true)
+///
+
+TEST ///
+    A = frac(QQ[t])
+    R0 = symmetricRing A
+    oldX = value getSymbol "X"
     assert(try (registerTransformedBasis("AlphaHMerge", "h",
                 "Alphabet" => "(1-t)*X",
                 "OnEquivalentBasis" => "Merge"); false) else true)
@@ -225,7 +362,9 @@ TEST ///
     assert(toBasis(AlphaH_2, p) == toBasis(q_2, p))
     assert(AlphaH_{2,1} == q_{2,1})
     assert(toBasis(toBasis(AlphaH_2, p), "AlphaH") == AlphaH_2)
+///
 
+TEST ///
     K = frac(QQ[t,q])
     R1 = symmetricRing K
     registerTransformedBasis("MacAlphaH", "h",
@@ -233,20 +372,22 @@ TEST ///
     assert(toBasis(MacAlphaH_1, p) == ((1-K_0)/(1-K_1))*p_1)
     assert(toBasis(MacAlphaH_2, p) == ((1-K_0^2)/(2*(1-K_1^2)))*p_2 + (((1-K_0)^2)/(2*(1-K_1)^2))*p_{1,1})
     assert(try (registerTransformedBasis("BadAlphabet", "h", "Alphabet" => "X+1"); false) else true)
+///
 
+TEST ///
     U = frac(QQ[u])
     R2 = symmetricRing U
     registerTransformedBasis("UAlphaH", "h",
+        "BasisKey" => "StableUAlphaH",
         "Alphabet" => "(1-u)*X",
-        "RegisterCompanions" => hashTable {"InnerProductPartner" => "UAlphaM"})
+        "RegisterCompanions" => hashTable {
+            "InnerProductPartner" => hashTable {
+                "BasisSymbol" => "UAlphaM", "BasisKey" => "StableUAlphaM"}})
+    assert((basisData "UAlphaH")#"BasisKey" == "StableUAlphaH")
+    assert((basisData "UAlphaM")#"BasisKey" == "StableUAlphaM")
     assert(toBasis(UAlphaH_1, p) == (1-U_0)*p_1)
     assert(toBasis(UAlphaM_1, p) == (1/(1-U_0))*p_1)
     assert(hallInnerProduct(UAlphaH_1, UAlphaM_1) == 1_U)
-
-    Rplain = symmetricRing QQ
-    assert(not ((aliases Rplain)#?"q"))
-    assert(not ((omegaPartners Rplain)#?"q"))
-    assert(try (AlphaHAlias_2; false) else true)
 ///
 
 TEST ///
@@ -268,6 +409,9 @@ TEST ///
     assert(toBasis(SpecDeclaredtm1_2, p) == 0_R0)
     assert(specializeParameters(SpecDeclared_2, {A_0 => 0}) == SpecDeclaredt0_2)
     assert(specializeParameters(SpecDeclared_2, {A_0 => -1}) == SpecDeclaredtm1_2)
+///
+
+TEST ///
     C = frac(QQ[u])
     Rfrac = symmetricRing(C, "HallLittlewoodParameter" => null)
     registerTransformedBasis("SpecFam", "h",
@@ -282,10 +426,17 @@ TEST ///
     assert(specializeParameters(SpecFamOmega_2, {C_0 => 0}) == SpecFamOmegau0_2)
     assert(omegaInvolution SpecFamu0_2 == SpecFamOmegau0_2)
     assert(hallInnerProduct(SpecFamu0_2, SpecFamDualu0_2) == 1_C)
+///
+
+TEST ///
+    A = QQ[t]
     R0 = symmetricRing A
     registerTransformedBasis("TScaleNonInvertible", "h",
         "TermTransform" => (lambda, mu) -> A_0)
     assert(try (toBasis(p_1, "TScaleNonInvertible"); false) else true)
+///
+
+TEST ///
     K = QQ[t,q]
     R1 = symmetricRing K
     registerTransformedBasis("MultiSpec", "h",
@@ -328,6 +479,10 @@ TEST ///
     assert(toFF(p_2) == toBasis(p_2, ff))
     assert((basis "ff")#"BasisSymbol" == "ff")
     assert(try (basis "f"; false) else true)
+///
+
+TEST ///
+    R0 = symmetricRing QQ
     assert(hJacobiTrudi {1,1} == h_{1,1} - h_2)
     assert(eJacobiTrudi {1,1} == e_{1,1} - e_2)
     assert(hJacobiTrudi({2,1}, {1}) == h_{1,1})
@@ -344,6 +499,10 @@ TEST ///
     assert(toBasis(Somega_2, p) == (-1/2)*p_2 + (1/2)*p_{1,1})
     assert(Somega_3 == S_{1,1,1})
     assert(toString Somega_3 == "S_{1,1,1}")
+///
+
+TEST ///
+    R0 = symmetricRing QQ
     assert(omegaInvolution(h_2*S_1 + e_1) == e_2*S_1 + h_1)
     assert(omegaInvolution(h_2*S_1 + e_1, "useSomega" => true) == e_2*S_1 + h_1)
     assert(omegaInvolution(S_3, "useSomega" => true) == S_{1,1,1})
@@ -353,7 +512,9 @@ TEST ///
     assert(omegaInvolution(p_{2,1}) == -p_{2,1})
     assert(S_{1,3} == -S_{2,2})
     assert(straighten S_{1,3} == -S_{2,2})
+///
 
+TEST ///
     RnoNormalize = symmetricRing(QQ, "NormalizeSomega" => false)
     assert((bases RnoNormalize)#?"Somega")
     assert(toString Somega_3 == "Somega_3")
@@ -378,7 +539,9 @@ TEST ///
     assert(S_2 @ S_2 == toBasis(plethysm(S_2, S_2), S))
     assert(S_2 @ S_{1,1} == toBasis(plethysm(S_2, S_{1,1}), S))
     assert(S_{5,1} @ S_{3,1} == toBasis(plethysm(S_{5,1}, S_{3,1}), S))
+///
 
+TEST ///
     A = frac(QQ[t])
     R1 = symmetricRing A
     plethysmResult = plethysm(S_2, S_2)
@@ -388,14 +551,14 @@ TEST ///
     assert(toBasis(toBasis(p_2, Q), p) == p_2)
     assert(toBasis(toBasis(p_2, B), p) == p_2)
     assert(toBasis(toBasis(p_2, P), p) == p_2)
-    assert(toBasis(toBasis(p_2, R), p) == p_2)
+    assert(toBasis(toBasis(p_2, Pomega), p) == p_2)
     singleCyclePowerSums = 3 + p_5 + 2*p_3
     assert(toBasis(toBasis(singleCyclePowerSums, Q), p) == singleCyclePowerSums)
     assert(toBasis(toBasis(singleCyclePowerSums, B), p) == singleCyclePowerSums)
     assert(toBasis(toBasis(p_{3,2}, Q), p) == p_{3,2})
     assert(toBasis(toBasis(p_{3,2}, B), p) == p_{3,2})
     assert(toBasis(toBasis(p_{3,2}, P), p) == p_{3,2})
-    assert(toBasis(toBasis(p_{3,2}, R), p) == p_{3,2})
+    assert(toBasis(toBasis(p_{3,2}, Pomega), p) == p_{3,2})
     cachedAndUncachedPowerSums = p_{3,2} + p_{4,1}
     assert(toBasis(toBasis(cachedAndUncachedPowerSums, Q), p) ==
            cachedAndUncachedPowerSums)
@@ -420,12 +583,19 @@ TEST ///
     assert(hallInnerProduct(plethysm(S_{2,1}, S_2), S_4) == hallInnerProduct(plethysm(S_{2,1}, S_2), toBasis(S_4, p)))
     cachedPlethysmResult = S_{4,3,1,1} @ S_2
     assert(S_{4,3,1,1} @ S_2 == cachedPlethysmResult)
+///
+
+TEST ///
     A = frac(QQ[t])
     Rfrac = symmetricRing A
     cachedFractionPlethysmResult = S_{4,3,1,1} @ S_2
     assert(S_{4,3,1,1} @ S_2 == cachedFractionPlethysmResult)
     assert((h_2 + e_1) @ h_1 == (1/2)*p_2 + (1/2)*p_{1,1} + p_1)
     assert(h_1 @ (p_1 + p_2) == h_1 + 2*h_2 - h_{1,1})
+///
+
+TEST ///
+    Rsource = symmetricRing QQ
     f = h_1
     R1 = symmetricRing ZZ
     assert(try (plethysm(h_2, h_1); false) else true)
@@ -445,6 +615,11 @@ TEST ///
     assert(hallInnerProduct(m_2, q_2) == 1_A)
     assert(omegaInvolution omegaInvolution(S_{2,1} + Q_2) == S_{2,1} + Q_2)
     assert(omegaInvolution(Q_{{2,1}, {1}}) == B_{{2,1}, {1}})
+///
+
+TEST ///
+    A = QQ[t]
+    R0 = symmetricRing A
     ipLeftCoeff = 1 + A_0
     ipMiddleCoeff = 2 - A_0
     ipSmallCoeff = A_0^2
@@ -453,14 +628,23 @@ TEST ///
     assert(hallInnerProduct((3-A_0)*m_3 + A_0*m_{2,1} + 5*m_1, ipLeftCoeff*q_3 + ipMiddleCoeff*q_{2,1} + ipSmallCoeff*q_1) == ipExpected)
     assert(hallInnerProduct(ipLeftCoeff*b_3 + ipMiddleCoeff*b_{2,1} + ipSmallCoeff*b_1, (3-A_0)*ff_3 + A_0*ff_{2,1} + 5*ff_1) == ipExpected)
     assert(hallInnerProduct((3-A_0)*ff_3 + A_0*ff_{2,1} + 5*ff_1, ipLeftCoeff*b_3 + ipMiddleCoeff*b_{2,1} + ipSmallCoeff*b_1) == ipExpected)
+///
+
+TEST ///
+    A = QQ[t]
+    R0 = symmetricRing A
+    ipLeftCoeff = 1 + A_0
+    ipMiddleCoeff = 2 - A_0
+    ipSmallCoeff = A_0^2
+    ipExpected = ipLeftCoeff*(3 - A_0) + ipMiddleCoeff*A_0 + ipSmallCoeff*5
     assert(hallInnerProduct(Q_2, P_2) == 1_A)
     assert(hallInnerProduct(P_2, Q_2) == 1_A)
     assert(hallInnerProduct(ipLeftCoeff*Q_3 + ipMiddleCoeff*Q_{2,1} + ipSmallCoeff*Q_1, (3-A_0)*P_3 + A_0*P_{2,1} + 5*P_1) == ipExpected)
     assert(hallInnerProduct((3-A_0)*P_3 + A_0*P_{2,1} + 5*P_1, ipLeftCoeff*Q_3 + ipMiddleCoeff*Q_{2,1} + ipSmallCoeff*Q_1) == ipExpected)
-    assert(hallInnerProduct(B_2, R_2) == 1_A)
-    assert(hallInnerProduct(R_2, B_2) == 1_A)
-    assert(hallInnerProduct(ipLeftCoeff*B_3 + ipMiddleCoeff*B_{2,1} + ipSmallCoeff*B_1, (3-A_0)*R_3 + A_0*R_{2,1} + 5*R_1) == ipExpected)
-    assert(hallInnerProduct((3-A_0)*R_3 + A_0*R_{2,1} + 5*R_1, ipLeftCoeff*B_3 + ipMiddleCoeff*B_{2,1} + ipSmallCoeff*B_1) == ipExpected)
+    assert(hallInnerProduct(B_2, Pomega_2) == 1_A)
+    assert(hallInnerProduct(Pomega_2, B_2) == 1_A)
+    assert(hallInnerProduct(ipLeftCoeff*B_3 + ipMiddleCoeff*B_{2,1} + ipSmallCoeff*B_1, (3-A_0)*Pomega_3 + A_0*Pomega_{2,1} + 5*Pomega_1) == ipExpected)
+    assert(hallInnerProduct((3-A_0)*Pomega_3 + A_0*Pomega_{2,1} + 5*Pomega_1, ipLeftCoeff*B_3 + ipMiddleCoeff*B_{2,1} + ipSmallCoeff*B_1) == ipExpected)
     assert(toBasis(q_{2,1} + (A_0 - 1)*q_3, Q) == Q_{2,1})
     assert(toBasis(b_{2,1} + (A_0 - 1)*b_3, B) == B_{2,1})
     assert(straighten Q_{1,3} == A_0*Q_{3,1} + (A_0 - 1)*Q_{2,2})
@@ -468,24 +652,32 @@ TEST ///
     assert(try (toBasis(p_1, q); false) else true)
     assert(try (toBasis(p_1, Q); false) else true)
     assert(try (toBasis(P_1, p); false) else true)
+///
 
+TEST ///
     K = QQ[t,q]
     R1 = symmetricRing K
     assert(R1#"HallLittlewoodParameter" == K_0)
     assert(R1#"MacdonaldParameters" == {K_0, K_1})
     assert(toBasis(q_1, p) == (1-K_0)*p_1)
+///
 
+TEST ///
     C = frac QQ[t]
     R2 = symmetricRing C
     assert(R2#"HallLittlewoodParameter" == C_0)
     assert(toBasis(q_1, p) == (1-C_0)*p_1)
+///
 
+TEST ///
     D = frac QQ[t,q]
     R3 = symmetricRing D
     assert(R3#"HallLittlewoodParameter" == D_0)
     assert(R3#"MacdonaldParameters" == {D_0, D_1})
     assert(toBasis(q_1, p) == (1-D_0)*p_1)
+///
 
+TEST ///
     E = frac(QQ[t])
     debug needsPackage "SymmetricRings"
     R4 = symmetricRing E
@@ -502,20 +694,35 @@ TEST ///
     assert(toBasis(toBasis(B_{2,1}, p), B) == B_{2,1})
     assert(toBasis(toBasis(p_4, Q), p) == p_4)
     assert(toBasis(toBasis(p_4, B), p) == p_4)
+///
+
+TEST ///
+    E = frac(QQ[t])
+    R4 = symmetricRing E
     assert(toBasis(Q_2, P) == (1-E_0)*P_2)
-    assert(toBasis(B_2, R) == (1-E_0)*R_2)
+    assert(toBasis(B_2, Pomega) == (1-E_0)*Pomega_2)
     assert(toBasis(P_2, Q) == 1/(1-E_0)*Q_2)
-    assert(toBasis(R_2, B) == 1/(1-E_0)*B_2)
+    assert(toBasis(Pomega_2, B) == 1/(1-E_0)*B_2)
     hallCapitalSum = Q_{3,1} + E_0*Q_{2,2}
     assert(toBasis(toBasis(hallCapitalSum, P), Q) == hallCapitalSum)
     assert(toBasis(toBasis(P_2, p), P) == P_2)
-    assert(toBasis(toBasis(R_2, p), R) == R_2)
+    assert(toBasis(toBasis(Pomega_2, p), Pomega) == Pomega_2)
+///
+
+TEST ///
+    E = frac(QQ[t])
+    R4 = symmetricRing E
     targetedQPowerSums = toBasis((1+E_0)*Q_{3,1} + Q_{2,2}, p)
     targetedBPowerSums = toBasis((1-E_0)*B_{3,1} + B_{2,2}, p)
     assert(hallInnerProduct(targetedQPowerSums, 3*P_{3,1}) == 3*(1+E_0))
     assert(hallInnerProduct(3*P_{3,1}, targetedQPowerSums) == 3*(1+E_0))
-    assert(hallInnerProduct(targetedBPowerSums, 2*R_{3,1}) == 2*(1-E_0))
-    assert(hallInnerProduct(2*R_{3,1}, targetedBPowerSums) == 2*(1-E_0))
+    assert(hallInnerProduct(targetedBPowerSums, 2*Pomega_{3,1}) == 2*(1-E_0))
+    assert(hallInnerProduct(2*Pomega_{3,1}, targetedBPowerSums) == 2*(1-E_0))
+///
+
+TEST ///
+    E = frac(QQ[t])
+    R4 = symmetricRing E
     assert(basisCoefficient(p_{3,1} + 2*p_4, p_{3,1}) == 1_E)
     assert(basisCoefficient(toBasis((1+E_0)*S_{3,1} + S_{2,2}, p), S_{3,1}) == 1+E_0)
     assert(basisCoefficient(toBasis((1-E_0)*Somega_{3,1} + Somega_{2,2}, p), Somega_{3,1}) == 1-E_0)
@@ -526,15 +733,20 @@ TEST ///
     assert(basisCoefficient(toBasis((3+E_0)*Q_{3,1} + Q_{2,2}, p), Q_{3,1}) == 3+E_0)
     assert(basisCoefficient(toBasis((3-E_0)*P_{3,1} + P_{2,2}, p), P_{3,1}) == 3-E_0)
     assert(basisCoefficient(toBasis((4+E_0)*B_{3,1} + B_{2,2}, p), B_{3,1}) == 4+E_0)
-    assert(basisCoefficient(toBasis((4-E_0)*R_{3,1} + R_{2,2}, p), R_{3,1}) == 4-E_0)
+    assert(basisCoefficient(toBasis((4-E_0)*Pomega_{3,1} + Pomega_{2,2}, p), Pomega_{3,1}) == 4-E_0)
     assert(basisCoefficient(toBasis((5+E_0)*m_{3,1} + m_{2,2}, p), m_{3,1}) == 5+E_0)
     assert(basisCoefficient(toBasis((5-E_0)*ff_{3,1} + ff_{2,2}, p), ff_{3,1}) == 5-E_0)
+///
+
+TEST ///
+    E = frac(QQ[t])
+    R4 = symmetricRing E
     targetedPPowerSums = toBasis((2+E_0)*P_{3,1} + P_{2,2}, p)
-    targetedRPowerSums = toBasis((2-E_0)*R_{3,1} + R_{2,2}, p)
+    targetedPOmegaPowerSums = toBasis((2-E_0)*Pomega_{3,1} + Pomega_{2,2}, p)
     assert(hallInnerProduct(targetedPPowerSums, 3*Q_{3,1}) == 3*(2+E_0))
     assert(hallInnerProduct(3*Q_{3,1}, targetedPPowerSums) == 3*(2+E_0))
-    assert(hallInnerProduct(targetedRPowerSums, 2*B_{3,1}) == 2*(2-E_0))
-    assert(hallInnerProduct(2*B_{3,1}, targetedRPowerSums) == 2*(2-E_0))
+    assert(hallInnerProduct(targetedPOmegaPowerSums, 2*B_{3,1}) == 2*(2-E_0))
+    assert(hallInnerProduct(2*B_{3,1}, targetedPOmegaPowerSums) == 2*(2-E_0))
     targetedQGeneratorPowerSums = toBasis((1+E_0)*q_{3,1} + q_{2,2}, p)
     targetedBGeneratorPowerSums = toBasis((1-E_0)*b_{3,1} + b_{2,2}, p)
     assert(hallInnerProduct(targetedQGeneratorPowerSums, m_{3,1}) == 1+E_0)
@@ -549,18 +761,23 @@ TEST ///
         weightedCharacterPowerSums, toBasis(weightedCharacterSchur, p))
     assert(hallInnerProduct(weightedCharacterPowerSums, weightedCharacterSchur) == weightedCharacterFallback)
     assert(hallInnerProduct(weightedCharacterSchur, weightedCharacterPowerSums) == weightedCharacterFallback)
+///
+
+TEST ///
+    E = frac(QQ[t])
+    R4 = symmetricRing E
     assert(multiplyToBasis(Q_2, Q_1, Q) == toBasis(Q_2*Q_1, Q))
     assert(multiplyToBasis(P_2, P_1, P) == toBasis(P_2*P_1, P))
     assert(multiplyToBasis(B_2, B_1, B) == toBasis(B_2*B_1, B))
-    assert(multiplyToBasis(R_2, R_1, R) == toBasis(R_2*R_1, R))
+    assert(multiplyToBasis(Pomega_2, Pomega_1, Pomega) == toBasis(Pomega_2*Pomega_1, Pomega))
     assert(toBasis(P_{2,1}*e_1, P) ==
            P_{3,1} + (1+E_0)*P_{2,2} + (1+E_0)*P_{2,1,1})
-    assert(toBasis(R_{2,1}*h_1, R) ==
-           R_{3,1} + (1+E_0)*R_{2,2} + (1+E_0)*R_{2,1,1})
+    assert(toBasis(Pomega_{2,1}*h_1, Pomega) ==
+           Pomega_{3,1} + (1+E_0)*Pomega_{2,2} + (1+E_0)*Pomega_{2,1,1})
     assert(toBasis(toBasis(P_{2,1,1}, p), P) == P_{2,1,1})
-    assert(toBasis(toBasis(R_{2,1,1}, p), R) == R_{2,1,1})
+    assert(toBasis(toBasis(Pomega_{2,1,1}, p), Pomega) == Pomega_{2,1,1})
     assert(toBasis(P_{1,2}, p) == toBasis(straighten P_{1,2}, p))
-    assert(toBasis(R_{1,2}, p) == toBasis(straighten R_{1,2}, p))
+    assert(toBasis(Pomega_{1,2}, p) == toBasis(straighten Pomega_{1,2}, p))
     sparseQGenerators = q_8 + q_{7,1}
     sparseBGenerators = b_8 + b_{7,1}
     assert(toBasis(toBasis(sparseQGenerators, Q), p) ==
@@ -571,6 +788,11 @@ TEST ///
            toBasis(toBasis(q_2*q_1 + q_3, p), Q))
     assert(toBasis(q_2*p_1, q) == q_2*toBasis(p_1, q))
     assert(toBasis(p_1*b_2, b) == toBasis(p_1, b)*b_2)
+///
+
+TEST ///
+    E = frac(QQ[t])
+    R4 = symmetricRing E
     assert(toBasis(p_2, m) == m_2)
     assert(toBasis(m_2, p) == p_2)
     assert(toBasis(p_2, ff) == -ff_2)
@@ -587,15 +809,25 @@ TEST ///
     pPairRight = (3-E_0)*p_2 + E_0*p_{1,1} + 5*p_1
     pPairExpected = (1+E_0)*(3-E_0)*2/(1-E_0^2) + (2-E_0)*E_0*2/(1-E_0)^2 + E_0^2*5/(1-E_0)
     assert(hallInnerProduct(pPairLeft, pPairRight) == pPairExpected)
+///
+
+TEST ///
+    E = frac(QQ[t])
+    debug needsPackage "SymmetricRings"
+    R4 = symmetricRing E
     assert(toBasis(Q_{{2}, {1}}, m) == (1-E_0)*m_1)
     assert(toBasis(B_{{2}, {1}}, ff) == (1-E_0)*ff_1)
     assert(toBasis(P_{{2}, {1}}, p) == p_1)
-    assert(toBasis(R_{{2}, {1}}, p) == p_1)
+    assert(toBasis(Pomega_{{2}, {1}}, p) == p_1)
     assert(Q_{{8,2}, {6}} == Q_2*Q_2)
     assert(Q_{{8,2}, {6}} - Q_2*Q_2 == 0_R4)
     assert(toS(Q_2*S_2) == toS(toP(Q_2*S_2)))
     assert(multiplyToS(Q_2, S_2) == toS(Q_2*S_2))
+///
 
+TEST ///
+    E = frac(QQ[t])
+    R4 = symmetricRing E
     FipSpecial1 = Q_2
     GipSpecial1 = P_2
     FipSpecial2 = Q_2 + E_0*Q_1
@@ -603,7 +835,10 @@ TEST ///
     assert(hallInnerProduct(FipSpecial1, GipSpecial1, "ParameterSpecialization" => {E_0 => 0}) == 1_E)
     assert(hallInnerProduct(FipSpecial2, GipSpecial2, "ParameterSpecialization" => {E_0 => 0}) == 1_E)
     assert(hallInnerProduct(FipSpecial1, GipSpecial1, "ParameterSpecialization" => {E_0 => 0}, "PromoteSpecializedRing" => true) == 1_QQ)
+///
 
+TEST ///
+    E = frac(QQ[t])
     R4 = symmetricRing E
     Fspecial = (1-E_0)*Q_2 + E_0*h_1
     FqbSpecial = q_{2,1} + b_2
@@ -637,6 +872,10 @@ TEST ///
     assert(hallInnerProduct(ff_{3,1}, ordinaryEPowerSums) == 4_QQ)
     assert(hallInnerProduct(ordinaryFFPowerSums, e_{3,1}) == 5_QQ)
     assert(hallInnerProduct(e_{3,1}, ordinaryFFPowerSums) == 5_QQ)
+///
+
+TEST ///
+    Rordinary = symmetricRing QQ
     kostkaPairs = {
         {{3,1}, {2,1,1}},
         {{2,2}, {2,1,1}},
@@ -663,21 +902,36 @@ TEST ///
     assert(hallInnerProduct(h_3, S_{3,1}) == 0_QQ)
     assert(omegaInvolution h_2 == e_2)
     assert(not ((bases Rordinary)#?"Q"))
+///
+
+TEST ///
     Romega = symmetricRing(QQ, "NormalizeSomega" => false)
-    omegaSchurTerm = Somega_{3,1}
+    schurOmegaTerm = Somega_{3,1}
     completeTerm = h_{2,1,1}
     elementaryTerm = e_{2,1,1}
-    assert(hallInnerProduct(omegaSchurTerm, completeTerm) ==
-        hallInnerProduct(toBasis(omegaSchurTerm, p), toBasis(completeTerm, p)))
-    assert(hallInnerProduct(completeTerm, omegaSchurTerm) ==
-        hallInnerProduct(toBasis(completeTerm, p), toBasis(omegaSchurTerm, p)))
-    assert(hallInnerProduct(omegaSchurTerm, elementaryTerm) ==
-        hallInnerProduct(toBasis(omegaSchurTerm, p), toBasis(elementaryTerm, p)))
-    assert(hallInnerProduct(elementaryTerm, omegaSchurTerm) ==
-        hallInnerProduct(toBasis(elementaryTerm, p), toBasis(omegaSchurTerm, p)))
+    assert(hallInnerProduct(schurOmegaTerm, completeTerm) ==
+        hallInnerProduct(toBasis(schurOmegaTerm, p), toBasis(completeTerm, p)))
+    assert(hallInnerProduct(completeTerm, schurOmegaTerm) ==
+        hallInnerProduct(toBasis(completeTerm, p), toBasis(schurOmegaTerm, p)))
+    assert(hallInnerProduct(schurOmegaTerm, elementaryTerm) ==
+        hallInnerProduct(toBasis(schurOmegaTerm, p), toBasis(elementaryTerm, p)))
+    assert(hallInnerProduct(elementaryTerm, schurOmegaTerm) ==
+        hallInnerProduct(toBasis(elementaryTerm, p), toBasis(schurOmegaTerm, p)))
+///
+
+TEST ///
     A = QQ[t]
     Rhl = symmetricRing A
     assert((bases Rhl)#?"Q")
+    assert((bases Rhl)#?"Pomega")
+    assert(not ((bases Rhl)#?"R"))
+    assert(apply({"Q", "B", "P", "Pomega", "q", "b", "S", "Somega",
+                "h", "e", "p", "m", "ff"},
+            basisSymbol -> (basisData basisSymbol)#"DisplayOrder") ==
+        {90, 89, 88, 87, 80, 79, 70, 69, 60, 59, 50, 40, 39})
+    assert(toString(Q_2 + B_2 + P_2 + Pomega_2 + S_2 + q_2 + b_2 +
+                h_2 + e_2 + p_2 + m_2 + ff_2) ==
+        "Q_2 + B_2 + P_2 + Pomega_2 + q_2 + b_2 + S_2 + h_2 + e_2 + p_2 + m_2 + ff_2")
     assert(omegaInvolution Q_2 == B_2)
     assert(hallInnerProduct(Q_2, P_2) == 1_A)
     assert(specializeParameters(Q_2, {A_0 => 0}) == S_2)
@@ -716,6 +970,11 @@ TEST ///
     assert(toS(pFromComplete + pFromElementary) == toS(toP(h_2 + e_2)))
     assert(toS(-pFromComplete) == -toS(pFromComplete))
     assert(toS(3*pFromComplete) == 3*toS(pFromComplete))
+///
+
+TEST ///
+    debug needsPackage "SymmetricRings"
+    R0 = symmetricRing QQ
     assert(toBasis(S_{5,3,2}*S_{4,3,1}, S) == toBasis(toBasis(S_{5,3,2}*S_{4,3,1}, p), S))
     assert(toBasis(S_{5,3,2}*S_{4,3,1}*h_1, S) == toBasis(toBasis(S_{5,3,2}*S_{4,3,1}*h_1, p), S))
     assert(toBasis(S_{3,2}*h_{3,2}, S) == toBasis(toBasis(S_{3,2}*h_{3,2}, p), S))
@@ -731,6 +990,10 @@ TEST ///
     assert(toS(S_{1,3}*e_2) == toBasis(toP(S_{1,3}*e_2), S))
     assert(multiplyToS(S_2*h_2*e_1, p_2) == toS(S_2*h_2*e_1*p_2))
     assert(multiplyToBasis(m_2, p_1, m) == toBasis(m_2*p_1, m))
+///
+
+TEST ///
+    R0 = symmetricRing QQ
     assert(S_{3,1}@S_2 == toS plethysm(S_{3,1}, S_2))
     assert(S_{3,1}@S_{2,1} == toS plethysm(S_{3,1}, S_{2,1}))
     assert(toS(S_{3,1}*p_2) == toBasis(toP(S_{3,1}*p_2), S))
@@ -746,6 +1009,10 @@ TEST ///
     assert(toBasis(S_{3,2}*h_2*e_1*p_3, S) == toS(S_{3,2}*h_2*e_1*p_3))
     assert(toBasis(S_{3,1}*S_{{4,2}, {1}}, S) == toS(S_{3,1}*S_{{4,2}, {1}}))
     assert(toBasis(S_{{4,2}, {1}}*S_{{3,1}, {1}}, S) == toS(S_{{4,2}, {1}}*S_{{3,1}, {1}}))
+///
+
+TEST ///
+    R0 = symmetricRing QQ
     assert(toBasis(h_{3,2}*h_{4,1}, h) == h_{4,3,2,1})
     assert(toBasis(p_{3,2}*p_{4,1}, p) == p_{4,3,2,1})
     assert(toBasis(S_2*h_1, h) == h_{2,1})
@@ -782,4 +1049,119 @@ TEST ///
     assert try (e_{{2,1}, {1}}; false) else true
     assert try (m_{{2,1}, {1}}; false) else true
     assert try (ff_{{2,1}, {1}}; false) else true
+///
+
+TEST ///
+    -- Exercise the automatic p -> S crossover tree on dense, sparse, and
+    -- nonhomogeneous inputs. The explicit p -> h -> S computations are an
+    -- independent oracle for the selected abacus and complete routes.
+    R0 = symmetricRing QQ
+    partitions14 = partitions 14
+    dense14 = sum(partitions14, mu -> p_(toList mu))
+    largeCycleSupport = sum(take(partitions14, 64), mu -> p_(toList mu))
+    smallCycleSupport = sum(take(partitions 16, -16), mu -> p_(toList mu))
+    assert(toS dense14 == toBasis(toBasis(dense14, h), S))
+    assert(toS largeCycleSupport == toBasis(toBasis(largeCycleSupport, h), S))
+    assert(toS smallCycleSupport == toBasis(toBasis(smallCycleSupport, h), S))
+    assert(toS(dense14 + p_5) == toS(dense14) + toS(p_5))
+///
+
+TEST ///
+    -- Combinatorial tags are attached by semantic product/plethysm pipelines,
+    -- combined by addition, and preserved by representation changes.
+    R0 = symmetricRing QQ
+    lrPowerSums = toBasis(S_{4,2}*S_{3,1}, p)
+    horizontalPowerSums = toBasis(S_{4,2}*h_3, p)
+    verticalPowerSums = toBasis(S_{4,2}*e_3, p)
+    borderPowerSums = toBasis(S_{4,2}*p_3, p)
+    plethysmPowerSums = plethysm(S_3, S_2)
+    plethysmProductPowerSums = toBasis(plethysmPowerSums*S_1, p)
+    assert(toS lrPowerSums == toS(S_{4,2}*S_{3,1}))
+    assert(toS horizontalPowerSums == toS(S_{4,2}*h_3))
+    assert(toS verticalPowerSums == toS(S_{4,2}*e_3))
+    assert(toS borderPowerSums == toS(S_{4,2}*p_3))
+    assert(toS plethysmProductPowerSums == toS(plethysmPowerSums*S_1))
+    assert(toS(lrPowerSums + plethysmPowerSums) ==
+           toS(lrPowerSums) + toS(plethysmPowerSums))
+    assert(toS(multiplyToBasis(S_{4,2}, S_{3,1}, p)) ==
+           toS(S_{4,2}*S_{3,1}))
+
+    lrLarge = toBasis(S_{6,3}*S_{5,4}, p)
+    assert(toS lrLarge == toS(S_{6,3}*S_{5,4}))
+
+    largePlethysm = plethysm(S_5, S_2)
+    largePlethysmProductPowerSums = toBasis(largePlethysm*S_5, p)
+    assert(toS largePlethysmProductPowerSums == toS(largePlethysm*S_5))
+
+    -- Combined Schur plethysm preserves its operands across the determinant
+    -- crossover: three-row outer shapes may use Adams/Jacobi-Trudi, while
+    -- four-row shapes materialize in p and use the shared dispatcher.
+    assert(S_{4,2,1}@S_2 == toS plethysm(S_{4,2,1}, S_2))
+    assert(S_{3,2,1,1}@S_2 == toS plethysm(S_{3,2,1,1}, S_2))
+
+    -- The four degree-one bases represent the same multiplier but attach
+    -- different dominant product tags. Their p -> S results must agree.
+    sparsePlethysm = plethysm(S_{3,1}, S_{2,1})
+    assert(toS(toBasis(sparsePlethysm*S_1, p)) ==
+           toS(toBasis(sparsePlethysm*h_1, p)))
+    assert(toS(toBasis(sparsePlethysm*S_1, p)) ==
+           toS(toBasis(sparsePlethysm*e_1, p)))
+    assert(toS(toBasis(sparsePlethysm*S_1, p)) ==
+           toS(toBasis(sparsePlethysm*p_1, p)))
+
+    highCycleSupport = sum(take(partitions 18, 100),
+        mu -> p_(toList mu))
+    lowCycleSupport = sum(take(partitions 18, -100),
+        mu -> p_(toList mu))
+    assert(toS(toBasis(highCycleSupport*p_1, p)) ==
+           toS(toBasis(highCycleSupport*h_1, p)))
+    assert(toS(toBasis(lowCycleSupport*p_1, p)) ==
+           toS(toBasis(lowCycleSupport*h_1, p)))
+
+    sparseLR = toBasis(S_{4,3,2,1}*S_{4,3,2,1}, p)
+    assert(toS sparseLR == toS(S_{4,3,2,1}*S_{4,3,2,1}))
+///
+
+TEST ///
+    -- Moderately supported constant p-expansions may convert to Schur in the
+    -- cached QQ shadow, while nonconstant coefficients fall back natively.
+    A = frac(QQ[t])
+    R0 = symmetricRing A
+    shadowPlethysm = plethysm(S_{3,1}, S_{2,1})
+    shadowInput = toBasis(shadowPlethysm*S_1, p)
+    assert(toS shadowInput == toBasis(toBasis(shadowInput, h), S))
+
+    nonconstantInput = sum(take(partitions 10, 8),
+        mu -> t*p_(toList mu))
+    assert(toS nonconstantInput ==
+           toBasis(toBasis(nonconstantInput, h), S))
+///
+
+TEST ///
+    -- Public QQ-shadow helpers lift atomically, honor a disabled attempt, and
+    -- return algorithm results to the caller's original symmetric ring.
+    A = frac(QQ[t])
+    R0 = symmetricRing A
+    constantInput = promote(1/2, A)*p_2 + p_{1,1}
+    constantQQ = toConstantQQIfPossible constantInput
+    assert(coefficientRing constantQQ === QQ)
+    assert(returnFromConstantQQ(constantQQ, R0) == constantInput)
+
+    parameterInput = t*p_2
+    assert(ring toConstantQQIfPossible(parameterInput) === R0)
+    assert(ring toConstantQQIfPossible(constantInput, false) === R0)
+    atomicInputs = toConstantQQIfPossible {constantInput, parameterInput}
+    assert(all(atomicInputs, F -> ring F === R0))
+
+    shadowResult = withConstantQQIfPossible(
+        constantInput,
+        true,
+        (Rwork, Fwork) -> toBasis(Fwork, basis(Rwork, "S")))
+    assert(ring shadowResult === R0)
+    assert(shadowResult == toS constantInput)
+    nativeResult = withConstantQQIfPossible(
+        constantInput,
+        false,
+        (Rwork, Fwork) -> Fwork)
+    assert(ring nativeResult === R0)
 ///

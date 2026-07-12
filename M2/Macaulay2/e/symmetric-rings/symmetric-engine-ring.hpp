@@ -23,9 +23,35 @@ class SymmetricEngineRing : public Ring
 {
 
  private:
+  enum class BasisKind
+  {
+    Custom = 0,
+    PowerSum,
+    Complete,
+    Elementary,
+    Monomial,
+    Forgotten,
+    Schur,
+    SchurOmega,
+    HallLittlewoodQGenerator,
+    HallLittlewoodBGenerator,
+    HallLittlewoodQ,
+    HallLittlewoodB,
+    HallLittlewoodP,
+    HallLittlewoodPOmega
+  };
+
   struct SchurCompatibleFactor
   {
-    enum Kind { General, Horizontal, Vertical, PowerSum, SchurExpansion };
+    enum Kind
+    {
+      General,
+      Horizontal,
+      Vertical,
+      PowerSum,
+      PowerSumAbacus,
+      SchurExpansion
+    };
     Kind kind;
     Partition index;
     CoeffMap expansion;
@@ -38,6 +64,7 @@ class SymmetricEngineRing : public Ring
     ViaHorizontalPieri,
     ViaVerticalPieri,
     ViaBorderStrips,
+    ViaAbacusRimHooks,
     ViaLittlewoodRichardsonExpansion
   };
   enum class ProductToTargetRoute
@@ -64,21 +91,24 @@ class SymmetricEngineRing : public Ring
     ViaElementaryClassicalFormula,
     ViaHallLittlewoodGeneratorClassicalFormula,
     ViaSchurCharacters,
-    ViaOmegaSchurCharacters,
+    ViaSchurOmegaCharacters,
     ViaMonomialTransition,
     ViaForgottenTransition,
     ViaHallLittlewoodRaisingOperators,
     ViaHallLittlewoodCapitalNormalization,
     ViaSkewSchurJacobiTrudiComplete,
-    ViaSkewOmegaSchurJacobiTrudiElementary,
+    ViaSkewSchurOmegaJacobiTrudiElementary,
     ViaSkewHallLittlewood,
     NoApplicableRoute
   };
 
   const Ring *coefficientRing;
   mutable std::map<int, std::string> basisDisplays;
+  mutable std::map<int, std::string> basisKeys;
   mutable std::map<int, int> basisOrders;
   mutable std::map<int, bool> multiplicativeBases;
+  mutable std::map<int, BasisKind> basisKinds;
+  mutable std::map<BasisKind, int> basisIdsByKind;
   mutable int powerSumBasisId = -1;
   mutable GCMap<int, ring_elem> completeToPowerSumsCache;
   mutable GCMap<int, ring_elem> elementaryToPowerSumsCache;
@@ -111,6 +141,8 @@ class SymmetricEngineRing : public Ring
   mutable std::map<std::pair<Partition, Partition>, long> kostkaNumberCache;
   mutable std::map<std::pair<Partition, int>, std::vector<LRProductTerm>>
       schurTimesPowerSumViaBorderStripsCache;
+  mutable std::map<std::pair<Partition, int>, std::vector<LRProductTerm>>
+      schurTimesPowerSumViaAbacusRimHooksCache;
   mutable std::map<std::pair<Partition, Partition>, std::vector<LRProductTerm>>
       monomialProductViaExponentSplittingsCache;
   mutable GCMap<long, ring_elem> smallIntegerCoeffCache;
@@ -126,14 +158,19 @@ class SymmetricEngineRing : public Ring
 
   bool isMultiplicativeBasis(int basisId) const;
   bool isPowerSumBasis(int basisId) const;
-  bool isForgottenDisplay(const std::string& display) const;
+  BasisKind basisKindForId(int basisId) const;
+  BasisKind basisKindFromCanonicalKey(const std::string& key) const;
+  bool hasBasisKind(int basisId, BasisKind kind) const;
+  int basisIdForKind(BasisKind kind) const;
+  int requiredBasisIdForKind(BasisKind kind) const;
+  const char *basisKindName(BasisKind kind) const;
   void rememberBasis(int basisId,
                        const std::string& display,
                        int order,
                        bool isMultiplicative) const;
   void rememberBasesFrom(const SymmetricEngineRing *R) const;
   std::string displayForBasis(int basisId) const;
-  int basisIdForDisplay(const std::string& display) const;
+  std::string basisKeyForId(int basisId) const;
   int basisOrderForId(int basisId) const;
   const CharacterTable& characterTable(int degree) const;
   int characterTableValue(const CharacterTable& table, size_t row, size_t col) const;
@@ -202,6 +239,7 @@ class SymmetricEngineRing : public Ring
   static SymmetricEngineRing *create(const Ring *A);
   const Ring *getCoefficientRing() const;
   void rememberBasisMetadata(int basisId,
+                               const std::string& canonicalBasisKey,
                                const std::string& display,
                                int order,
                                bool isMultiplicative) const;
@@ -218,6 +256,10 @@ class SymmetricEngineRing : public Ring
   std::string displayIndex(const SymmetricMonomial& monomial, size_t pos) const;
   std::string displayBasisElement(const SymmetricMonomial& monomial, size_t pos) const;
   std::string displayMonomial(const SymmetricMonomial& monomial) const;
+  int compareBasisIdsForPresentation(int aBasis, int bBasis) const;
+  std::vector<size_t> presentationAtomPositions(const SymmetricMonomial& monomial) const;
+  std::vector<int> presentationMonomialData(const SymmetricMonomial& monomial) const;
+  std::vector<size_t> presentationTermOrder(ring_elem f) const;
   std::string elementString(ring_elem f, int maxTerms = -1) const;
   int elementWeight(ring_elem f) const;
   virtual unsigned int computeHashValue(const ring_elem a) const;

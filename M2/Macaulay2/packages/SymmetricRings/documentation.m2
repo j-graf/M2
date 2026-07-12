@@ -13,9 +13,10 @@ doc ///
     This package constructs rings of symmetric functions whose elements may be
     written as linear combinations of products of functions from several named
     bases.  The built-in bases include the power sums p, complete homogeneous
-    functions h, elementary functions e, Schur functions S, omega-Schur
-    functions Somega, monomial functions m, forgotten functions ff, and
-    Hall-Littlewood bases q, b, Q, B, P, and R.
+    functions h, elementary functions e, Schur functions S, the Schur Omega
+    basis (default symbol Somega), monomial functions m, forgotten functions
+    ff, and Hall-Littlewood bases q, b, Q, B, P, and Hall-Littlewood P Omega
+    (default symbol Pomega).
    Text
     This package has two unique features. First, the ring is mixed-basis:
     An expression such as $S_{3,1,2}h_5+e_2$ is a formal sum of terms in different
@@ -44,6 +45,8 @@ doc ///
    plethysm
    toBasis
    multiplyToBasis
+   toConstantQQIfPossible
+   withConstantQQIfPossible
 
  Node
   Key
@@ -189,7 +192,8 @@ doc ///
     @TO "symmetricRing(...,\"MacdonaldParameters\"=>...)"@ records a pair of
     Macdonald parameters.  The option
     @TO "symmetricRing(...,\"NormalizeSomega\"=>...)"@ controls whether
-    Somega basis elements are immediately rewritten as Schur functions.
+    Schur Omega (@TT "Somega"@) basis elements are immediately rewritten as
+    Schur functions.
    Example
     A = QQ[t,q]
     R = symmetricRing(A, "HallLittlewoodParameter" => t,
@@ -199,15 +203,32 @@ doc ///
     R#"MacdonaldParameters"
     Somega_2
    Text
-    With the default normalization, Somega is mainly an auxiliary basis used to
+    With the default normalization, the Schur Omega basis Somega is mainly an auxiliary basis used to
     describe omega images.  The function @TO omegaInvolution@ has its own
     "useSomega" option: when false, Schur functions remain in the ordinary
-    Schur basis; when true, the image may be displayed in the Somega basis.
+    Schur basis; when true, the image may be displayed in the Schur Omega
+    basis Somega.
    Example
     A = QQ
     R = symmetricRing A
     omegaInvolution S_2
     omegaInvolution(S_2, "useSomega" => true)
+   Text
+    @SUBSECTION "Basis identity and display symbols"@
+   Text
+    Every basis has a stable registry key and numeric id.  The
+    @TT "BasisSymbols"@ option changes only the public symbol installed on a
+    particular ring.  Conversion, multiplication, omega, and inner-product
+    routing continue to use the stable basis identity, so renamed built-in
+    bases retain the same mathematics.  Stable keys such as @TT "Schur"@ and
+    the ring-local symbols may both be passed to @TO basis@ and @TO toBasis@.
+   Example
+    A = QQ
+    R = symmetricRing(A, "BasisSymbols" => hashTable {
+        "PowerSum" => "pp", "Complete" => "hh", "Schur" => "ss"})
+    toBasis(pp_2, "hh")
+    toBasis(pp_2, "ss")
+    (basis "ss")#"BasisKey"
    Text
     @SUBSECTION "Specialization options"@
    Text
@@ -335,9 +356,21 @@ doc ///
     ring f
     terms(S_{2,1}*e_2 - 3*p_5)
    Text
-    The function @TO terms@ returns the summands of a symmetric function.  The
-    function @TO rawTerms@ returns the coefficient and basis-factor data for
-    each summand.
+    The function @TO terms@ returns the summands in canonical presentation
+    order. Terms first use decreasing weight, then the highest-priority basis
+    family they contain, where larger @TT "DisplayOrder"@ means higher
+    priority. Terms involving fewer distinct basis families come first when
+    their highest-priority family agrees; complete basis signatures and factor
+    indices break subsequent ties. Partitions are compared lexicographically
+    from largest to smallest. Factors use the same basis priority as sums, so
+    if @TT "u"@ precedes @TT "v"@, both @TT "u+v"@ and @TT "u*v"@ display
+    @TT "u"@ first. The function @TO rawTerms@ returns coefficient and
+    basis-factor data in the engine's internal storage order.
+   Text
+    The default built-in priority is
+    @TT "Q > B > P > Pomega > q > b > S > Somega > h > e > p > m > ff"@.
+    User-defined bases have default @TT "DisplayOrder"@ 100 and therefore
+    precede the built-ins unless their metadata specifies another value.
    Example
     A = QQ
     R = symmetricRing A
@@ -535,8 +568,10 @@ doc ///
    Text
     The expression symmetricRing A creates the @TO SymmetricRing@ of symmetric
     functions over A and makes the standard bases p, h, e, m, ff, S, Somega, q,
-    b, Q, B, P, and R available in that ring.  By default, Somega basis
-    elements are immediately rewritten as ordinary Schur functions, so this
+    b, Q, B, P, and Pomega available in that ring.  Here Somega is the default
+    symbol for Schur Omega, and Pomega is the default symbol for
+    Hall-Littlewood P Omega. By default, elements in the Schur Omega basis
+    Somega are immediately rewritten as ordinary Schur functions, so this
     auxiliary basis should not appear in ordinary output.
    Text
     If the coefficient ring has a generator named t, then t is used as the
@@ -552,7 +587,7 @@ doc ///
    Text
     If the coefficient ring has a variable named t, it is used as the
     Hall-Littlewood parameter.  This parameter appears in conversions involving
-    q, b, Q, B, P, and R; see also @TO toBasis@.
+    q, b, Q, B, P, and Pomega; see also @TO toBasis@.
    Example
     A = QQ[t]
     R = symmetricRing A
@@ -590,6 +625,14 @@ doc ///
     such as "(1-t)*X" or "((1-t)/(1-q))*X"; the package parses it in a hidden
     one-variable ring over the coefficient ring and interprets X as the ambient
     alphabet.
+   Text
+    The first argument is the initial display symbol, not the mathematical
+    identity of the basis.  Set "BasisKey" to a stable name when that identity
+    should remain independent of the symbol.  A later ring may then choose any
+    notation with @TT "BasisSymbols"@, keyed by that stable name.  Internal
+    source, output, omega, duality, and specialization metadata stores basis
+    keys rather than display symbols.  Companion hash-table entries may likewise
+    provide separate "BasisSymbol" and "BasisKey" values.
    Text
     For example, "TermTransform" may be a @TO raisingOperator@ object, or a
     callback returning one.  The operator is applied to each source term after
@@ -755,9 +798,11 @@ doc ///
   Description
    Text
     This returns the data attached to a @TO SymmetricBasis@.  It describes the
-    basis symbol, display order, index conventions, and optional mathematical
-    structures such as omega partners, power-sum conversion, transformed-basis
-    data, and diagonal @TO hallInnerProduct@ pairings.
+    stable @TT "BasisKey"@, current @TT "BasisSymbol"@, display order, index
+    conventions, and optional mathematical structures such as omega partners,
+    power-sum conversion, transformed-basis data, and diagonal
+    @TO hallInnerProduct@ pairings. The key and numeric basis id determine
+    mathematical identity; a ring-local symbol controls notation only.
    Text
     For transformed bases, the key "TransformedBasisData" gives a compact
     summary of the source basis, alphabet, summation policy, output basis,
@@ -937,7 +982,7 @@ doc ///
     toBasis(toBasis(p_2, q), p)
     toBasis(Q_{2,1}, q)
    Text
-    Skew Schur and Somega functions are converted using the corresponding
+    Skew Schur and Schur Omega (Somega) functions are converted using the corresponding
     Jacobi-Trudi determinant.
    Example
     A = QQ
@@ -964,6 +1009,106 @@ doc ///
     R = symmetricRing A
     multiplyToBasis(S_2, e_1, S)
     multiplyToBasis(Q_2, Q_1, Q)
+
+ Node
+  Key
+   toConstantQQIfPossible
+   (toConstantQQIfPossible,SymmetricRingElement)
+   (toConstantQQIfPossible,SymmetricRingElement,Boolean)
+   (toConstantQQIfPossible,List)
+   (toConstantQQIfPossible,List,Boolean)
+  Headline
+   use a cached QQ shadow when all coefficients are rational constants
+  Usage
+   toConstantQQIfPossible F
+   toConstantQQIfPossible(F,tryQQ)
+   toConstantQQIfPossible inputs
+   toConstantQQIfPossible(inputs,tryQQ)
+  Description
+   Text
+    This operation returns F in the cached symmetric ring over QQ when all
+    coefficients and basis atoms can be lifted. If lifting is unavailable, or
+    if tryQQ is false, it returns F unchanged in its original ring. For a list,
+    lifting is all-or-none: either every input moves to the same QQ shadow or
+    every original input is returned.
+   Text
+    Algorithms should select working-ring bases by stable key, for example
+    @TT "basis(Rwork,\"S\")"@, rather than reusing an indexed basis table belonging
+    to the original ring.
+   Example
+    A = frac(QQ[t])
+    R = symmetricRing A
+    F = promote(1/2,A)*p_2 + p_{1,1}
+    Fqq = toConstantQQIfPossible F
+    coefficientRing Fqq
+    ring toConstantQQIfPossible(t*p_2)
+    ring toConstantQQIfPossible(F,false)
+  SeeAlso
+   returnFromConstantQQ
+   withConstantQQIfPossible
+
+ Node
+  Key
+   returnFromConstantQQ
+   (returnFromConstantQQ,SymmetricRingElement,SymmetricRing)
+  Headline
+   return a QQ-shadow result to its original symmetric ring
+  Usage
+   returnFromConstantQQ(Fwork,R)
+  Description
+   Text
+    If Fwork already belongs to R, it is returned unchanged. Otherwise Fwork
+    must belong to the cached QQ shadow corresponding to R, and its collected
+    result is promoted back to R. Elements from unrelated symmetric rings are
+    rejected.
+   Example
+    A = frac(QQ[t])
+    R = symmetricRing A
+    F = promote(1/3,A)*p_3
+    Fqq = toConstantQQIfPossible F
+    G = returnFromConstantQQ(Fqq,R)
+    ring G
+    G == F
+  SeeAlso
+   toConstantQQIfPossible
+   withConstantQQIfPossible
+
+ Node
+  Key
+   withConstantQQIfPossible
+   (withConstantQQIfPossible,SymmetricRingElement,Function)
+   (withConstantQQIfPossible,SymmetricRingElement,Boolean,Function)
+   (withConstantQQIfPossible,List,Function)
+   (withConstantQQIfPossible,List,Boolean,Function)
+  Headline
+   run an algorithm conditionally in the cached QQ shadow
+  Usage
+   withConstantQQIfPossible(F,tryQQ,compute)
+   withConstantQQIfPossible(inputs,tryQQ,compute)
+  Description
+   Text
+    The Boolean tryQQ is an algorithm-specific eligibility decision, such as a
+    support-size crossover. When it is true, all inputs are lifted to the QQ
+    shadow if possible; otherwise the original inputs are used. The callback
+    is then invoked exactly once and its symmetric-function result is always
+    returned over the original ring.
+   Text
+    For one input, compute receives (Rwork,Fwork). For a list, it receives
+    (Rwork,inputsWork). The working ring is supplied so the callback can look up
+    target bases by stable key.
+   Example
+    A = frac(QQ[t])
+    R = symmetricRing A
+    F = promote(1/2,A)*p_2 + p_{1,1}
+    G = withConstantQQIfPossible(F,true,(Rwork,Fwork) ->
+        toBasis(Fwork,basis(Rwork,"S")))
+    ring G
+    G == toS F
+    H = withConstantQQIfPossible(F,false,(Rwork,Fwork) -> Fwork)
+    ring H
+  SeeAlso
+   toConstantQQIfPossible
+   returnFromConstantQQ
 
  Node
   Key
@@ -1028,7 +1173,8 @@ doc ///
     The function specializeParameters applies a parameter substitution to the
     coefficients of f and also applies known basis specializations.  For
     example, at the Hall-Littlewood specialization t=0 the Q and P bases
-    specialize to Schur functions, B and R specialize to Somega functions, q
+    specialize to Schur functions, while B and the Hall-Littlewood P Omega
+    basis Pomega specialize to Schur Omega functions (default symbol Somega), q
     specializes to h, and b specializes to e.  Thus
     $Q_\lambda(x;0)=s_\lambda(x)$ and $q_\lambda(x;0)=h_\lambda(x)$.
    Text
@@ -1137,7 +1283,7 @@ doc ///
    Text
     By default, omega sends Schur functions back to ordinary Schur functions:
     $\omega(s_\lambda)=s_{\lambda'}$ for partitions lambda.  With "useSomega" set
-    to true, Schur functions are sent to the formal Somega basis.
+    to true, Schur functions are sent to the formal Schur Omega basis Somega.
    Example
     A = QQ
     R = symmetricRing A
@@ -1145,7 +1291,7 @@ doc ///
     omegaInvolution(S_{2,1,1})
    Text
     With the useSomega option, the image of a Schur function is kept in the
-    formal Somega basis.  Composition-indexed Schur functions are straightened
+    formal Schur Omega basis Somega.  Composition-indexed Schur functions are straightened
     before applying the partition-conjugation rule.
    Example
     A = QQ
@@ -1329,7 +1475,8 @@ doc ///
     and a list of basis factors, where every basis factor records its basis id,
     outer index, and optional inner index for skew shapes.  This is mainly an
     inspection tool for debugging, tests, and user-defined conversion formulas.
-    For ordinary mathematical use, @TO terms@ returns the summands themselves.
+    Its order is an internal implementation detail.  For ordinary mathematical
+    use, @TO terms@ returns the summands themselves in presentation order.
    Example
     A = QQ
     R = symmetricRing A
@@ -1353,7 +1500,7 @@ doc ///
     symmetric functions.
    Text
     "HallLittlewoodParameter" => null sets the parameter used by the
-    Hall-Littlewood bases q, b, Q, B, P, and R.  If omitted, a coefficient-ring
+    Hall-Littlewood bases q, b, Q, B, P, and Pomega.  If omitted, a coefficient-ring
     generator named t is used when present.
    Text
     "MacdonaldParameters" => {} specifies a parameter pair, usually {t,q}.  If
@@ -1363,7 +1510,21 @@ doc ///
     "DefaultSeriesVariables" => {} specifies default variables for future
     symmetric-function series constructions.
    Text
-    "NormalizeSomega" => true controls whether Somega basis elements are
+    "BasisSymbols" => hashTable {} assigns ring-local public symbols to bases.
+    Keys are stable basis keys and values are the desired symbols; for example,
+    hashTable {"PowerSum" => "pp", "Schur" => "ss",
+    "HallLittlewoodPOmega" => "Pw"}.  This option
+    changes input and output notation only.  Basis conversion and other
+    mathematical dispatch continue to use stable basis ids and kinds.
+   Example
+    A = frac(QQ[t])
+    R = symmetricRing(A, "BasisSymbols" => hashTable {
+        "PowerSum" => "pp", "Schur" => "ss",
+        "HallLittlewoodPOmega" => "Pw"})
+    toBasis(pp_2, "ss")
+    toBasis(Pw_2, "pp")
+   Text
+    "NormalizeSomega" => true controls whether Schur Omega (Somega) basis elements are
     automatically rewritten as ordinary Schur functions.
    Text
     The resulting ring remembers these choices; for example, they can be
@@ -1389,7 +1550,7 @@ doc ///
     R#"DefaultSeriesVariables"
    Text
     By default, NormalizeSomega is true.  For example, Somega_3 is displayed as
-    S_{1,1,1}.  Set "NormalizeSomega" to false to keep Somega as a visible
+    S_{1,1,1}.  Set "NormalizeSomega" to false to keep the Schur Omega basis Somega as a visible
     auxiliary basis.
    Example
     A = QQ
@@ -1410,10 +1571,15 @@ doc ///
   Description
    Text
     This returns the @TO SymmetricBasis@ corresponding to a named basis in the
-    current symmetric function ring.
+    current symmetric function ring. A ring-local public symbol or the stable
+    basis key may be used. The returned record distinguishes its stable
+    @TT "BasisKey"@ from its ring-local @TT "BasisSymbol"@.
    Example
     A = QQ
     R = symmetricRing A
     basis "S"
     basis symbol h
+    R1 = symmetricRing(QQ, "BasisSymbols" => hashTable {"Schur" => "ss"})
+    (basis "ss")#"BasisKey"
+    (basis "S")#"BasisSymbol"
 ///

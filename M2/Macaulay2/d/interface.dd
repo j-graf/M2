@@ -136,30 +136,33 @@ setupfun("rawSymmetricRingsSetHallLittlewoodParameter", rawSymmetricRingsSetHall
 export rawSymmetricRingsRememberBasis(e:Expr):Expr := (
      when e
      is s:Sequence do (
-	  if length(s) != 5 then return WrongNumArgs(5);
+	  if length(s) != 6 then return WrongNumArgs(6);
 	  when s.0
 	  is R:RawRingCell do (
 	       when s.1
 	       is basisId:ZZcell do (
 		    if !isInt(basisId) then return WrongArgSmallInteger(2);
 		    when s.2
-		    is displaySymbol:stringCell do (
+		    is canonicalBasisKey:stringCell do (
 			 when s.3
+		    is displaySymbol:stringCell do (
+			 when s.4
 			 is displayOrder:ZZcell do (
-			      if !isInt(displayOrder) then return WrongArgSmallInteger(4);
-			      when s.4
+			      if !isInt(displayOrder) then return WrongArgSmallInteger(5);
+			      when s.5
 			      is isMultiplicative:Boolean do (
 				   toExpr(Ccode(bool,
 					"rawSymmetricRingsRememberBasis(",
 					R.p, ", ", toInt(basisId), ", ",
-					displaySymbol.v, ", ", toInt(displayOrder),
-					", ", toBoolean(s.4), ")")))
-			      else WrongArg(5, "a Boolean"))
-			 else WrongArgZZ(4))
+					canonicalBasisKey.v, ", ", displaySymbol.v, ", ",
+					toInt(displayOrder), ", ", toBoolean(s.5), ")")))
+			      else WrongArg(6, "a Boolean"))
+			 else WrongArgZZ(5))
+		    else WrongArgString(4))
 		    else WrongArgString(3))
 	       else WrongArgZZ(2))
 	  else WrongArg(1, "a raw ring"))
-     else WrongNumArgs(5));
+	     else WrongNumArgs(6));
 setupfun("rawSymmetricRingsRememberBasis", rawSymmetricRingsRememberBasis);
 
 export rawSymmetricRingsBasisElement(e:Expr):Expr := (
@@ -620,6 +623,40 @@ export rawSymmetricRingsTermMonomial(e:Expr):Expr := (
 	  else WrongArg(1, "a raw ring element"))
      else WrongNumArgs(2));
 setupfun("rawSymmetricRingsTermMonomial", rawSymmetricRingsTermMonomial);
+
+export rawSymmetricRingsPresentationTermIndices(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 2 then return WrongNumArgs(2);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is maxTerms:ZZcell do (
+		    if !isInt(maxTerms) then return WrongArgSmallInteger(2);
+		    toExpr(Ccode(array(int),
+			 "rawSymmetricRingsPresentationTermIndices(",
+			 f.p, ", ", toInt(maxTerms), ")")))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(2));
+setupfun("rawSymmetricRingsPresentationTermIndices", rawSymmetricRingsPresentationTermIndices);
+
+export rawSymmetricRingsPresentationTermMonomial(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 2 then return WrongNumArgs(2);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is i:ZZcell do (
+		    if !isInt(i) then return WrongArgSmallInteger(2);
+		    toExpr(Ccode(array(int),
+			 "rawSymmetricRingsPresentationTermMonomial(",
+			 f.p, ", ", toInt(i), ")")))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(2));
+setupfun("rawSymmetricRingsPresentationTermMonomial", rawSymmetricRingsPresentationTermMonomial);
 
 export rawSymmetricRingsElementToString(e:Expr):Expr := (
      when e

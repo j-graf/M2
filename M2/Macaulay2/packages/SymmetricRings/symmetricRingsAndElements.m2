@@ -21,7 +21,7 @@ newSymmetricEngineRing = Rraw -> (
 -- but ordinary construction should preserve user-chosen BasisSymbols.
 rememberBasisInEngine = (R0, B0) -> (
     B := basisOnRing(B0, R0);
-    rawSymmetricRingsRememberBasis(raw R0, B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex");
+    rawSymmetricRingsRememberBasis(raw R0, B#"BasisId", basisKey B, B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex");
     )
 
 -- Tests whether a basis should be present over a particular coefficient ring.
@@ -47,8 +47,8 @@ rememberRingBasisData = R0 -> scan(R0#"Bases", B0 -> rememberBasisInEngine(R0, B
 -- Each entry is source id, target id, target display order, and target
 -- multiplicativity. The engine only sees ids and display metadata, so missing
 -- or unavailable omega partners must be filtered out before this map is built.
-omegaMapData = R0 -> flatten apply(select(R0#"Bases", B0 -> omegaPartnerSymbol B0 =!= null), B0 -> (
-        target := basis(R0, omegaPartnerSymbol B0);
+omegaMapData = R0 -> flatten apply(select(R0#"Bases", B0 -> omegaPartnerKey B0 =!= null), B0 -> (
+        target := basis(R0, omegaPartnerKey B0);
         {B0#"BasisId", target#"BasisId", target#"DisplayOrder", if target#"MultiplicativeIndex" then 1 else 0}
         ))
 
@@ -115,14 +115,14 @@ inferMacdonaldParameters = A -> (
 basisSymbolForRing = (R0, B0) -> (
     key := basisKey B0;
     if R0#?"BasisKeyToSymbol" and (R0#"BasisKeyToSymbol")#?key then (R0#"BasisKeyToSymbol")#key
-    else basisDefaultSymbol B0
+    else registeredBasisSymbol B0
     )
 
 -- Adds one basis to the ring-level key/symbol maps.
 registerBasisSymbolOnRing = (R0, B0) -> (
     key := basisKey B0;
     symbolOptions := if R0#?"BasisSymbolOptions" then R0#"BasisSymbolOptions" else hashTable {};
-    symbolString := if symbolOptions#?key then toString symbolOptions#key else basisDefaultSymbol B0;
+    symbolString := if symbolOptions#?key then toString symbolOptions#key else registeredBasisSymbol B0;
     if not R0#?"BasisKeyToSymbol" then R0#"BasisKeyToSymbol" = new MutableHashTable;
     if not R0#?"BasisSymbolToKey" then R0#"BasisSymbolToKey" = new MutableHashTable;
     if (R0#"BasisSymbolToKey")#?symbolString and (R0#"BasisSymbolToKey")#symbolString =!= key then
@@ -141,7 +141,6 @@ initializeBasisSymbolMaps = (R0, symbolOptions) -> (
     R0#"BasisKeyToSymbol" = new MutableHashTable;
     R0#"BasisSymbolToKey" = new MutableHashTable;
     scan(availableSymmetricBases, B0 -> registerBasisSymbolOnRing(R0, B0));
-    R0#"UsesDefaultBasisSymbols" = all(R0#"Bases", B0 -> basisSymbolForRing(R0, B0) == basisDefaultSymbol B0);
     )
 
 -- Constructs a symmetric function ring and installs its available bases.
@@ -319,7 +318,7 @@ omegaPartners = args -> (
     R0 := L#0;
     H := new MutableHashTable;
     scan(R0#"Bases", B0 -> (
-            omegaKey := omegaPartnerSymbol B0;
+            omegaKey := omegaPartnerKey B0;
             if omegaKey =!= null and BasisIndex#?omegaKey and ringHasBasis(R0, BasisIndex#omegaKey) then
                 H#(basisSymbolForRing(R0, B0)) = basisSymbolForRing(R0, BasisIndex#omegaKey);
             ));
@@ -362,13 +361,13 @@ compactBasisData = B -> B#"BasisSymbol" => B#"DisplayName"
 -- Chooses verbose or compact output for bases().
 basesOutput = (B, verbose) -> if verbose then B else hashTable(B / (B0 -> compactBasisData B0))
 
--- Lists bases visible to the user, hiding Somega when normalized.
+-- Lists bases visible to the user, hiding Schur Omega (Somega) when normalized.
 -- Somega remains registered internally because the engine and omega map need
--- it, but normalized rings display Schur omega images through S instead of
+-- it, but normalized rings display Schur Omega images through S instead of
 -- advertising Somega as a public basis.
 visibleBasesOnRing = R0 -> (
     B := R0#"Bases" / (B0 -> basisOnRing(B0, R0));
-    if R0#?"NormalizeSomega" and R0#"NormalizeSomega" then select(B, B0 -> basisKey B0 =!= "Somega") else B
+    if R0#?"NormalizeSomega" and R0#"NormalizeSomega" then select(B, B0 -> basisKey B0 =!= "SchurOmega") else B
     )
 
 -- Parses the "verbose" option for bases().
@@ -408,8 +407,8 @@ basisData = method()
 -- specialization, and transformed-basis registries for public inspection.
 enrichedBasisData = B -> (
     H := new MutableHashTable from pairs B;
-    omegaSymbol := omegaPartnerSymbol B;
-    if omegaSymbol =!= null then H#"Omega" = omegaSymbol;
+    omegaKey := omegaPartnerKey B;
+    if omegaKey =!= null then H#"Omega" = omegaKey;
     ipData := new MutableHashTable;
     scan(keys InnerProductPairingRegistry, contextName -> (
             rules := innerProductRules(B, contextName);
@@ -428,7 +427,7 @@ enrichedBasisData = B -> (
             "UsesMixedBases" => data#"UsesMixedBases",
             "PreservesSourceBasis" => data#"PreservesSourceBasis",
             "InverseConversionAvailable" => data#"InverseConversionAvailable",
-            "OmegaPartner" => omegaSymbol,
+            "OmegaPartner" => omegaKey,
             "InnerProductPartners" => if #keys ipData > 0 then hashTable pairs ipData else null,
             "KnownEquivalentBasis" => if data#?"KnownEquivalentBasis" then data#"KnownEquivalentBasis" else null,
             "OnEquivalentBasis" => if data#?"OnEquivalentBasis" then data#"OnEquivalentBasis" else null
@@ -487,12 +486,12 @@ rawBasisAtomElement = (R0, B, outer, inner) -> (
     new R0 from rawSymmetricRingsBasisElement(raw R0, B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex", #inner, payload)
     )
 
--- Rewrites a Somega basis element as its Schur omega image.
+-- Rewrites a Schur Omega (Somega) basis element as its Schur image.
 -- NormalizeSomega is a display/user-experience policy, not an engine basis
 -- removal. Raw Somega atoms may appear from engine calls and are rewritten here
 -- so ordinary users see the canonical Schur-style form.
 somegaAtomAsSchurElement = (R0, atom) -> (
-    Sbasis := basis(R0, "S");
+    Sbasis := basis(R0, "Schur");
     sAtom := rawBasisAtomElement(R0, Sbasis, atom#"Outer", atom#"Inner");
     new R0 from rawSymmetricRingsOmega(raw sAtom, omegaMapData R0, false)
     )
@@ -500,7 +499,7 @@ somegaAtomAsSchurElement = (R0, atom) -> (
 -- Converts decoded atom data into a user-level symmetric function.
 atomAsElement = (R0, atom) -> (
     B := basisWithId(R0, atom#"BasisId");
-    if basisKey B == "Somega" then somegaAtomAsSchurElement(R0, atom)
+    if basisKey B == "SchurOmega" then somegaAtomAsSchurElement(R0, atom)
     else rawBasisAtomElement(R0, B, atom#"Outer", atom#"Inner")
     )
 
@@ -534,7 +533,7 @@ normalizeSomegaElement = f -> (
 terms SymmetricRingElement := f -> (
     R0 := ring f;
     A := coefficientRing R0;
-    apply(rawTerms f, term -> promote(promote(term#0, A), R0) * monomialAsElement(R0, term#1))
+    apply(presentationTerms(f, null), term -> promote(promote(term#0, A), R0) * monomialAsElement(R0, term#1))
     )
 
 -- Wraps a raw engine element and applies ring-level normalizations.
@@ -681,12 +680,13 @@ termExpression = (R0, term) -> (
 -- the number of terms shown.
 symmetricElementExpression = (f, maxTerms) -> (
     R0 := ring f;
-    T := rawTerms f;
-    if #T == 0 then return expression 0;
-    displayCount := if maxTerms === null then #T else min(#T, maxTerms);
-    pieces := apply(take(T, displayCount), term -> termExpression(R0, term));
+    termCount := rawSymmetricRingsTermCount raw f;
+    if termCount == 0 then return expression 0;
+    T := presentationTerms(f, maxTerms);
+    displayCount := #T;
+    pieces := apply(T, term -> termExpression(R0, term));
     result := if #pieces == 0 then expression 0 else sum pieces;
-    if displayCount < #T then result = result + hold(toString(#T - displayCount) | " terms");
+    if displayCount < termCount then result = result + hold(toString(termCount - displayCount) | " terms");
     result
     )
 
@@ -728,16 +728,10 @@ coefficientIsFraction = c -> (
     nd#1 != 1
     )
 
--- The display pulls out a negative sign only for coefficients that are a single
--- term divided by a single term, such as -3, -t, or -1/t.
-coefficientIsSingleTermQuotient = c -> (
-    nd := coefficientNumeratorDenominator c;
-    coefficientTermCount(nd#0) == 1 and coefficientTermCount(nd#1) == 1
-    )
-
 -- Determines whether a coefficient should contribute the term's external sign.
+-- Opposite numerator/denominator leading signs are pulled out even for additive
+-- rational coefficients, preventing a graded order from displaying "+ -".
 coefficientPullsNegativeSign = c -> (
-    if not coefficientIsSingleTermQuotient c then return false;
     nd := coefficientNumeratorDenominator c;
     nNegative := coefficientScalarIsNegative coefficientLeadingScalar nd#0;
     dNegative := coefficientScalarIsNegative coefficientLeadingScalar nd#1;
@@ -789,11 +783,12 @@ joinSignedTermNets = parts -> (
 -- terms shown.
 symmetricElementNet = (f, maxTerms) -> (
     R0 := ring f;
-    T := rawTerms f;
-    if #T == 0 then return net "0";
-    displayCount := if maxTerms === null then #T else min(#T, maxTerms);
-    pieces := apply(take(T, displayCount), term -> termNetData(R0, term));
-    if displayCount < #T then pieces = append(pieces, {"+", net(toString(#T - displayCount) | " terms")});
+    termCount := rawSymmetricRingsTermCount raw f;
+    if termCount == 0 then return net "0";
+    T := presentationTerms(f, maxTerms);
+    displayCount := #T;
+    pieces := apply(T, term -> termNetData(R0, term));
+    if displayCount < termCount then pieces = append(pieces, {"+", net(toString(termCount - displayCount) | " terms")});
     joinSignedTermNets pieces
     )
 
@@ -846,6 +841,19 @@ rawTerms SymmetricRingElement := f -> (
     if n == 0 then {} else apply(toList(0..n-1), i -> {
             new A from rawSymmetricRingsTermCoefficient(raw f, i),
             decodeSymmetricMonomialData rawSymmetricRingsTermMonomial(raw f, i)
+            })
+    )
+
+-- Returns terms through the engine's presentation permutation. The engine
+-- sorts the complete view before applying maxTerms; only the selected terms
+-- are decoded here. Factor blocks arrive in decreasing DisplayOrder.
+presentationTerms = (f, maxTerms) -> (
+    A := coefficientRing ring f;
+    limit := if maxTerms === null then -1 else maxTerms;
+    indices := toList rawSymmetricRingsPresentationTermIndices(raw f, limit);
+    apply(indices, i -> {
+            new A from rawSymmetricRingsTermCoefficient(raw f, i),
+            decodeSymmetricMonomialData rawSymmetricRingsPresentationTermMonomial(raw f, i)
             })
     )
 

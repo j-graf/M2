@@ -203,7 +203,7 @@ bool SymmetricEngineRing::trySchurPlethysmToSchurViaAdamsJacobiTrudi(ring_elem f
                             int targetOrder,
                             ring_elem& result) const
 {
-    if (targetDisplay != "S") return false;
+    if (!hasBasisKind(targetBasisId, BasisKind::Schur)) return false;
     Partition outer;
     Partition inner;
     if (!singleSchurPartition(f, targetBasisId, outer)) return false;
@@ -212,6 +212,16 @@ bool SymmetricEngineRing::trySchurPlethysmToSchurViaAdamsJacobiTrudi(ring_elem f
     // The guaranteed post-plethysm power-sum pipeline is faster for one-row
     // outer input.
     if (outer.size() == 1) return false;
+    // Adams/Jacobi-Trudi grows both with the determinant dimension and with
+    // the Adams dilation supplied by the one-row inner shape. Crossover
+    // sweeps give a conservative stable region: two-row outers through inner
+    // size four, and three-row outers for inner size two. Outside that region
+    // materialization followed by the shared p -> S dispatcher avoids sharp
+    // high-inner and four-row regressions.
+    int innerPart = inner.front();
+    if (outer.size() == 2 && innerPart > 4) return false;
+    if (outer.size() == 3 && innerPart > 2) return false;
+    if (outer.size() > 3) return false;
     result = schurPlethysmToSchurViaAdamsJacobiTrudi(outer,
                                       inner,
                                       targetBasisId,
@@ -263,12 +273,14 @@ ring_elem SymmetricEngineRing::plethysm(ring_elem f,
     metadata.normalized = true;
     metadata.skewFree = true;
     metadata.collected = true;
-    metadata.origin = SymmetricConversionOrigin::Plethysm;
     int outerWeight = elementWeight(f);
     int innerWeight = elementWeight(g);
     if (outerWeight >= 0 && innerWeight >= 0)
       metadata.homogeneousWeight = outerWeight * innerWeight;
-    mutablePolyValue(result)->conversionMetadata = metadata;
+    auto *resultPoly = mutablePolyValue(result);
+    resultPoly->combinatorialTags =
+        combinatorialTagMask(CombinatorialTag::Plethysm);
+    resultPoly->conversionMetadata = metadata;
     return result;
   }
 
@@ -299,7 +311,7 @@ ring_elem SymmetricEngineRing::plethysmToBasisDispatch(ring_elem f,
     ConversionInput input{
         zero(),
         std::move(guarantees),
-        SymmetricConversionOrigin::Plethysm};
+        combinatorialTagMask(CombinatorialTag::Plethysm)};
     ConversionRequest request{
         ConversionRequestKind::PostPlethysm,
         input,

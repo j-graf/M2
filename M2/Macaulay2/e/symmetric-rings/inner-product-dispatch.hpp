@@ -89,8 +89,8 @@
     ViaDualBasisCoefficient,
     ViaSchurCompleteKostkaNumbers,
     ViaSchurElementaryConjugateKostkaNumbers,
-    ViaOmegaSchurCompleteConjugateKostkaNumbers,
-    ViaOmegaSchurElementaryKostkaNumbers,
+    ViaSchurOmegaCompleteConjugateKostkaNumbers,
+    ViaSchurOmegaElementaryKostkaNumbers,
     ViaWeightedSchurCharacters,
     ViaPowerSumDiagonalPairing,
     ViaConvertBothToPowerSums
@@ -106,7 +106,7 @@
     int coefficientBasisId = -1;
     int pairingSourceBasisId = -1;
     int pairingDualBasisId = -1;
-    int pairingKind = 0;
+    InnerProductPairingKind pairingKind = InnerProductPairingKind::Dual;
     size_t estimatedCost = 0;
     KnownState transitionCached = KnownState::Unknown;
   };

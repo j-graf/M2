@@ -58,6 +58,14 @@
           int targetBasisId,
           const std::string& targetDisplay,
           int targetDisplayOrder) const;
+  const std::vector<LRProductTerm>& schurTimesPowerSumViaAbacusRimHooks(
+          const Partition& lambda,
+          int part) const;
+  ring_elem powerSumsToSchurViaAbacusRimHooks(
+          ring_elem f,
+          int targetBasisId,
+          const std::string& targetDisplay,
+          int targetDisplayOrder) const;
 
 // ============================================================================
 // Schur Product Planning And Execution
@@ -123,7 +131,7 @@
                                                        const Partition& b) const;
   bool tryMonomialLikeBasisElementToCoeffMap(const SymmetricMonomial& monomial,
                                       size_t pos,
-                                      const std::string& targetDisplay,
+                                      int targetBasisId,
                                       CoeffMap& result) const;
   bool tryMonomialLikeMonomialToTarget(const SymmetricMonomial& monomial,
                                         int targetBasisId,

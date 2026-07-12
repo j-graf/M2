@@ -26,10 +26,13 @@
   enum class PowerSumsToTargetRoute
   {
     AlreadyInTarget,
+    ViaSchurDegreeBlocks,
     ViaSchurBorderStrips,
+    ViaSchurAbacusRimHooks,
     ViaSchurComplete,
     ViaSchurCharacters,
     ViaOmegaThenSchurBorderStrips,
+    ViaOmegaThenSchurAbacusRimHooks,
     ViaOmegaThenSchurComplete,
     ViaOmegaThenSchurCharacters,
     ViaCompleteLogarithmFormula,
@@ -78,7 +81,7 @@
     AlreadyExpandedInTarget,
     ViaPowerSumLookup,
     ViaSchurCharacters,
-    ViaOmegaSchurCharacters,
+    ViaSchurOmegaCharacters,
     ViaCompleteLogarithmFormula,
     ViaElementaryLogarithmFormula,
     ViaHallLittlewoodGeneratorLogarithmFormula,
@@ -117,7 +120,7 @@
   {
     ring_elem expression;
     ConversionGuarantees guarantees;
-    SymmetricConversionOrigin origin = SymmetricConversionOrigin::Unknown;
+    CombinatorialTags combinatorialTags = 0;
   };
 
   struct ConversionRequest
@@ -136,8 +139,8 @@
     bool targetIsMultiplicative;
     int factorCount;
     int singleBasisId;
-    std::string targetDisplay;
-    std::vector<std::string> factorDisplays;
+    BasisKind targetKind;
+    std::vector<BasisKind> factorKinds;
     bool hasSkewFactor;
   };
 
@@ -177,7 +180,8 @@
   void attachConversionGuarantees(
           ring_elem f,
           const ConversionGuarantees& guarantees,
-          SymmetricConversionOrigin origin = SymmetricConversionOrigin::Unknown) const;
+          CombinatorialTags combinatorialTags = 0) const;
+  CombinatorialTags selectMultiplicationTags(ring_elem f, ring_elem g) const;
 
 // ============================================================================
 // Top-Level Conversion Pipeline
@@ -194,6 +198,7 @@
   void traceConversionSelection(
           ConversionPipeline pipeline,
           const ConversionRequest& request,
+          int targetBasisId,
           const std::string& targetDisplay) const;
   ring_elem executeConversionPipeline(
           ConversionPipeline pipeline,
@@ -274,6 +279,13 @@
           const std::string& targetDisplay,
           int targetDisplayOrder,
           bool targetIsMultiplicative) const;
+  ring_elem powerSumsToSchurViaDegreeBlocks(
+          const ConversionInput& input,
+          int pBasisId,
+          int targetBasisId,
+          const std::string& targetDisplay,
+          int targetDisplayOrder,
+          bool targetIsMultiplicative) const;
   ring_elem powerSumsToSchurViaComplete(
           ring_elem f,
           int targetBasisId,
@@ -341,6 +353,7 @@
 
   bool canUseGroupedHallLittlewoodPipeline(
           const ConversionGuarantees& guarantees,
+          int targetBasisId,
           const std::string& targetDisplay) const;
   ring_elem runGroupedMultiplicativeTargetPipeline(
           const ConversionInput& input,
@@ -407,6 +420,7 @@
 // These workflows preserve operands supplied by products or plethysm.
 
   ring_elem runFactorizedProductPipeline(
+          const ConversionInput& requestInput,
           ring_elem f,
           ring_elem g,
           int pBasisId,

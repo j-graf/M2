@@ -30,12 +30,11 @@
                                   const std::string& targetDisplay,
                                   int targetDisplayOrder,
                                   bool targetIsMultiplicative) const;
-  int requiredBasisIdForDisplay(const std::string& display) const;
-  ring_elem basisElementForDisplay(const std::string& display,
+  ring_elem basisElementForKind(BasisKind kind,
                                        const Partition& index) const;
   ring_elem replaceSingleBasis(ring_elem f,
                                  int sourceBasisId,
-                                 const std::string& targetDisplay) const;
+                                 int targetBasisId) const;
   Partition basisElementIndex(
         const SymmetricMonomial& monomial,
         size_t pos) const;
@@ -216,12 +215,12 @@
   ring_elem skewQOrBFunction(const Partition& lambda,
                                const Partition& mu,
                                bool omega) const;
-  ring_elem skewPOrRToPowerSums(const Partition& lambda,
+  ring_elem skewPOrPOmegaToPowerSums(const Partition& lambda,
                                   const Partition& mu,
                                   bool omega) const;
   ring_elem skewHallLittlewoodToPowerSums(const Partition& lambda,
                                             const Partition& mu,
-                                            const std::string& display) const;
+                                            BasisKind basisKind) const;
   ring_elem powerSumsToHallLittlewoodCapitalViaTriangularReduction(ring_elem f,
                                            int targetBasisId,
                                            const std::string& targetDisplay,
@@ -297,8 +296,8 @@
                                   bool targetIsMultiplicative,
                                   ring_elem& result) const;
   ExpressionToTargetRoute selectExpressionToTargetRoute(
-                                 const std::string& targetDisplay,
-                                 bool targetIsMultiplicative) const;
+          int targetBasisId,
+          bool targetIsMultiplicative) const;
   const char *expressionToTargetRouteName(
                                  ExpressionToTargetRoute route) const;
   void traceExpressionToTargetSelection(
@@ -329,9 +328,9 @@
                                     int first,
                                     int second) const;
   ring_elem straightenSchurBasisElement(const Partition& alpha,
-                                    const std::string& display) const;
+                                    int basisId) const;
   ring_elem straightenHallCapitalBasisElement(const Partition& alpha,
-                                          const std::string& display) const;
+                                          int basisId) const;
   ring_elem straightenBasisElement(const SymmetricMonomial& monomial, size_t pos) const;
   ring_elem straightenMonomial(const SymmetricMonomial& monomial) const;
   ring_elem straightenElement(ring_elem f) const;

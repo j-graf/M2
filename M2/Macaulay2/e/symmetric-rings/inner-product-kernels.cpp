@@ -144,7 +144,7 @@ ring_elem SymmetricEngineRing::powerSumPairing(
 // ============================================================================
 // Kostka-Number Pairings
 // ============================================================================
-// Ordinary Schur and omega-Schur pairings use Kostka and conjugate Kostka numbers.
+// Ordinary Schur and Schur Omega pairings use Kostka and conjugate Kostka numbers.
 
 long SymmetricEngineRing::kostkaNumberViaSemistandardTableaux(
     const Partition& shape,
@@ -242,9 +242,9 @@ ring_elem SymmetricEngineRing::schurCompleteInnerProductViaKostkaNumbers(
     ring_elem completeBasisElement) const
 {
     return kostkaInnerProductForBasisElements(schurBasisElement,
-                              requiredBasisIdForDisplay("S"),
+                              requiredBasisIdForKind(BasisKind::Schur),
                               completeBasisElement,
-                              requiredBasisIdForDisplay("h"),
+                              requiredBasisIdForKind(BasisKind::Complete),
                               false);
   }
 
@@ -254,33 +254,33 @@ SymmetricEngineRing::schurElementaryInnerProductViaConjugateKostkaNumbers(
     ring_elem elementaryBasisElement) const
 {
     return kostkaInnerProductForBasisElements(schurBasisElement,
-                              requiredBasisIdForDisplay("S"),
+                              requiredBasisIdForKind(BasisKind::Schur),
                               elementaryBasisElement,
-                              requiredBasisIdForDisplay("e"),
+                              requiredBasisIdForKind(BasisKind::Elementary),
                               true);
   }
 
 ring_elem
-SymmetricEngineRing::omegaSchurCompleteInnerProductViaConjugateKostkaNumbers(
-    ring_elem omegaSchurBasisElement,
+SymmetricEngineRing::schurOmegaCompleteInnerProductViaConjugateKostkaNumbers(
+    ring_elem schurOmegaBasisElement,
     ring_elem completeBasisElement) const
 {
-    return kostkaInnerProductForBasisElements(omegaSchurBasisElement,
-                              requiredBasisIdForDisplay("Somega"),
+    return kostkaInnerProductForBasisElements(schurOmegaBasisElement,
+                              requiredBasisIdForKind(BasisKind::SchurOmega),
                               completeBasisElement,
-                              requiredBasisIdForDisplay("h"),
+                              requiredBasisIdForKind(BasisKind::Complete),
                               true);
   }
 
 ring_elem
-SymmetricEngineRing::omegaSchurElementaryInnerProductViaKostkaNumbers(
-    ring_elem omegaSchurBasisElement,
+SymmetricEngineRing::schurOmegaElementaryInnerProductViaKostkaNumbers(
+    ring_elem schurOmegaBasisElement,
     ring_elem elementaryBasisElement) const
 {
-    return kostkaInnerProductForBasisElements(omegaSchurBasisElement,
-                              requiredBasisIdForDisplay("Somega"),
+    return kostkaInnerProductForBasisElements(schurOmegaBasisElement,
+                              requiredBasisIdForKind(BasisKind::SchurOmega),
                               elementaryBasisElement,
-                              requiredBasisIdForDisplay("e"),
+                              requiredBasisIdForKind(BasisKind::Elementary),
                               false);
   }
 
@@ -295,8 +295,8 @@ SymmetricEngineRing::powerSumsSchurInnerProductViaWeightedCharacters(
     ring_elem g,
     const InnerProductContext& context) const
 {
-    int pId = requiredBasisIdForDisplay("p");
-    int schurId = requiredBasisIdForDisplay("S");
+    int pId = requiredBasisIdForKind(BasisKind::PowerSum);
+    int schurId = requiredBasisIdForKind(BasisKind::Schur);
     if (error()) return coefficientRing->zero();
 
     CoeffMap pCoeffs;

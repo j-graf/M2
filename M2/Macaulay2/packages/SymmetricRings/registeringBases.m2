@@ -26,10 +26,10 @@ SymmetricRingIndexedVariableTable _ Thing := (x, i) -> x#symbol _ i
 -- Tracks the ring whose basis symbols are currently installed
 CurrentSymmetricRing = null
 
--- Maps basis symbols to global basis metadata
+-- Maps stable basis keys (and alias names at the public lookup boundary) to metadata
 BasisIndex = new MutableHashTable
 
--- Maps default public basis symbols to stable basis keys
+-- Maps registered public basis symbols to stable basis keys
 BasisSymbolIndex = new MutableHashTable
 
 -- Maps user-facing basis alias symbols to the canonical basis they share
@@ -57,12 +57,15 @@ KnownTransformedBasisOutcomes = {}
 -- Returns the stable internal key for a basis metadata record
 basisKey = B -> (
     if B#?"BasisAliasOf" then B#"BasisAliasOf"
-    else if B#?"BasisKey" then B#"BasisKey"
-    else B#"BasisSymbol"
+    else B#"BasisKey"
     )
 
--- Returns the default public symbol for a basis metadata record
-basisDefaultSymbol = B -> if B#?"DefaultSymbol" then B#"DefaultSymbol" else B#"BasisSymbol"
+-- Returns the registration symbol on the canonical global basis record.
+registeredBasisSymbol = B -> (
+    if B#?"BasisAliasOf" then B#"BasisSymbol"
+    else if BasisIndex#?(basisKey B) then (BasisIndex#(basisKey B))#"BasisSymbol"
+    else B#"BasisSymbol"
+    )
 
 -- Resolves a global basis symbol or alias to a stable internal key
 globalBasisKey = basisSymbol -> (
@@ -76,9 +79,6 @@ globalBasisKey = basisSymbol -> (
 -- Converts basis-like inputs to the canonical key used by registries
 basisRegistryKey = B -> if instance(B, SymmetricBasis) then basisKey B else globalBasisKey B
 
--- Returns the canonical basis symbol for a symbol or alias
-canonicalBasisSymbol = basisSymbol -> basisDefaultSymbol BasisIndex#(globalBasisKey basisSymbol)
-
 -- Lists registered basis alias metadata records
 registeredBasisAliases = () -> apply(keys BasisAliasIndex, aliasSymbol -> BasisIndex#aliasSymbol)
 
@@ -88,7 +88,7 @@ registeredAliasTable = () -> (
     scan(keys BasisAliasIndex, aliasSymbol -> (
             targetSymbol := BasisAliasIndex#aliasSymbol;
             target := BasisIndex#targetSymbol;
-            targetDisplay := basisDefaultSymbol target;
+            targetDisplay := registeredBasisSymbol target;
             H#targetDisplay = append(if H#?targetDisplay then H#targetDisplay else {}, aliasSymbol);
             ));
     hashTable pairs H
@@ -106,7 +106,6 @@ registerBasisAlias = (aliasSymbol, targetSymbol) -> (
     target := BasisIndex#targetKey;
     aliasBasis := new SymmetricBasis from hashTable(pairs target | {
             "BasisSymbol" => aliasKey,
-            "DefaultSymbol" => aliasKey,
             "BasisKey" => targetKey,
             "DisplayName" => aliasKey | "-alias for " | targetKey,
             "BasisAliasOf" => targetKey,
@@ -145,7 +144,7 @@ registerOmegaLink = (source, target) -> (
     )
 
 -- Looks up the named omega image of a basis
-omegaPartnerSymbol = B -> (
+omegaPartnerKey = B -> (
     key := basisRegistryKey B;
     if OmegaRegistry#?key then OmegaRegistry#key
     else null
@@ -231,7 +230,6 @@ acceptIntegerIndex = L -> all(L, i -> class i === ZZ)
 -- TODO: Remove unused metadata
 basisOptionDefaults = hashTable {
     "BasisKey" => null,
-    "DefaultSymbol" => null,
     "DisplayName" => null,
     "DisplayOrder" => 100,
     "CanBeSkew" => false,
@@ -278,14 +276,12 @@ parseStringOptions = (defaults, opts, name) -> (
 makeBasis = (basisSymbol, opts) -> (
     symbolString := toString basisSymbol;
     keyString := if opts#"BasisKey" === null then symbolString else toString opts#"BasisKey";
-    defaultSymbol := if opts#"DefaultSymbol" === null then symbolString else toString opts#"DefaultSymbol";
     NextBasisId = NextBasisId + 1;
-    displayName := if opts#"DisplayName" === null then defaultSymbol | "-basis" else opts#"DisplayName";
+    displayName := if opts#"DisplayName" === null then symbolString | "-basis" else opts#"DisplayName";
     multiplicative := opts#"MultiplicativeIndex" or opts#"IsMultiplicativeIndex";
     new SymmetricBasis from hashTable {
         "BasisKey" => keyString,
-        "DefaultSymbol" => defaultSymbol,
-        "BasisSymbol" => defaultSymbol,
+        "BasisSymbol" => symbolString,
         "BasisId" => NextBasisId,
         "DisplayName" => displayName,
         "DisplayOrder" => opts#"DisplayOrder",
@@ -333,7 +329,7 @@ stripLegacyBuiltinRegistryFields = B -> new SymmetricBasis from hashTable(pairs 
 -- basis metadata into CurrentSymmetricRing when one is active.
 installBasis = (B, builtin) -> (
     key := basisKey B;
-    basisSymbol := basisDefaultSymbol B;
+    basisSymbol := B#"BasisSymbol";
     if BasisIndex#?key then error("a symmetric function basis with key ", key, " is already registered");
     if BasisSymbolIndex#?basisSymbol or BasisAliasIndex#?basisSymbol then error("a symmetric function basis with symbol ", basisSymbol, " is already registered");
     registerBasisMetadataInRegistries B;
@@ -346,10 +342,8 @@ installBasis = (B, builtin) -> (
     refreshAvailableBases();
     if CurrentSymmetricRing =!= null then (
         registerBasisSymbolOnRing(CurrentSymmetricRing, storedBasis);
-        CurrentSymmetricRing#"UsesDefaultBasisSymbols" = all(CurrentSymmetricRing#"Bases", B0 -> basisSymbolForRing(CurrentSymmetricRing, B0) == basisDefaultSymbol B0);
         if basisAvailableForRing(CurrentSymmetricRing, storedBasis) then (
             CurrentSymmetricRing#"Bases" = append(CurrentSymmetricRing#"Bases", storedBasis);
-            CurrentSymmetricRing#"UsesDefaultBasisSymbols" = CurrentSymmetricRing#"UsesDefaultBasisSymbols" and basisSymbolForRing(CurrentSymmetricRing, storedBasis) == basisDefaultSymbol storedBasis;
             rememberBasisInEngine(CurrentSymmetricRing, storedBasis);
             CurrentSymmetricRing.cache#"Aliases"#(basisSymbolForRing(CurrentSymmetricRing, storedBasis)) = installBasisAlias(CurrentSymmetricRing, storedBasis);
             )
@@ -812,7 +806,7 @@ transformedDiagonalScaleValue = (R0, data, lambda) -> (
 
 -- Builds the low-level option table for a transformed basis, inheriting index
 -- behavior from a known source basis
-transformedBasisRegistrationOptionsFromSource = (basisSymbol, opts, data, omegaSymbol, innerProductData, sourceForOptions) -> (
+transformedBasisRegistrationOptionsFromSource = (basisSymbol, opts, data, omegaKey, innerProductData, sourceForOptions) -> (
     H := new MutableHashTable from pairs basisOptionDefaults;
     scan(keys basisOptionDefaults, optKey -> if opts#?optKey then H#optKey = opts#optKey);
     if H#"CanBeSkew" === null then H#"CanBeSkew" = sourceForOptions#"CanBeSkew";
@@ -822,6 +816,7 @@ transformedBasisRegistrationOptionsFromSource = (basisSymbol, opts, data, omegaS
     if H#"ZeroOnNegative" === null then H#"ZeroOnNegative" = sourceForOptions#"ZeroOnNegative";
     H#"DisplayName" = if data#?"DisplayName" then data#"DisplayName" else H#"DisplayName";
     H#"DisplayOrder" = if data#?"DisplayOrder" then data#"DisplayOrder" else H#"DisplayOrder";
+    H#"BasisKey" = data#"BasisKey";
     H#"Omega" = null;
     H#"InnerProductData" = null;
     H#"TransformData" = data;
@@ -831,13 +826,13 @@ transformedBasisRegistrationOptionsFromSource = (basisSymbol, opts, data, omegaS
     )
 
 -- Builds the low-level option table for a transformed basis
-transformedBasisRegistrationOptions = (basisSymbol, opts, data, omegaSymbol, innerProductData) ->
-    transformedBasisRegistrationOptionsFromSource(basisSymbol, opts, data, omegaSymbol, innerProductData, basis(data#"SourceBasis"))
+transformedBasisRegistrationOptions = (basisSymbol, opts, data, omegaKey, innerProductData) ->
+    transformedBasisRegistrationOptionsFromSource(basisSymbol, opts, data, omegaKey, innerProductData, basis(data#"SourceBasis"))
 
 -- Installs a transformed basis and records its cross-basis links in registries
-installTransformedBasis = (B, omegaSymbol, innerProductData) -> (
+installTransformedBasis = (B, omegaKey, innerProductData) -> (
     installed := installBasis(B, false);
-    registerOmegaLink(installed, omegaSymbol);
+    registerOmegaLink(installed, omegaKey);
     if innerProductData =!= null and instance(innerProductData, HashTable) then
         scan(keys innerProductData, contextName -> registerInnerProductRule(contextName, installed, innerProductData#contextName));
     installed
@@ -855,12 +850,14 @@ transformedCompanionData = (entry, defaultDisplayOrder) -> (
     if entry === null then null
     else if instance(entry, String) or instance(entry, Symbol) then hashTable {
         "BasisSymbol" => toString entry,
+        "BasisKey" => toString entry,
         "DisplayOrder" => defaultDisplayOrder
         }
     else if instance(entry, HashTable) then (
         if not entry#?"BasisSymbol" then error "expected companion metadata to include \"BasisSymbol\"";
         hashTable {
             "BasisSymbol" => toString entry#"BasisSymbol",
+            "BasisKey" => if entry#?"BasisKey" then toString entry#"BasisKey" else toString entry#"BasisSymbol",
             "DisplayName" => if entry#?"DisplayName" then entry#"DisplayName" else null,
             "DisplayOrder" => if entry#?"DisplayOrder" then entry#"DisplayOrder" else defaultDisplayOrder
             }
@@ -898,9 +895,9 @@ transformedDualScaleFunction = (data, source) -> (
 transformedUnitPairing = (R0, idx) -> 1_(coefficientRing R0)
 
 -- Builds inner-product metadata for a single declared dual companion
-transformedSingleDualInnerProductData = (dualSymbol, pairing) -> hashTable {
+transformedSingleDualInnerProductData = (dualKey, pairing) -> hashTable {
     "Ordinary" => hashTable {
-        "DualBasis" => dualSymbol,
+        "DualBasis" => dualKey,
         "Pairing" => pairing,
         "EngineKind" => "Dual"
         }
@@ -934,15 +931,15 @@ transformedSupportsInnerProductCompanions = data -> (
 -- This is a conservative capability probe, not a proof of all degrees. If the
 -- degree-one sample is mixed, unavailable, or outside R0, the transform is
 -- treated as mixed so automatic inverses and companions stay disabled.
-transformedInspectOutputMetadata = (R0, sourceSymbol, alphabetData, termTransform, termTransformKind, termTransformMode) -> (
+transformedInspectOutputMetadata = (R0, sourceKey, alphabetData, termTransform, termTransformKind, termTransformMode) -> (
     if termTransformKind == "Identity" and alphabetData === null then return hashTable {
         "PreservesSourceBasis" => true,
-        "OutputBasis" => sourceSymbol,
+        "OutputBasis" => sourceKey,
         "UsesMixedBases" => false
         };
     if termTransformKind == "Identity" and alphabetData =!= null then return hashTable {
         "PreservesSourceBasis" => false,
-        "OutputBasis" => "p",
+        "OutputBasis" => "PowerSum",
         "UsesMixedBases" => false
         };
     if R0 === null then return hashTable {
@@ -950,7 +947,7 @@ transformedInspectOutputMetadata = (R0, sourceSymbol, alphabetData, termTransfor
         "OutputBasis" => null,
         "UsesMixedBases" => true
         };
-    source := basis(R0, sourceSymbol);
+    source := basis(R0, sourceKey);
     sampleSourceTerm := if alphabetData === null then source_1 else transformedPowerSumScale(toBasis(source_1, p), (R1, n) -> transformedApplyAlphabetScale(alphabetData, R1, n));
     sampleData := hashTable {
         "BasisSymbol" => "<sample>",
@@ -964,9 +961,9 @@ transformedInspectOutputMetadata = (R0, sourceSymbol, alphabetData, termTransfor
         "UsesMixedBases" => true
         };
     basisIds := unique flatten apply(rawTerms sample, term -> apply(term#1, atom -> atom#"BasisId"));
-    outputBasis := if #basisIds == 1 then (basisWithId(R0, basisIds#0))#"BasisSymbol" else null;
+    outputBasis := if #basisIds == 1 then basisKey(basisWithId(R0, basisIds#0)) else null;
     hashTable {
-        "PreservesSourceBasis" => outputBasis === sourceSymbol,
+        "PreservesSourceBasis" => outputBasis === sourceKey,
         "OutputBasis" => outputBasis,
         "UsesMixedBases" => outputBasis === null or any(rawTerms sample, term -> #(term#1) > 1)
         }
@@ -976,9 +973,10 @@ transformedInspectOutputMetadata = (R0, sourceSymbol, alphabetData, termTransfor
 -- InverseConversionAvailable is the main safety gate used by toBasis from
 -- power sums. Keep this condition conservative: false only disables a shortcut,
 -- but true lets arbitrary elements convert into the transformed basis.
-transformedMakeData = (basisSymbol, sourceSymbol, opts, alphabetData, sumOverData, termTransform, termTransformKind, termTransformMode, outputData, companionMeta) -> hashTable {
+transformedMakeData = (basisSymbol, sourceKey, opts, alphabetData, sumOverData, termTransform, termTransformKind, termTransformMode, outputData, companionMeta) -> hashTable {
+    "BasisKey" => if companionMeta =!= null then companionMeta#"BasisKey" else if opts#"BasisKey" === null then basisSymbol else toString opts#"BasisKey",
     "BasisSymbol" => basisSymbol,
-    "SourceBasis" => sourceSymbol,
+    "SourceBasis" => sourceKey,
     "Alphabet" => opts#"Alphabet",
     "AlphabetData" => alphabetData,
     "SumOver" => sumOverData,
@@ -1011,9 +1009,9 @@ transformedValidateSymbolsAvailable = symbols -> (
     )
 
 -- Finds a registered known outcome for a transformed basis definition.
-transformedKnownOutcome = (R0, sourceSymbol, opts, sumOverData, termTransformKind) -> (
+transformedKnownOutcome = (R0, sourceKey, opts, sumOverData, termTransformKind) -> (
     matches := select(KnownTransformedBasisOutcomes, data -> (
-            data#?"SourceBasis" and data#"SourceBasis" == sourceSymbol
+            data#?"SourceBasis" and data#"SourceBasis" == sourceKey
             and data#?"Alphabet" and transformedAlphabetEquivalent(R0, opts#"Alphabet", data#"Alphabet")
             and data#?"SumOver" and data#"SumOver" == sumOverData#"Kind"
             and data#?"TermTransformKind" and data#"TermTransformKind" == termTransformKind
@@ -1083,12 +1081,12 @@ transformedNormalizeGeneratedSpecializations = families -> (
 transformedSpecializedTermTransform = substitutions -> (lambda, mu, sourceTerm) -> specializePowerSumCoefficients(toBasis(sourceTerm, p), substitutions)
 
 -- Builds specialization registry metadata from a substitution list.
-transformedSpecializationRuleFromSubstitutions = (targetSymbol, substitutions) -> (
+transformedSpecializationRuleFromSubstitutions = (targetKey, substitutions) -> (
     if #substitutions == 0 or not all(substitutions, opt -> class opt === Option) then null
     else hashTable {
         "Substitutions" => substitutions,
-        "TargetBasis" => targetSymbol,
-        "Map" => basisSpecializationMap targetSymbol
+        "TargetBasis" => targetKey,
+        "Map" => basisSpecializationMap targetKey
         }
     )
 
@@ -1120,24 +1118,32 @@ transformedAddGeneratedSpecializationEntries = (entries, opts, families) -> (
     sameIndexData := transformedNormalizeSumOver "SameIndex";
     outputData := hashTable {
         "PreservesSourceBasis" => false,
-        "OutputBasis" => "p",
+        "OutputBasis" => "PowerSum",
         "UsesMixedBases" => false
         };
     scan(families, family -> (
             suffix := family#"Suffix";
             substitutions := family#"Substitutions";
-            suffixMap := new MutableHashTable;
-            scan(baseSymbols, s -> suffixMap#s = s | suffix);
+            symbolSuffixMap := new MutableHashTable;
+            keySuffixMap := new MutableHashTable;
+            scan(entries, entry -> (
+                    B := entry#"Basis";
+                    generatedSymbol := B#"BasisSymbol" | suffix;
+                    symbolSuffixMap#(B#"BasisSymbol") = generatedSymbol;
+                    keySuffixMap#(basisKey B) = generatedSymbol;
+                    ));
             resultEntries = apply(resultEntries, entry -> (
-                    sourceSymbol := (entry#"Basis")#"BasisSymbol";
-                    generatedSymbol := suffixMap#sourceSymbol;
-                    newRules := {transformedSpecializationRuleFromSubstitutions(generatedSymbol, substitutions)};
+                    sourceKey := basisKey(entry#"Basis");
+                    generatedKey := keySuffixMap#sourceKey;
+                    newRules := {transformedSpecializationRuleFromSubstitutions(generatedKey, substitutions)};
                     hashTable(pairs entry | {"SpecializationRules" => (if entry#?"SpecializationRules" then entry#"SpecializationRules" else {}) | newRules})
                     ));
             scan(entries, entry -> (
                     sourceBasis := entry#"Basis";
+                    sourceKey := basisKey sourceBasis;
                     sourceSymbol := sourceBasis#"BasisSymbol";
-                    generatedSymbol := suffixMap#sourceSymbol;
+                    generatedSymbol := symbolSuffixMap#sourceSymbol;
+                    generatedKey := keySuffixMap#sourceKey;
                     generatedOpts := hashTable(pairs opts | {
                             "Alphabet" => "X",
                             "SumOver" => "SameIndex",
@@ -1150,15 +1156,16 @@ transformedAddGeneratedSpecializationEntries = (entries, opts, families) -> (
                         "DisplayOrder" => sourceBasis#"DisplayOrder"
                         };
                     generatedTransform := transformedSpecializedTermTransform substitutions;
-                    generatedData := transformedMakeData(generatedSymbol, sourceSymbol, generatedOpts, null, sameIndexData, generatedTransform, "UserFunction", "Element", outputData, generatedMeta);
-                    generatedOmega := if entry#"Omega" =!= null and suffixMap#?(entry#"Omega") then suffixMap#(entry#"Omega") else entry#"Omega";
-                    generatedInnerData := transformedSpecializedInnerProductData(entry#"InnerProductData", suffixMap);
+                    generatedMeta = hashTable(pairs generatedMeta | {"BasisKey" => generatedKey});
+                    generatedData := transformedMakeData(generatedSymbol, sourceKey, generatedOpts, null, sameIndexData, generatedTransform, "UserFunction", "Element", outputData, generatedMeta);
+                    generatedOmega := if entry#"Omega" =!= null and keySuffixMap#?(entry#"Omega") then keySuffixMap#(entry#"Omega") else entry#"Omega";
+                    generatedInnerData := transformedSpecializedInnerProductData(entry#"InnerProductData", keySuffixMap);
                     generatedEntries = append(generatedEntries, hashTable {
                             "Basis" => makeBasis(generatedSymbol, transformedBasisRegistrationOptionsFromSource(generatedSymbol, generatedOpts, generatedData, generatedOmega, generatedInnerData, sourceBasis)),
                             "Omega" => generatedOmega,
                             "InnerProductData" => generatedInnerData,
                             "GeneratedSpecializationSuffix" => suffix,
-                            "GeneratedFrom" => sourceSymbol
+                            "GeneratedFrom" => sourceKey
                             });
                     ));
             ));
@@ -1286,78 +1293,82 @@ transformedInstallClusterAtomically = entries -> (
 -- specializations, and finally performs the atomic install.
 transformedRegisterWithTermData = (basisSymbol, sourceInput, opts, termData) -> (
     source := basis(sourceInput);
+    sourceKey := basisKey source;
     sourceSymbol := source#"BasisSymbol";
     alphabetData := transformedAlphabetData(CurrentSymmetricRing, opts#"Alphabet");
     sumOverData := transformedNormalizeSumOver opts#"SumOver";
     termTransform := termData#0;
     termTransformKind := termData#1;
     termTransformMode := termData#2;
-    knownOutcome := transformedKnownOutcome(CurrentSymmetricRing, sourceSymbol, opts, sumOverData, termTransformKind);
+    knownOutcome := transformedKnownOutcome(CurrentSymmetricRing, sourceKey, opts, sumOverData, termTransformKind);
     aliasOutcome := transformedApplyKnownOutcomePolicy(basisSymbol, knownOutcome, opts#"OnEquivalentBasis");
     if aliasOutcome =!= null then return aliasOutcome;
-    outputData := transformedInspectOutputMetadata(CurrentSymmetricRing, sourceSymbol, alphabetData, termTransform, termTransformKind, termTransformMode);
+    outputData := transformedInspectOutputMetadata(CurrentSymmetricRing, sourceKey, alphabetData, termTransform, termTransformKind, termTransformMode);
     specializationFamilies := transformedNormalizeGeneratedSpecializations opts#"RegisterSpecializations";
     companions := opts#"RegisterCompanions";
     omegaMeta := transformedCompanionData(transformedCompanionEntry(companions, "OmegaPartner"), opts#"DisplayOrder" + 1);
     innerMeta := transformedCompanionData(transformedCompanionEntry(companions, "InnerProductPartner"), opts#"DisplayOrder" + 2);
     omegaInnerMeta := transformedCompanionData(transformedCompanionEntry(companions, "OmegaInnerProductPartner"), opts#"DisplayOrder" + 3);
     transformedValidateSymbolsAvailable prepend(basisSymbol, apply(select({omegaMeta, innerMeta, omegaInnerMeta}, x -> x =!= null), meta -> meta#"BasisSymbol"));
-    sourceOmegaSymbol := omegaPartnerSymbol source;
-    if omegaMeta =!= null and sourceOmegaSymbol === null then error("cannot register omega companion for ", basisSymbol, ": source basis ", sourceSymbol, " has no omega metadata; omit \"OmegaPartner\"");
+    sourceOmegaKey := omegaPartnerKey source;
+    if omegaMeta =!= null and sourceOmegaKey === null then error("cannot register omega companion for ", basisSymbol, ": source basis ", sourceSymbol, " has no omega metadata; omit \"OmegaPartner\"");
     if innerMeta =!= null and transformedSourceDualRule(source, "Ordinary") === null then error("cannot register inner-product companion for ", basisSymbol, ": source basis ", sourceSymbol, " has no ordinary diagonal inner-product metadata; omit \"InnerProductPartner\"");
     if omegaInnerMeta =!= null and innerMeta === null then error "cannot register \"OmegaInnerProductPartner\" without \"InnerProductPartner\"";
-    primaryData := transformedMakeData(basisSymbol, sourceSymbol, opts, alphabetData, sumOverData, termTransform, termTransformKind, termTransformMode, outputData, null);
+    primaryData := transformedMakeData(basisSymbol, sourceKey, opts, alphabetData, sumOverData, termTransform, termTransformKind, termTransformMode, outputData, null);
+    primaryKey := primaryData#"BasisKey";
     if knownOutcome =!= null then primaryData = hashTable(pairs primaryData | {"KnownEquivalentBasis" => knownOutcome#"EquivalentBasis"});
     if (innerMeta =!= null or omegaInnerMeta =!= null) and not transformedSupportsInnerProductCompanions primaryData then
         error "inner-product companions are currently only supported for identity or diagonal SameIndex transforms";
-    omegaSymbol := if omegaMeta === null then sourceOmegaSymbol else omegaMeta#"BasisSymbol";
-    innerSymbol := if innerMeta === null then null else innerMeta#"BasisSymbol";
-    primaryInnerData := if innerSymbol === null then transformedInheritedInnerProductData(primaryData, source)
-        else transformedSingleDualInnerProductData(innerSymbol, transformedUnitPairing);
+    omegaKey := if omegaMeta === null then sourceOmegaKey else omegaMeta#"BasisKey";
+    innerKey := if innerMeta === null then null else innerMeta#"BasisKey";
+    primaryInnerData := if innerKey === null then transformedInheritedInnerProductData(primaryData, source)
+        else transformedSingleDualInnerProductData(innerKey, transformedUnitPairing);
     entries := {hashTable {
-            "Basis" => makeBasis(basisSymbol, transformedBasisRegistrationOptions(basisSymbol, opts, primaryData, omegaSymbol, primaryInnerData)),
-            "Omega" => omegaSymbol,
+            "Basis" => makeBasis(basisSymbol, transformedBasisRegistrationOptions(basisSymbol, opts, primaryData, omegaKey, primaryInnerData)),
+            "Omega" => omegaKey,
             "InnerProductData" => primaryInnerData,
             "SpecializationRules" => {},
             "Primary" => true
             }};
     if omegaMeta =!= null then (
-        omegaSource := basis(sourceOmegaSymbol);
-        omegaOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, omegaSource#"BasisSymbol", alphabetData, termTransform, termTransformKind, termTransformMode);
-        omegaData := transformedMakeData(omegaMeta#"BasisSymbol", omegaSource#"BasisSymbol", opts, alphabetData, sumOverData, termTransform, termTransformKind, termTransformMode, omegaOutputData, omegaMeta);
-        omegaInnerSymbol := if omegaInnerMeta === null then null else omegaInnerMeta#"BasisSymbol";
-        omegaInnerData := if omegaInnerSymbol === null then transformedInheritedInnerProductData(omegaData, omegaSource)
-            else transformedSingleDualInnerProductData(omegaInnerSymbol, transformedUnitPairing);
+        omegaSource := basis(sourceOmegaKey);
+        omegaSourceKey := basisKey omegaSource;
+        omegaOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, omegaSourceKey, alphabetData, termTransform, termTransformKind, termTransformMode);
+        omegaData := transformedMakeData(omegaMeta#"BasisSymbol", omegaSourceKey, opts, alphabetData, sumOverData, termTransform, termTransformKind, termTransformMode, omegaOutputData, omegaMeta);
+        omegaInnerKey := if omegaInnerMeta === null then null else omegaInnerMeta#"BasisKey";
+        omegaInnerData := if omegaInnerKey === null then transformedInheritedInnerProductData(omegaData, omegaSource)
+            else transformedSingleDualInnerProductData(omegaInnerKey, transformedUnitPairing);
         entries = append(entries, hashTable {
-                "Basis" => makeBasis(omegaMeta#"BasisSymbol", transformedBasisRegistrationOptions(omegaMeta#"BasisSymbol", opts, omegaData, basisSymbol, omegaInnerData)),
-                "Omega" => basisSymbol,
+                "Basis" => makeBasis(omegaMeta#"BasisSymbol", transformedBasisRegistrationOptions(omegaMeta#"BasisSymbol", opts, omegaData, primaryKey, omegaInnerData)),
+                "Omega" => primaryKey,
                 "InnerProductData" => omegaInnerData
                 });
         );
     if innerMeta =!= null then (
-        dualSourceSymbol := transformedOrdinarySourceDualKey source;
-        dualSource := basis(dualSourceSymbol);
+        dualSourceKey := transformedOrdinarySourceDualKey source;
+        dualSource := basis(dualSourceKey);
         dualTermTransform := transformedDualScaleFunction(primaryData, source);
         dualAlphabetData := transformedInverseAlphabetData alphabetData;
-        dualOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, dualSource#"BasisSymbol", dualAlphabetData, dualTermTransform, "UserFunction", "Coefficient");
-        dualData := transformedMakeData(innerMeta#"BasisSymbol", dualSource#"BasisSymbol", opts, dualAlphabetData, sumOverData, dualTermTransform, "UserFunction", "Coefficient", dualOutputData, innerMeta);
-        dualSourceOmegaSymbol := omegaPartnerSymbol dualSource;
-        if omegaInnerMeta =!= null and dualSourceOmegaSymbol === null then error("cannot register omega inner-product companion for ", basisSymbol, ": source dual basis ", dualSource#"BasisSymbol", " has no omega metadata");
-        dualOmegaSymbol := if omegaInnerMeta === null then dualSourceOmegaSymbol else omegaInnerMeta#"BasisSymbol";
+        dualOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, dualSourceKey, dualAlphabetData, dualTermTransform, "UserFunction", "Coefficient");
+        dualData := transformedMakeData(innerMeta#"BasisSymbol", dualSourceKey, opts, dualAlphabetData, sumOverData, dualTermTransform, "UserFunction", "Coefficient", dualOutputData, innerMeta);
+        dualSourceOmegaKey := omegaPartnerKey dualSource;
+        if omegaInnerMeta =!= null and dualSourceOmegaKey === null then error("cannot register omega inner-product companion for ", basisSymbol, ": source dual basis ", dualSource#"BasisSymbol", " has no omega metadata");
+        dualOmegaKey := if omegaInnerMeta === null then dualSourceOmegaKey else omegaInnerMeta#"BasisKey";
         entries = append(entries, hashTable {
-                "Basis" => makeBasis(innerMeta#"BasisSymbol", transformedBasisRegistrationOptions(innerMeta#"BasisSymbol", opts, dualData, dualOmegaSymbol, transformedSingleDualInnerProductData(basisSymbol, transformedUnitPairing))),
-                "Omega" => dualOmegaSymbol,
-                "InnerProductData" => transformedSingleDualInnerProductData(basisSymbol, transformedUnitPairing)
+                "Basis" => makeBasis(innerMeta#"BasisSymbol", transformedBasisRegistrationOptions(innerMeta#"BasisSymbol", opts, dualData, dualOmegaKey, transformedSingleDualInnerProductData(primaryKey, transformedUnitPairing))),
+                "Omega" => dualOmegaKey,
+                "InnerProductData" => transformedSingleDualInnerProductData(primaryKey, transformedUnitPairing)
                 });
         if omegaInnerMeta =!= null then (
-            omegaDualSource := basis(dualSourceOmegaSymbol);
-            omegaDualOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, omegaDualSource#"BasisSymbol", dualAlphabetData, dualTermTransform, "UserFunction", "Coefficient");
-            omegaDualData := transformedMakeData(omegaInnerMeta#"BasisSymbol", omegaDualSource#"BasisSymbol", opts, dualAlphabetData, sumOverData, dualTermTransform, "UserFunction", "Coefficient", omegaDualOutputData, omegaInnerMeta);
-            omegaTargetSymbol := if omegaMeta === null then omegaPartnerSymbol omegaDualSource else omegaMeta#"BasisSymbol";
+            omegaDualSource := basis(dualSourceOmegaKey);
+            omegaDualSourceKey := basisKey omegaDualSource;
+            omegaDualOutputData := transformedInspectOutputMetadata(CurrentSymmetricRing, omegaDualSourceKey, dualAlphabetData, dualTermTransform, "UserFunction", "Coefficient");
+            omegaDualData := transformedMakeData(omegaInnerMeta#"BasisSymbol", omegaDualSourceKey, opts, dualAlphabetData, sumOverData, dualTermTransform, "UserFunction", "Coefficient", omegaDualOutputData, omegaInnerMeta);
+            omegaTargetKey := if omegaMeta === null then omegaPartnerKey omegaDualSource else omegaMeta#"BasisKey";
             entries = append(entries, hashTable {
-                    "Basis" => makeBasis(omegaInnerMeta#"BasisSymbol", transformedBasisRegistrationOptions(omegaInnerMeta#"BasisSymbol", opts, omegaDualData, innerMeta#"BasisSymbol", transformedSingleDualInnerProductData(omegaTargetSymbol, transformedUnitPairing))),
-                    "Omega" => innerMeta#"BasisSymbol",
-                    "InnerProductData" => transformedSingleDualInnerProductData(omegaTargetSymbol, transformedUnitPairing)
+                    "Basis" => makeBasis(omegaInnerMeta#"BasisSymbol", transformedBasisRegistrationOptions(omegaInnerMeta#"BasisSymbol", opts, omegaDualData, innerKey, transformedSingleDualInnerProductData(omegaTargetKey, transformedUnitPairing))),
+                    "Omega" => innerKey,
+                    "InnerProductData" => transformedSingleDualInnerProductData(omegaTargetKey, transformedUnitPairing)
                     });
             );
         );
@@ -1404,7 +1415,8 @@ registerSpecializedBasis = args -> (
     opts := parseStringOptions(transformedBasisOptionDefaults, extraOptions, "registerSpecializedBasis");
     result := transformedRegisterWithTermData(basisSymbol, sourceInput, opts, {specializedTransform, "Specialization", "Element"});
     targetSymbol := result#"PrimaryBasis";
-    rule := transformedSpecializationRuleFromSubstitutions(targetSymbol, substitutions);
+    targetKey := basisKey basis(targetSymbol);
+    rule := transformedSpecializationRuleFromSubstitutions(targetKey, substitutions);
     if rule =!= null then registerBasisSpecializationRule(source, rule);
     if rule === null then result
     else registrationReport(hashTable(pairs result | {
@@ -1413,19 +1425,19 @@ registerSpecializedBasis = args -> (
     )
 
 -- Creates a basis-specialization map to a target basis
-basisSpecializationMap = targetSymbol -> (R0, idx) -> (
-    B := basis(R0, targetSymbol);
+basisSpecializationMap = targetKey -> (R0, idx) -> (
+    B := basis(R0, targetKey);
     if instance(idx, List) and #idx == 2 and instance(idx#0, List) and instance(idx#1, List) then
         makeSkewElement(B, idx#0, idx#1)
     else B_idx
     )
 
 -- Specialization metadata for Hall-Littlewood bases at t=0
-hallLittlewoodZeroSpecialization = targetSymbol -> {
+hallLittlewoodZeroSpecialization = targetKey -> {
     hashTable {
         "Parameter" => "HallLittlewoodParameter",
         "Value" => 0,
-        "Map" => basisSpecializationMap targetSymbol
+        "Map" => basisSpecializationMap targetKey
         }
     }
 
@@ -1463,8 +1475,8 @@ hallLittlewoodPowerSumPairing = (R0, idx) -> (
     )
 
 -- Builds metadata for a basis with unit pairing against a dual basis.
-ordinaryDualData = dualSymbol -> hashTable {
-    "DualBasis" => dualSymbol,
+ordinaryDualData = dualKey -> hashTable {
+    "DualBasis" => dualKey,
     "Pairing" => unitPairing,
     "EngineKind" => "Dual"
     }
@@ -1476,45 +1488,81 @@ hallLittlewoodDualData = ordinaryDualData
 -- Built-In Basis Declarations
 -- ============================================================================
 
+-- Central registration symbols for built-in bases. The stable BasisKey is the
+-- identity; these values provide the initial public notation.
+builtinBasisSymbols = hashTable {
+    "HallLittlewoodQ" => "Q",
+    "HallLittlewoodB" => "B",
+    "HallLittlewoodP" => "P",
+    "HallLittlewoodPOmega" => "Pomega",
+    "HallLittlewoodQGenerator" => "q",
+    "HallLittlewoodBGenerator" => "b",
+    "Schur" => "S",
+    "SchurOmega" => "Somega",
+    "Complete" => "h",
+    "Elementary" => "e",
+    "PowerSum" => "p",
+    "Monomial" => "m",
+    "Forgotten" => "ff"
+    }
+
+-- Central presentation priority for built-in bases. Basis declarations below
+-- read from this table so the complete order is visible in one place.
+builtinBasisDisplayOrders = hashTable {
+    "HallLittlewoodQ" => 90,
+    "HallLittlewoodB" => 89,
+    "HallLittlewoodP" => 88,
+    "HallLittlewoodPOmega" => 87,
+    "HallLittlewoodQGenerator" => 80,
+    "HallLittlewoodBGenerator" => 79,
+    "Schur" => 70,
+    "SchurOmega" => 69,
+    "Complete" => 60,
+    "Elementary" => 59,
+    "PowerSum" => 50,
+    "Monomial" => 40,
+    "Forgotten" => 39
+    }
+
 -- Built-in basis registrations and their standard metadata.
 -- DisplayOrder fixes presentation order; declaration order fixes the engine
 -- basis ids assigned by makeBasis. Reordering or inserting built-ins here can
 -- change id-based dispatch assumptions and tests that compare basis metadata.
-p = makeBuiltinBasis("p", "DisplayName" => "power sum basis", "DisplayOrder" => 10, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "Omega" => "p", "InnerProductData" => hashTable {
-        "Ordinary" => hashTable {"DualBasis" => "p", "Pairing" => ordinaryPowerSumPairing, "EngineKind" => "PowerSum"},
-        "HallLittlewood" => hashTable {"DualBasis" => "p", "Pairing" => hallLittlewoodPowerSumPairing, "EngineKind" => "PowerSum"}
+p = makeBuiltinBasis(builtinBasisSymbols#"PowerSum", "BasisKey" => "PowerSum", "DisplayName" => "power sum basis", "DisplayOrder" => builtinBasisDisplayOrders#"PowerSum", "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "Omega" => "PowerSum", "InnerProductData" => hashTable {
+        "Ordinary" => hashTable {"DualBasis" => "PowerSum", "Pairing" => ordinaryPowerSumPairing, "EngineKind" => "PowerSum"},
+        "HallLittlewood" => hashTable {"DualBasis" => "PowerSum", "Pairing" => hallLittlewoodPowerSumPairing, "EngineKind" => "PowerSum"}
         })
-h = makeBuiltinBasis("h", "DisplayName" => "complete homogeneous basis", "DisplayOrder" => 20, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true, "Omega" => "e", "InnerProductData" => hashTable {"Ordinary" => ordinaryDualData "m"})
-e = makeBuiltinBasis("e", "DisplayName" => "elementary basis", "DisplayOrder" => 30, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true, "Omega" => "h", "InnerProductData" => hashTable {"Ordinary" => ordinaryDualData "ff"})
-m = makeBuiltinBasis("m", "DisplayName" => "monomial basis", "DisplayOrder" => 40, "Omega" => "ff", "InnerProductData" => hashTable {
-        "Ordinary" => ordinaryDualData "h",
-        "HallLittlewood" => hallLittlewoodDualData "q"
+h = makeBuiltinBasis(builtinBasisSymbols#"Complete", "BasisKey" => "Complete", "DisplayName" => "complete homogeneous basis", "DisplayOrder" => builtinBasisDisplayOrders#"Complete", "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true, "Omega" => "Elementary", "InnerProductData" => hashTable {"Ordinary" => ordinaryDualData "Monomial"})
+e = makeBuiltinBasis(builtinBasisSymbols#"Elementary", "BasisKey" => "Elementary", "DisplayName" => "elementary basis", "DisplayOrder" => builtinBasisDisplayOrders#"Elementary", "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true, "Omega" => "Complete", "InnerProductData" => hashTable {"Ordinary" => ordinaryDualData "Forgotten"})
+m = makeBuiltinBasis(builtinBasisSymbols#"Monomial", "BasisKey" => "Monomial", "DisplayName" => "monomial basis", "DisplayOrder" => builtinBasisDisplayOrders#"Monomial", "Omega" => "Forgotten", "InnerProductData" => hashTable {
+        "Ordinary" => ordinaryDualData "Complete",
+        "HallLittlewood" => hallLittlewoodDualData "HallLittlewoodQGenerator"
         })
-ff = makeBuiltinBasis("ff", "DisplayName" => "forgotten basis", "DisplayOrder" => 50, "Omega" => "m", "InnerProductData" => hashTable {
-        "Ordinary" => ordinaryDualData "e",
-        "HallLittlewood" => hallLittlewoodDualData "b"
+ff = makeBuiltinBasis(builtinBasisSymbols#"Forgotten", "BasisKey" => "Forgotten", "DisplayName" => "forgotten basis", "DisplayOrder" => builtinBasisDisplayOrders#"Forgotten", "Omega" => "Monomial", "InnerProductData" => hashTable {
+        "Ordinary" => ordinaryDualData "Elementary",
+        "HallLittlewood" => hallLittlewoodDualData "HallLittlewoodBGenerator"
         })
-S = makeBuiltinBasis("S", "DisplayName" => "Schur basis", "DisplayOrder" => 60, "CanBeSkew" => true, "Omega" => "Somega", "InnerProductData" => hashTable {"Ordinary" => ordinaryDualData "S"})
-Somega = makeBuiltinBasis("Somega", "DisplayName" => "omega Schur-style basis", "DisplayOrder" => 61, "CanBeSkew" => true, "Omega" => "S", "InnerProductData" => hashTable {"Ordinary" => ordinaryDualData "Somega"})
-q = makeBuiltinBasis("q", "DisplayName" => "Hall-Littlewood q basis", "DisplayOrder" => 70, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true, "Omega" => "b", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "h", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "m"})
-b = makeBuiltinBasis("b", "DisplayName" => "Hall-Littlewood b basis", "DisplayOrder" => 71, "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true, "Omega" => "q", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "e", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "ff"})
-Q = makeBuiltinBasis("Q", "DisplayName" => "Hall-Littlewood Q basis", "DisplayOrder" => 72, "CanBeSkew" => true, "Omega" => "B", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "S", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "P"})
-B = makeBuiltinBasis("B", "DisplayName" => "Hall-Littlewood B basis", "DisplayOrder" => 73, "CanBeSkew" => true, "Omega" => "Q", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "Somega", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "R"})
-P = makeBuiltinBasis("P", "DisplayName" => "Hall-Littlewood P basis", "DisplayOrder" => 74, "CanBeSkew" => true, "Omega" => "R", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "S", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "Q"})
-R = makeBuiltinBasis("R", "DisplayName" => "omega Hall-Littlewood P basis", "DisplayOrder" => 75, "CanBeSkew" => true, "Omega" => "P", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "Somega", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "B"})
+S = makeBuiltinBasis(builtinBasisSymbols#"Schur", "BasisKey" => "Schur", "DisplayName" => "Schur basis", "DisplayOrder" => builtinBasisDisplayOrders#"Schur", "CanBeSkew" => true, "Omega" => "SchurOmega", "InnerProductData" => hashTable {"Ordinary" => ordinaryDualData "Schur"})
+Somega = makeBuiltinBasis(builtinBasisSymbols#"SchurOmega", "BasisKey" => "SchurOmega", "DisplayName" => "Schur Omega basis", "DisplayOrder" => builtinBasisDisplayOrders#"SchurOmega", "CanBeSkew" => true, "Omega" => "Schur", "InnerProductData" => hashTable {"Ordinary" => ordinaryDualData "SchurOmega"})
+q = makeBuiltinBasis(builtinBasisSymbols#"HallLittlewoodQGenerator", "BasisKey" => "HallLittlewoodQGenerator", "DisplayName" => "Hall-Littlewood q basis", "DisplayOrder" => builtinBasisDisplayOrders#"HallLittlewoodQGenerator", "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true, "Omega" => "HallLittlewoodBGenerator", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "Complete", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "Monomial"})
+b = makeBuiltinBasis(builtinBasisSymbols#"HallLittlewoodBGenerator", "BasisKey" => "HallLittlewoodBGenerator", "DisplayName" => "Hall-Littlewood b basis", "DisplayOrder" => builtinBasisDisplayOrders#"HallLittlewoodBGenerator", "MultiplicativeIndex" => true, "ZeroIndexIsOne" => true, "ZeroOnNegative" => true, "Omega" => "HallLittlewoodQGenerator", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "Elementary", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "Forgotten"})
+Q = makeBuiltinBasis(builtinBasisSymbols#"HallLittlewoodQ", "BasisKey" => "HallLittlewoodQ", "DisplayName" => "Hall-Littlewood Q basis", "DisplayOrder" => builtinBasisDisplayOrders#"HallLittlewoodQ", "CanBeSkew" => true, "Omega" => "HallLittlewoodB", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "Schur", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "HallLittlewoodP"})
+B = makeBuiltinBasis(builtinBasisSymbols#"HallLittlewoodB", "BasisKey" => "HallLittlewoodB", "DisplayName" => "Hall-Littlewood B basis", "DisplayOrder" => builtinBasisDisplayOrders#"HallLittlewoodB", "CanBeSkew" => true, "Omega" => "HallLittlewoodQ", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "SchurOmega", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "HallLittlewoodPOmega"})
+P = makeBuiltinBasis(builtinBasisSymbols#"HallLittlewoodP", "BasisKey" => "HallLittlewoodP", "DisplayName" => "Hall-Littlewood P basis", "DisplayOrder" => builtinBasisDisplayOrders#"HallLittlewoodP", "CanBeSkew" => true, "Omega" => "HallLittlewoodPOmega", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "Schur", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "HallLittlewoodQ"})
+Pomega = makeBuiltinBasis(builtinBasisSymbols#"HallLittlewoodPOmega", "BasisKey" => "HallLittlewoodPOmega", "DisplayName" => "Hall-Littlewood P Omega basis", "DisplayOrder" => builtinBasisDisplayOrders#"HallLittlewoodPOmega", "CanBeSkew" => true, "Omega" => "HallLittlewoodP", "AvailableWhen" => "HallLittlewood", "Specialization" => hallLittlewoodZeroSpecialization "SchurOmega", "InnerProductData" => hashTable {"HallLittlewood" => hallLittlewoodDualData "HallLittlewoodB"})
 
 registerKnownTransformedBasisOutcome hashTable {
-    "SourceBasis" => "h",
+    "SourceBasis" => "Complete",
     "Alphabet" => "(1-t)*X",
     "SumOver" => "SameIndex",
     "TermTransformKind" => "Identity",
-    "EquivalentBasis" => "q"
+    "EquivalentBasis" => "HallLittlewoodQGenerator"
     }
 
 registerKnownTransformedBasisOutcome hashTable {
-    "SourceBasis" => "e",
+    "SourceBasis" => "Elementary",
     "Alphabet" => "(1-t)*X",
     "SumOver" => "SameIndex",
     "TermTransformKind" => "Identity",
-    "EquivalentBasis" => "b"
+    "EquivalentBasis" => "HallLittlewoodBGenerator"
     }
