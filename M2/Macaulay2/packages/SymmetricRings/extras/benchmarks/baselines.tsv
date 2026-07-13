@@ -1,151 +1,151 @@
-case_id	accepted_date	median_cpu_seconds	coefficient_ring	status	notes
-prod-large-four-product	2026-07-12	7.1e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-inner-hl-pleth-large	2026-07-12	0.741462	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-p-four-S	2026-07-12	0.005223	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-unequal-weight-product	2026-07-12	6.9e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pieri-hook-r1-border	2026-07-12	0.000277	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-P-three-p	2026-07-12	0.538391	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-p30-e	2026-07-12	0.047916	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-row-row-to-p	2026-07-12	0.015654	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-four-row2-to-p	2026-07-12	0.031913	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-three-balanced-row2-to-p	2026-07-12	0.042498	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-p30-h	2026-07-12	0.047984	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-large-two-to-p	2026-07-12	0.035506	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L2-r2-split-to-S	2026-07-12	0.071166	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-hl-small-ordinary	2026-07-12	0.063765	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pieri-four-r3-horizontal	2026-07-12	0.000432	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-repeated-row-to-p	2026-07-12	0.001916	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-hl-three-three-ordinary	2026-07-12	7.14865	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-hl-small-retained	2026-07-12	0.009348	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-four-row2-combined	2026-07-12	2.09647	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-three-row2-to-p	2026-07-12	0.031082	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-small-balanced-product	2026-07-12	7e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L2-r8-split-to-S	2026-07-12	0.742978	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-three-multirow-split-to-S	2026-07-12	14.6955	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-row-row-split-to-S	2026-07-12	0.828627	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-hl-three-three-retained	2026-07-12	0.697694	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-h16-p	2026-07-12	0.001323	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-p-four-Somega	2026-07-12	0.160321	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pieri-three-r2-border	2026-07-12	0.000301	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-two-multirow-combined	2026-07-12	6.2018	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-roundtrip-B-three	2026-07-12	1.45887	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pieri-hook-r1-vertical	2026-07-12	0.000309	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-three-balanced-row2-combined	2026-07-12	0.726414	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-four-three-p-to-S	2026-07-12	0.079186	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L3-r3-split-to-S	2026-07-12	2.09557	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-two-multirow-split-to-S	2026-07-12	6.13159	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L2-r8-combined	2026-07-12	0.734667	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-hook-row-combined	2026-07-12	0.024679	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-h30-p	2026-07-12	0.048315	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-large-two-p-to-S	2026-07-12	2.00869	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L2-r6-combined	2026-07-12	8.60518	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-p8-Pomega	2026-07-12	0.00087	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-ff-generic-p	2026-07-12	0.00036	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L3-r4-combined	2026-07-12	0.433656	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L4-r2-combined	2026-07-12	2.08104	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pieri-hook-r1-horizontal	2026-07-12	0.000272	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L2-r4-combined	2026-07-12	0.286513	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L3-r2-combined	2026-07-12	0.351982	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-Somega-three-p	2026-07-12	0.650688	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-roundtrip-h-row	2026-07-12	8.97854	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-e16-p	2026-07-12	0.001287	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-four-three-product	2026-07-12	6.9e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L2-r2-combined	2026-07-12	0.013999	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-two-multirow-to-p	2026-07-12	0.007476	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-p-ones-ff	2026-07-12	0.000959	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pieri-three-r2-vertical	2026-07-12	0.000309	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-large-three-to-p	2026-07-12	0.03685	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-roundtrip-S-hook	2026-07-12	0.008399	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-hook-balanced-p-to-S	2026-07-12	0.016673	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-hook-row-to-p	2026-07-12	0.003183	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-e30-p	2026-07-12	0.048528	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-hook-balanced-product	2026-07-12	6.8e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-two-row2-split-to-S	2026-07-12	0.181995	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-inner-p-S-cycle-heavy	2026-07-12	0.000277	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-three-row2-combined	2026-07-12	0.355813	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-large-four-to-p	2026-07-12	0.043216	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-p8-B	2026-07-12	0.003838	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-S-rectangle-p	2026-07-12	0.001357	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-small-balanced-p-to-S	2026-07-12	0.003191	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-S-hook-p	2026-07-12	0.001533	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-h24-p	2026-07-12	0.019193	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-four-three-to-p	2026-07-12	0.002701	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-hl-row-three-retained	2026-07-12	0.009329	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-q-row-p	2026-07-12	0.211066	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-roundtrip-e-row	2026-07-12	9.07564	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-large-three-product	2026-07-12	6.7e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-p18-b	2026-07-12	0.007476	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-three-three-product	2026-07-12	6.8e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-three-balanced-row2-split-to-S	2026-07-12	4.74159	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-p8-P	2026-07-12	0.000878	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-roundtrip-Pomega-three	2026-07-12	1.93367	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-B-three-p	2026-07-12	0.42301	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-p8-Q	2026-07-12	0.003869	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-large-three-p-to-S	2026-07-12	2.15258	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-S-three-p	2026-07-12	0.190986	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-three-row2-split-to-S	2026-07-12	2.24104	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-unequal-weight-to-p	2026-07-12	0.007292	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pieri-four-r3-border	2026-07-12	0.000369	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-inner-p-S-sparse	2026-07-12	0.000275	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L3-r2-split-to-S	2026-07-12	2.18785	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pieri-three-r2-horizontal	2026-07-12	0.000319	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-m-generic-p	2026-07-12	0.00036	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-p18-q	2026-07-12	0.007465	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-roundtrip-S-three	2026-07-12	1.18373	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L2-r3-split-to-S	2026-07-12	0.053182	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L4-r2-split-to-S	2026-07-12	2.11207	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-two-row2-to-p	2026-07-12	0.007795	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-large-two-product	2026-07-12	6.6e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-e24-p	2026-07-12	0.019296	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-repeated-row-combined	2026-07-12	0.008268	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-Q-three-p	2026-07-12	0.429264	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-Pomega-three-p	2026-07-12	0.538638	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-hook-balanced-to-p	2026-07-12	0.002313	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-three-three-to-p	2026-07-12	0.001545	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-three-three-p-to-S	2026-07-12	0.017308	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-three-multirow-combined	2026-07-12	14.6623	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-repeated-row-split-to-S	2026-07-12	0.030192	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L2-r4-split-to-S	2026-07-12	0.496183	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L3-r4-split-to-S	2026-07-12	0.441533	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-small-balanced-to-p	2026-07-12	0.000709	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L3-r3-combined	2026-07-12	2.0869	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-roundtrip-Q-three	2026-07-12	1.46127	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-hook-row-split-to-S	2026-07-12	0.027394	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-inner-hl-pleth-small	2026-07-12	0.185929	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L2-r3-combined	2026-07-12	0.014512	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-p-ones-m	2026-07-12	0.000948	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-row-row-combined	2026-07-12	0.811561	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-three-multirow-to-p	2026-07-12	0.029837	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-large-four-p-to-S	2026-07-12	6.26482	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pieri-four-r3-vertical	2026-07-12	0.00034	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-roundtrip-P-three	2026-07-12	1.94399	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-conv-b-row-p	2026-07-12	0.209824	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-four-row2-split-to-S	2026-07-12	2.12862	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-cross-L2-r6-split-to-S	2026-07-12	8.69548	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-pleth-two-row2-combined	2026-07-12	0.037384	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-prod-unequal-weight-p-to-S	2026-07-12	0.108816	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-hl-row-three-ordinary	2026-07-12	0.170714	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty
-extra-conv-p-parameter-S	2026-07-12	0.001402	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-inner-S-e	2026-07-12	0.000227	QQ	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-inner-S-h	2026-07-12	0.000233	QQ	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-hl-Pomega-retained	2026-07-12	0.093682	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-inner-q-m-diagonal	2026-07-12	0.000311	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-inner-Somega-e	2026-07-12	0.000321	QQ	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-prod-direct-lr	2026-07-12	0.000494	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-conv-S-combination-p	2026-07-12	0.006775	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-inner-b-ff-diagonal	2026-07-12	0.000319	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-inner-Somega-h	2026-07-12	0.000315	QQ	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-hl-B-ordinary	2026-07-12	0.249952	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-hl-B-retained	2026-07-12	0.038547	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-inner-ordinary-expansions	2026-07-12	0.001976	QQ	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-conv-p-combination-S	2026-07-12	0.001268	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-prod-multiply-to-S	2026-07-12	0.00042	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-prod-post-plethysm	2026-07-12	0.034576	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-inner-B-Pomega-diagonal	2026-07-12	0.000276	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-inner-targeted-Q-P	2026-07-12	0.039034	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-hl-P-ordinary	2026-07-12	0.404738	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-inner-Q-P-diagonal	2026-07-12	0.000283	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-hl-Pomega-ordinary	2026-07-12	0.408745	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-conv-h-to-S	2026-07-12	0.00054	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-conv-S-to-h	2026-07-12	0.000353	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
-extra-hl-P-retained	2026-07-12	0.093075	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%
+case_id	accepted_date	median_cpu_seconds	coefficient_ring	status	notes	cpu_model	memory	os_name	os_version
+prod-large-four-product	2026-07-12	7.1e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+inner-hl-pleth-large	2026-07-12	0.741462	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-p-four-S	2026-07-12	0.005223	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-unequal-weight-product	2026-07-12	6.9e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pieri-hook-r1-border	2026-07-12	0.000277	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-P-three-p	2026-07-12	0.538391	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-p30-e	2026-07-12	0.047916	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-row-row-to-p	2026-07-12	0.015654	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-four-row2-to-p	2026-07-12	0.031913	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-three-balanced-row2-to-p	2026-07-12	0.042498	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-p30-h	2026-07-12	0.047984	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-large-two-to-p	2026-07-12	0.035506	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r2-split-to-S	2026-07-12	0.071166	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+hl-small-ordinary	2026-07-12	0.063765	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pieri-four-r3-horizontal	2026-07-12	0.000432	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-repeated-row-to-p	2026-07-12	0.001916	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+hl-three-three-ordinary	2026-07-12	7.14865	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+hl-small-retained	2026-07-12	0.009348	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-four-row2-combined	2026-07-12	2.09647	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-three-row2-to-p	2026-07-12	0.031082	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-small-balanced-product	2026-07-12	7e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r8-split-to-S	2026-07-12	0.742978	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-three-multirow-split-to-S	2026-07-12	14.6955	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-row-row-split-to-S	2026-07-12	0.828627	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+hl-three-three-retained	2026-07-12	0.697694	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-h16-p	2026-07-12	0.001323	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-p-four-Somega	2026-07-12	0.160321	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pieri-three-r2-border	2026-07-12	0.000301	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-two-multirow-combined	2026-07-12	6.2018	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+roundtrip-B-three	2026-07-12	1.45887	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pieri-hook-r1-vertical	2026-07-12	0.000309	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-three-balanced-row2-combined	2026-07-12	0.726414	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-four-three-p-to-S	2026-07-12	0.079186	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r3-split-to-S	2026-07-12	2.09557	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-two-multirow-split-to-S	2026-07-12	6.13159	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r8-combined	2026-07-12	0.734667	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-hook-row-combined	2026-07-12	0.024679	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-h30-p	2026-07-12	0.048315	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-large-two-p-to-S	2026-07-12	2.00869	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r6-combined	2026-07-12	8.60518	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-p8-Pomega	2026-07-12	0.00087	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-ff-generic-p	2026-07-12	0.00036	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r4-combined	2026-07-12	0.433656	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L4-r2-combined	2026-07-12	2.08104	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pieri-hook-r1-horizontal	2026-07-12	0.000272	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r4-combined	2026-07-12	0.286513	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r2-combined	2026-07-12	0.351982	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-Somega-three-p	2026-07-12	0.650688	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+roundtrip-h-row	2026-07-12	8.97854	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-e16-p	2026-07-12	0.001287	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-four-three-product	2026-07-12	6.9e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r2-combined	2026-07-12	0.013999	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-two-multirow-to-p	2026-07-12	0.007476	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-p-ones-ff	2026-07-12	0.000959	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pieri-three-r2-vertical	2026-07-12	0.000309	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-large-three-to-p	2026-07-12	0.03685	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+roundtrip-S-hook	2026-07-12	0.008399	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-hook-balanced-p-to-S	2026-07-12	0.016673	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-hook-row-to-p	2026-07-12	0.003183	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-e30-p	2026-07-12	0.048528	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-hook-balanced-product	2026-07-12	6.8e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-two-row2-split-to-S	2026-07-12	0.181995	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+inner-p-S-cycle-heavy	2026-07-12	0.000277	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-three-row2-combined	2026-07-12	0.355813	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-large-four-to-p	2026-07-12	0.043216	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-p8-B	2026-07-12	0.003838	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-S-rectangle-p	2026-07-12	0.001357	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-small-balanced-p-to-S	2026-07-12	0.003191	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-S-hook-p	2026-07-12	0.001533	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-h24-p	2026-07-12	0.019193	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-four-three-to-p	2026-07-12	0.002701	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+hl-row-three-retained	2026-07-12	0.009329	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-q-row-p	2026-07-12	0.211066	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+roundtrip-e-row	2026-07-12	9.07564	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-large-three-product	2026-07-12	6.7e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-p18-b	2026-07-12	0.007476	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-three-three-product	2026-07-12	6.8e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-three-balanced-row2-split-to-S	2026-07-12	4.74159	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-p8-P	2026-07-12	0.000878	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+roundtrip-Pomega-three	2026-07-12	1.93367	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-B-three-p	2026-07-12	0.42301	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-p8-Q	2026-07-12	0.003869	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-large-three-p-to-S	2026-07-12	2.15258	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-S-three-p	2026-07-12	0.190986	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-three-row2-split-to-S	2026-07-12	2.24104	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-unequal-weight-to-p	2026-07-12	0.007292	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pieri-four-r3-border	2026-07-12	0.000369	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+inner-p-S-sparse	2026-07-12	0.000275	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r2-split-to-S	2026-07-12	2.18785	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pieri-three-r2-horizontal	2026-07-12	0.000319	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-m-generic-p	2026-07-12	0.00036	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-p18-q	2026-07-12	0.007465	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+roundtrip-S-three	2026-07-12	1.18373	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r3-split-to-S	2026-07-12	0.053182	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L4-r2-split-to-S	2026-07-12	2.11207	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-two-row2-to-p	2026-07-12	0.007795	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-large-two-product	2026-07-12	6.6e-05	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-e24-p	2026-07-12	0.019296	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-repeated-row-combined	2026-07-12	0.008268	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-Q-three-p	2026-07-12	0.429264	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-Pomega-three-p	2026-07-12	0.538638	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-hook-balanced-to-p	2026-07-12	0.002313	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-three-three-to-p	2026-07-12	0.001545	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-three-three-p-to-S	2026-07-12	0.017308	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-three-multirow-combined	2026-07-12	14.6623	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-repeated-row-split-to-S	2026-07-12	0.030192	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r4-split-to-S	2026-07-12	0.496183	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r4-split-to-S	2026-07-12	0.441533	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-small-balanced-to-p	2026-07-12	0.000709	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r3-combined	2026-07-12	2.0869	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+roundtrip-Q-three	2026-07-12	1.46127	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-hook-row-split-to-S	2026-07-12	0.027394	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+inner-hl-pleth-small	2026-07-12	0.185929	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r3-combined	2026-07-12	0.014512	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-p-ones-m	2026-07-12	0.000948	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-row-row-combined	2026-07-12	0.811561	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-three-multirow-to-p	2026-07-12	0.029837	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-large-four-p-to-S	2026-07-12	6.26482	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pieri-four-r3-vertical	2026-07-12	0.00034	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+roundtrip-P-three	2026-07-12	1.94399	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+conv-b-row-p	2026-07-12	0.209824	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-four-row2-split-to-S	2026-07-12	2.12862	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r6-split-to-S	2026-07-12	8.69548	QQ	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+pleth-two-row2-combined	2026-07-12	0.037384	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+prod-unequal-weight-p-to-S	2026-07-12	0.108816	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+hl-row-three-ordinary	2026-07-12	0.170714	FracQQt	accepted	initial systematic baseline; Apple M4; macOS 15.7.7; M2 1.26.06-26-ga4df3f098a-dirty	Apple M4	16 GB	macOS	15.7.7
+extra-conv-p-parameter-S	2026-07-12	0.001402	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-inner-S-e	2026-07-12	0.000227	QQ	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-inner-S-h	2026-07-12	0.000233	QQ	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-hl-Pomega-retained	2026-07-12	0.093682	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-inner-q-m-diagonal	2026-07-12	0.000311	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-inner-Somega-e	2026-07-12	0.000321	QQ	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-prod-direct-lr	2026-07-12	0.000494	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-conv-S-combination-p	2026-07-12	0.006775	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-inner-b-ff-diagonal	2026-07-12	0.000319	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-inner-Somega-h	2026-07-12	0.000315	QQ	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-hl-B-ordinary	2026-07-12	0.249952	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-hl-B-retained	2026-07-12	0.038547	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-inner-ordinary-expansions	2026-07-12	0.001976	QQ	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-conv-p-combination-S	2026-07-12	0.001268	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-prod-multiply-to-S	2026-07-12	0.00042	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-prod-post-plethysm	2026-07-12	0.034576	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-inner-B-Pomega-diagonal	2026-07-12	0.000276	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-inner-targeted-Q-P	2026-07-12	0.039034	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-hl-P-ordinary	2026-07-12	0.404738	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-inner-Q-P-diagonal	2026-07-12	0.000283	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-hl-Pomega-ordinary	2026-07-12	0.408745	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-conv-h-to-S	2026-07-12	0.00054	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-conv-S-to-h	2026-07-12	0.000353	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+extra-hl-P-retained	2026-07-12	0.093075	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7

@@ -1,243 +1,312 @@
-# Systematic SymmetricRings benchmarks
+# SymmetricRings systematic benchmark suite
 
-This directory is independent of the historical `../benchmarks.m2` notebook.
-The notebook remains unchanged and is not loaded or interpreted by this system.
+This directory contains the reproducible benchmark system for the
+`SymmetricRings` package.  It measures representative mathematical operations,
+compares a run with accepted baselines, records the machine and run conditions,
+and writes a human-readable report.
 
-The catalog separates mathematical inputs from executable operations:
+The suite is designed so that a contributor can run it without elevated
+privileges and without knowing the implementation details of every algorithm.
 
-- `partitions.m2` defines stable named partitions and pair families.
-- `cases.m2` combines those inputs with operation, ring, and timing-tier data.
-- `operations.m2` is the only file that translates operation names into code.
-- `runner.m2` executes or lists one-process benchmark cases.
-- `run-benchmarks.sh` creates a fresh M2 process for each cold repetition.
-- `validate.m2` checks identifiers, references, operations, tiers, and weights.
-- `summarize-results.awk` calculates per-case minimum, median, and maximum CPU time.
-- `compare-results.awk` compares current medians with the best valid and most
-  recent accepted baselines.
-- `estimate-run.awk` estimates a selected run without executing its cases.
-- `accept-summary.awk` prepares reviewed baseline rows.
-- `collect-system-info.sh` records hardware, OS, M2, build, and Git metadata.
-- `collect-run-conditions.sh` takes unprivileged pre-run and post-run resource
-  snapshots.
-- `summarize-run-conditions.awk` assesses snapshots and family calibration
-  drift.
-- `make-report.sh` combines system metadata and comparisons into Markdown.
-- `baselines.tsv` is reserved for reviewed, accepted historical medians.
+## Quick start
 
-## Running
-
-From the nested Macaulay2 source tree, first install the current package:
+Run commands from this directory.  The runner's help and listing modes are the
+authoritative source for the exact command-line spelling:
 
 ```sh
-CCACHE_DISABLE=1 cmake --build BUILD/build --target install-SymmetricRings -j2
+./run-benchmarks.sh --help
+./run-benchmarks.sh --list
 ```
 
-List the complete catalog:
+A normal selected run has the form:
 
 ```sh
-Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh --list
+./run-benchmarks.sh --family SchurPlethysm
 ```
 
-Validate the catalog without running its computations:
+Each run creates one timestamped directory under `results/`.  Its final
+`report.md` contains the comparison intended for people to read.  When sharing
+a run in chat, share **only `report.md`**, not all of the auxiliary files.
+
+Before a long run, use estimate mode with the same selection options.  It reads
+the latest available timings and accepted baselines but does not execute tests
+or create a results directory:
 
 ```sh
-BUILD/build/M2 --script \
-  Macaulay2/packages/SymmetricRings/extras/benchmarks/validate.m2
+./run-benchmarks.sh --family SchurPlethysm --estimate
 ```
 
-Run one case three times in fresh processes:
+## How cases are organized
+
+The suite is table-driven.  Partition data, case definitions, and operation
+definitions are kept separately so that mathematical inputs can be reused.
+Each case has a stable name, a family, and a tier.
+
+Core families cover routinely monitored operations.  Additional breadth is
+placed in families whose names end in `-extra`, including extra basis
+conversions, Schur and Hall--Littlewood products, and inner products.  The
+extra families are useful for audits and algorithm work without making every
+ordinary run exhaustive.
+
+Use listing mode to see the current cases and their metadata.  Do not copy a
+case list into this README: the table files are the maintained source of truth.
+
+## Selecting work
+
+Selections can be made by case, family, or tier.  Multiple selectors can be
+used to focus a run.  Representative cross-family checks are available at
+three coverage levels:
 
 ```sh
-Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --case pleth-three-row2-combined
+./run-benchmarks.sh --varied-fixed light
+./run-benchmarks.sh --varied-fixed standard
+./run-benchmarks.sh --varied-fixed thorough
 ```
 
-Run a family or timing tier:
+The fixed form always selects the same representative cases, making it useful
+for repeated checks during development.
+
+The random form samples within the selected families:
 
 ```sh
-Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --family SchurPlethysm --tier Medium --repetitions 3
-
-Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --tier Small --repetitions 3 --output symmetricrings-small
+./run-benchmarks.sh --varied-random standard --seed 12345
 ```
 
-Run a curated cross-family performance sample:
+Record the seed when sharing a random run.  The coverage levels select
+increasing numbers of cases per family; they describe breadth, not a promise
+about execution speed.
+
+To execute only cases that have no accepted baseline and no result in the
+single most recently modified run, use:
 
 ```sh
-Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --varied-fixed light
-
-Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --varied-fixed thorough
+./run-benchmarks.sh --new
 ```
 
-Or sample independently within every eligible family:
+“New” deliberately checks only the accepted baseline and that one latest run.
+It does not scan all historical result directories.
 
-```sh
-Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --varied-random standard
+## What happens during a run
 
-Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --varied-random standard --seed 42
-```
+For each selected case and repetition, the suite launches a fresh Macaulay2
+process.  This avoids accidental sharing of caches between unrelated cases and
+makes individual failures easier to diagnose.
 
-The `light`, `standard`, and `thorough` names describe breadth, not timing
-tiers. Fixed profiles use nested curated lists, so `light` is a subset of
-`standard`, which is a subset of `thorough`. Random profiles select at most 1,
-2, or 4 cases per eligible family, respectively. A random seed is generated
-and recorded when omitted; supplying `--seed` reproduces the selection.
-Family and tier filters may be combined with either varied mode.
+The suite records:
 
-Run only cases that have never produced a recorded raw result and have never
-appeared in the selected baseline table:
+- raw per-repetition measurements;
+- summarized median timings;
+- comparison with accepted baselines;
+- system information;
+- calibration probes before and after each family;
+- a run-condition classification;
+- a Markdown report.
 
-```sh
-Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --new --list
+No performance monitor runs during a timed test.  Calibration occurs only
+before and after families, so the probes do not compete with benchmark work.
+All system and memory information is collected without elevated privileges.
 
-Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --new --repetitions 3
-```
+The time estimate uses the most recent run median when one is available,
+otherwise the accepted baseline, plus the suite's startup and calibration
+model.  It is an estimate rather than a scheduling guarantee.
 
-`--new` may be combined with family, tier, or varied selection. It checks case
-IDs in the table selected by `--baselines` and in only the most recently
-modified `results/*/raw.tsv`. Older non-baseline runs do not affect selection.
-The reference run is recorded in `conditions.tsv` and the report.
+## Results directories
 
-Estimate the wall time for any selection without running it:
-
-```sh
-Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --varied-fixed standard --estimate
-
-Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --family SchurPlethysm --tier Medium --repetitions 5 --estimate
-```
-
-`--estimate` applies the same case, family, tier, varied, seed, and new-case
-filters as a real run. For each case it prefers the median wall time from the
-single most recent result run, then falls back to the most recent accepted
-baseline median. The total also models one fresh M2 process per repetition and
-two calibration processes per family. This is an estimate, not a benchmark;
-it creates no result directory. The default process and calibration constants
-may be overridden with `SYMRINGS_BENCH_PROCESS_OVERHEAD_SECONDS` and
-`SYMRINGS_BENCH_CALIBRATION_SECONDS`.
-
-The supported tiers are `Small`, `Medium`, `Large`, and `Stress`. The initial
-catalog avoids putting correctness smoke tests into the timing data; package
-tests remain the correctness authority. The runner nevertheless checks the
-expected homogeneous result weight by default. Use `--no-verify` only for
-diagnostic measurements.
-
-Optional breadth cases live in `BasisConversion-extra`, `SchurProduct-extra`,
-`HallLittlewoodProduct-extra`, and `InnerProduct-extra`. They cover structured
-linear combinations, direct LR expansion, post-plethysm multiplication,
-additional Hall–Littlewood product bases, and several inner-product dispatcher
-routes. Run an extra family directly with `--family NAME`, or let a varied
-profile sample it.
-
-## Result format
-
-Results are append-only TSV records with the following columns:
+A completed run creates a directory like:
 
 ```text
-case_id family operation tier coefficient_ring repetition
-cpu_seconds wall_seconds result_terms result_weight input_group
-lambda mu probe lambda_weight lambda_length mu_weight mu_length
-expected_weight pair_class
+results/
+  YYYYMMDD-HHMMSS/
+    raw...
+    summary...
+    comparison...
+    system...
+    conditions...
+    report.md
 ```
 
-`input_group` ties combined computations to their split stages. For example,
-the three records for a plethysm group time combined `@`, production in power
-sums, and subsequent conversion to Schur separately.
+Exact auxiliary filenames may evolve.  Treat `report.md` as the stable human
+entry point and retain the entire directory locally as the audit record.
 
-Each completed run creates one timestamped directory under `results/`:
+The report is ordered for review:
 
-```text
-results/TIMESTAMP/
-  raw.tsv
-  summary.tsv
-  comparison.tsv
-  system.tsv
-  conditions.tsv
-  report.md
-```
+1. overall summary;
+2. baseline comparison, broken into one table per family;
+3. comparison of CPU, RAM, and operating system with accepted baselines;
+4. system information;
+5. run conditions.
 
-Pass `--output RUN-NAME` to choose the subdirectory name under `results/`
-explicitly. Run names must be a single path component. The runner refuses to
-reuse an existing directory, so separate invocations cannot accidentally mix
-their raw repetitions or derived reports.
+The overall and family summaries use compact two-row tables.  Before each
+family's detailed results, the report summarizes improvements, regressions,
+unchanged cases, and new cases.  New cases are counted; the report does not add
+a long prose list titled “New cases without an accepted baseline.”
 
-The baseline comparison is also printed in the terminal. Cases are classified
-as `stable`, `improvement`, `regression`, or `new`. It reports changes from
-both the best valid historical median and the most recent accepted median. The
-The Markdown report starts with an overall summary, then groups baseline
-comparisons into one table per benchmark family, followed by system information
-and run conditions. Each family table is preceded by status counts and details
-of improvements and regressions. New cases are counted but not enumerated in
-prose. The overall and per-family summaries use a header row and one value row
-for quick scanning.
-The default classification threshold is ten percent; set
-`THRESHOLD_PERCENT` to override it. Use `--baselines FILE` to compare against a
-different baseline table.
+The overall table places `Baseline system` beside run health. It reports
+`same`, `different`, `mixed`, or `unknown`, based on CPU model, reported RAM,
+and operating-system name/version stored with the most recent accepted
+baseline for each selected case. The detailed comparison makes any mismatch
+visible; this classification does not alter timing classifications.
 
-The runner executes a fixed `conv-S-three-p` calibration probe in a fresh M2
-process immediately before and after each selected family. Nothing monitors or
-samples the machine concurrently with timed benchmark cases. The unprivileged
-condition snapshots record power source, Low Power Mode, coarse macOS thermal
-state when available, memory availability and pageouts, and load averages.
-The report classifies run health as `clean`, `warning`, or `compromised` and
-includes the meaning of all three classifications. Calibration drift of at
-least 10% produces a warning and drift of at least 20% marks a run compromised;
-the assessment also accounts for thermal state, Low Power Mode, memory
-pressure, and pageouts. Pageout increases are informational below 64 MiB. They
-produce a warning only at 64 MiB or more together with at least 1 MiB/s activity
-or memory below 15%, and mark a run compromised only at 512 MiB or more together
-with at least 5 MiB/s activity or memory below 5%.
+## Repetitions and timing
 
-Summarize a result file:
+The reported comparison uses median CPU time.  A normal baseline-quality run
+uses at least three repetitions.  Very short or noisy comparisons should use
+five or more.  Keep the number of repetitions the same when comparing closely
+matched runs.
 
-```sh
-Macaulay2/packages/SymmetricRings/extras/benchmarks/summarize-results.awk \
-  results/20260712-183000/raw.tsv > summary.tsv
-```
+The benchmarked operation should contain the mathematical work named by the
+case, not report formatting or printing.  A test must also verify enough of its
+result to catch an incorrect shortcut; fast wrong answers are not performance
+improvements.
 
-Use the median CPU time as the primary comparison. Keep the individual runs,
-and use at least five repetitions before classifying a difference below ten
-percent as a regression. Warm-cache studies should be separate case families;
-the standard runner intentionally provides cold M2 processes.
+Each repetition uses the same mathematical input and coefficient ring recorded
+by the case.  Changing a partition, ring, or construction method creates a
+different benchmark even if the displayed operation looks similar.
 
-Cases remain `new` until a baseline is deliberately accepted. After reviewing
-a generated summary, prepare rows for appending with:
+## Run conditions
 
-```sh
-ACCEPTED_DATE=2026-07-12 NOTES='initial systematic baseline' \
-  Macaulay2/packages/SymmetricRings/extras/benchmarks/accept-summary.awk \
-  results/TIMESTAMP/summary.tsv >> \
-  Macaulay2/packages/SymmetricRings/extras/benchmarks/baselines.tsv
-```
+Every report classifies the run:
 
-Running benchmarks never silently changes their baseline.
+| Classification | Meaning |
+|---|---|
+| **Clean** | Calibration and memory indicators show no material disturbance. |
+| **Warning** | Some condition may have influenced timings; interpret small differences cautiously. |
+| **Compromised** | Strong evidence of interference or instability; rerun before accepting conclusions. |
 
-Run artifacts are historical snapshots. After accepting a summary, do not
-regenerate the originating run's comparison or report against the updated
-baseline table. Its classifications should continue to describe what was known
-when the run occurred.
+The calibration probes compare stable work before and after each family.  A
+change of roughly 10 percent raises a warning; roughly 20 percent compromises
+the run.
 
-The system report records the computer model, CPU/chip, core counts, RAM,
-operating system and kernel, architecture, M2 version and executable, CMake
-build type, Git commit and branch, and whether the worktree is dirty. It does
-not record hardware serial numbers, UUIDs, or provisioning identifiers.
+Pageouts are evaluated by transferred volume and rate rather than by a tiny
+nonzero count.  Less than 64 MiB is informational.  Larger activity becomes a
+warning or compromised condition only when paired with substantial transfer
+rate or low available memory.  This avoids labeling harmless background
+pageouts as a bad run.
 
-## Extending the catalog
+These classifications are evidence, not automatic explanations.  A clean run
+can still contain a real software regression, while a warning may affect only
+one family.  Read the family calibration and system notes alongside the
+timings.
 
-Prefer adding a named mathematical shape to `partitions.m2` and referring to
-its stable ID from cases. Add raw partition lists directly to a case only for a
-localized crossover grid. New operation families receive a symbolic operation
-name in `cases.m2` and one implementation branch in `operations.m2`.
+For cleaner measurements:
 
-Do not add implementation-route names to case IDs. Cases describe mathematics;
-the dispatcher remains free to change algorithms. Forced-route experiments
-belong in separate diagnostic runs and should not be accepted as production
-baselines.
+- connect a laptop to power;
+- close CPU- and memory-heavy applications;
+- allow the machine to reach a stable temperature;
+- avoid builds, indexing, backups, and large downloads;
+- rerun important regressions independently.
+
+## Accepted baselines
+
+An accepted baseline is a reviewed reference result, not simply the most recent
+run.  Baselines should come from:
+
+- production automatic routing, unless a case explicitly studies a route;
+- the same mathematical input and coefficient ring as the case definition;
+- at least three repetitions, or more for noisy short cases;
+- a run that is not classified as compromised;
+- a correctly functioning package revision.
+
+Acceptance is an explicit operation.  The runner never promotes new results
+automatically.  Review the report and raw measurements first, then use the
+suite's acceptance command described by `--help`.
+
+Preserve the source run directory after acceptance.  If a case definition
+changes materially, invalidate its old baseline rather than silently comparing
+unlike computations.  Historical reports are snapshots and should not be
+regenerated after later baseline changes.
+
+When assessing a change, compare with the accepted baseline and with the best
+credible equivalent historical time, not only the immediately preceding run.
+
+## Adding a benchmark case
+
+To add a case:
+
+1. Choose or add named partition data.
+2. Choose an existing mathematical operation, or add an operation definition
+   with a precise result check.
+3. Give the case a stable descriptive name.
+4. Assign the most specific family and an appropriate tier.
+5. Use an `-extra` family when the case adds breadth but need not run in every
+   routine check.
+6. Validate the tables and list the case before executing it.
+7. Run it with enough repetitions and inspect its report.
+8. Accept a baseline only after correctness and run conditions are reviewed.
+
+Cases should collectively vary shapes, weights, support densities, coefficient
+rings, and semantic constructions.  Prefer mathematically recognizable inputs
+such as Schur products, Pieri products, plethysms, and round-trip basis
+conversions alongside synthetic stress cases.
+
+Do not make a benchmark depend on the current dispatcher's choice unless the
+case is explicitly a selector test.  Most cases should state a mathematical
+operation and allow production routing to evolve.
+
+## Algorithm comparisons and dispatcher work
+
+Forced routes and selector tracing are diagnostic tools.  They are useful for
+answering two different questions:
+
+- Which mathematical kernel is fastest for this fixed expanded input?
+- Does automatic dispatch choose well for realistic inputs?
+
+Keep these questions separate.  First compare exact outputs of forced routes,
+then time them, then run the ordinary unforced case.  An accepted general
+baseline should normally reflect the ordinary selector.
+
+For a selector change, include examples on both sides of every proposed
+threshold and examples from several semantic sources.  Weight alone is often
+insufficient: term count, support density, largest part, common parts,
+coefficient ring, and combinatorial tags can all predict behavior.
+
+## Files in this directory
+
+The suite is divided into small components for maintainability:
+
+- partition tables define reusable mathematical indices;
+- case tables combine inputs, operations, families, and tiers;
+- operation code constructs and verifies computations;
+- the runner and shell wrapper select and execute cases;
+- validation checks the tables before expensive work;
+- summarization and comparison compute medians and baseline differences;
+- estimation predicts duration without running cases;
+- system, condition, and calibration code describe the environment;
+- report code renders the final Markdown document;
+- baseline data stores accepted reference measurements.
+
+When changing one component, preserve the distinction between raw measurement,
+statistical summary, comparison policy, and presentation.  In particular, do
+not encode report wording in a mathematical operation or baseline policy in a
+case definition.
+
+## Troubleshooting
+
+If a case fails, run that single case with one repetition and inspect its raw
+output.  Confirm that Macaulay2 loads the intended working-tree package rather
+than another installed copy.
+
+If timings unexpectedly regress:
+
+1. check the run-condition classification;
+2. compare family calibration probes;
+3. confirm the coefficient ring and exact case definition;
+4. use dispatcher tracing outside the timed region;
+5. compare a forced old and new route on the same expanded input;
+6. repeat the case in a fresh run;
+7. inspect whether input construction, shadow-QQ conversion, or the target
+   operation is actually responsible.
+
+If a new case is not classified as new, remember that `--new` consults both the
+accepted baseline and the single most recent raw run.  A result in that latest
+run is enough to make the case non-new even if it has not been accepted.
+
+## Reporting a benchmark result
+
+For routine collaboration, the generated `report.md` is the only run artifact
+that should be shared in chat.  It already contains the overall and family
+summaries, detailed comparisons, system information, and run conditions.
+
+Keep the remaining files in the timestamped results directory.  They provide
+the local evidence needed for deeper investigation without overwhelming the
+initial review.

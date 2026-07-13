@@ -88,9 +88,11 @@ system.tsv  conditions.tsv  report.md
 Keep expected-weight verification enabled for production measurements;
 `--no-verify` is diagnostic only.
 
-Reports contain an overall summary, family comparison tables, system data, and
-run conditions. Count new cases but do not enumerate them in prose. Never add
-serial numbers, hardware UUIDs, or provisioning identifiers.
+Reports contain an overall summary, family comparison tables, a comparison of
+CPU/RAM/OS with the selected accepted baselines, system data, and run
+conditions. Put the baseline-system result beside run health in the overall
+summary. Count new cases but do not enumerate them in prose. Never add serial
+numbers, hardware UUIDs, or provisioning identifiers.
 
 After a suite run, `report.md` is the only result file to share or link in
 chat. Keep every TSV locally for reproducibility and diagnosis.
@@ -117,8 +119,10 @@ Use median CPU time as primary. Compare against both the best valid and most
 recent accepted medians. A fastest individual repetition is not a baseline.
 For changes below about 10%, use at least five repetitions before classifying.
 
-Accept a reviewed summary explicitly with `accept-summary.awk`; provide an
-acceptance date and useful note, and append its output to `baselines.tsv`.
+Accept a reviewed summary explicitly with `accept-summary.awk`; pass the run's
+`system.tsv` before its `summary.tsv`, provide an acceptance date and useful
+note, and append its output to `baselines.tsv`. This records the coarse system
+configuration with each accepted timing.
 
 Run directories are historical snapshots. After accepting a baseline, do not
 regenerate that run's `comparison.tsv` or `report.md`; a case that was new when

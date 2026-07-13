@@ -322,7 +322,7 @@ printf 'Raw results written to %s\n' "$raw_file" >&2
 "$SCRIPT_DIR/summarize-results.awk" "$raw_file" > "$summary_file"
 "$SCRIPT_DIR/compare-results.awk" "$BASELINES" "$raw_file" > "$comparison_file"
 "$SCRIPT_DIR/make-report.sh" "$system_file" "$comparison_file" \
-    "$conditions_file" > "$report_file"
+    "$conditions_file" "$BASELINES" > "$report_file"
 printf 'Summary written to %s\n' "$summary_file" >&2
 printf 'Baseline comparison written to %s\n' "$comparison_file" >&2
 printf 'System information written to %s\n' "$system_file" >&2
