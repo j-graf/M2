@@ -186,6 +186,62 @@ benchmarkInnerProductCases = {
         {("Lambda", {12,2}), ("Mu", {8,4,2}), ("InputGroup", "inner-p-S-cycle-heavy")})
     }
 
+-- Optional cases that broaden mathematical structure without making every
+-- routine run pay for the full cross-product of bases and input shapes.
+benchmarkExtraCases = {
+    benchmarkCaseRecord("extra-conv-S-to-h", "BasisConversion-extra", "DirectBasisConversion", "FracQQt", "Small",
+        {("SourceBasis", "Schur"), ("TargetBasis", "Complete"), ("Lambda", {5,4,2,1}), ("InputGroup", "extra-conv-direct-classical")}),
+    benchmarkCaseRecord("extra-conv-h-to-S", "BasisConversion-extra", "DirectBasisConversion", "FracQQt", "Small",
+        {("SourceBasis", "Complete"), ("TargetBasis", "Schur"), ("Lambda", {5,4,2,1}), ("InputGroup", "extra-conv-direct-classical")}),
+    benchmarkCaseRecord("extra-conv-p-combination-S", "BasisConversion-extra", "PowerSumCombinationToSchur", "FracQQt", "Medium",
+        {("Lambda", {8,4,2}), ("Mu", {7,4,3}), ("Probe", {6,5,3}), ("InputGroup", "extra-conv-p-combination")}),
+    benchmarkCaseRecord("extra-conv-p-parameter-S", "BasisConversion-extra", "ParameterPowerSumCombinationToSchur", "FracQQt", "Medium",
+        {("Lambda", {8,4,2}), ("Mu", {7,4,3}), ("Probe", {6,5,3}), ("InputGroup", "extra-conv-p-combination")}),
+    benchmarkCaseRecord("extra-conv-S-combination-p", "BasisConversion-extra", "SchurCombinationToPowerSums", "FracQQt", "Medium",
+        {("Lambda", {8,4,2}), ("Mu", {7,4,3}), ("Probe", {6,5,3}), ("InputGroup", "extra-conv-S-combination")}),
+
+    benchmarkCaseRecord("extra-prod-direct-lr", "SchurProduct-extra", "SchurProductExpanded", "FracQQt", "Medium",
+        {("Lambda", {4,3,1}), ("Mu", {3,3,2}), ("InputGroup", "extra-prod-lr")}),
+    benchmarkCaseRecord("extra-prod-multiply-to-S", "SchurProduct-extra", "SchurProductMultiplyToBasis", "FracQQt", "Medium",
+        {("Lambda", {4,3,1}), ("Mu", {3,3,2}), ("InputGroup", "extra-prod-lr")}),
+    benchmarkCaseRecord("extra-prod-post-plethysm", "SchurProduct-extra", "PlethysmSchurProductToSchur", "FracQQt", "Large",
+        {("Lambda", {4,2}), ("Mu", {2}), ("Probe", {2,1}), ("InputGroup", "extra-prod-post-plethysm")}),
+
+    benchmarkCaseRecord("extra-hl-P-ordinary", "HallLittlewoodProduct-extra", "HallLittlewoodBasisProduct", "FracQQt", "Medium",
+        {("SourceBasis", "HallLittlewoodP"), ("Lambda", {4,2}), ("Mu", {3,2,1}), ("InputGroup", "extra-hl-P")}),
+    benchmarkCaseRecord("extra-hl-P-retained", "HallLittlewoodProduct-extra", "HallLittlewoodBasisProductRetained", "FracQQt", "Medium",
+        {("SourceBasis", "HallLittlewoodP"), ("Lambda", {4,2}), ("Mu", {3,2,1}), ("InputGroup", "extra-hl-P")}),
+    benchmarkCaseRecord("extra-hl-B-ordinary", "HallLittlewoodProduct-extra", "HallLittlewoodBasisProduct", "FracQQt", "Medium",
+        {("SourceBasis", "HallLittlewoodB"), ("Lambda", {4,2}), ("Mu", {3,2,1}), ("InputGroup", "extra-hl-B")}),
+    benchmarkCaseRecord("extra-hl-B-retained", "HallLittlewoodProduct-extra", "HallLittlewoodBasisProductRetained", "FracQQt", "Medium",
+        {("SourceBasis", "HallLittlewoodB"), ("Lambda", {4,2}), ("Mu", {3,2,1}), ("InputGroup", "extra-hl-B")}),
+    benchmarkCaseRecord("extra-hl-Pomega-ordinary", "HallLittlewoodProduct-extra", "HallLittlewoodBasisProduct", "FracQQt", "Medium",
+        {("SourceBasis", "HallLittlewoodPOmega"), ("Lambda", {4,2}), ("Mu", {3,2,1}), ("InputGroup", "extra-hl-Pomega")}),
+    benchmarkCaseRecord("extra-hl-Pomega-retained", "HallLittlewoodProduct-extra", "HallLittlewoodBasisProductRetained", "FracQQt", "Medium",
+        {("SourceBasis", "HallLittlewoodPOmega"), ("Lambda", {4,2}), ("Mu", {3,2,1}), ("InputGroup", "extra-hl-Pomega")}),
+
+    benchmarkCaseRecord("extra-inner-S-h", "InnerProduct-extra", "SchurClassicalInnerProduct", "QQ", "Medium",
+        {("LeftBasis", "Schur"), ("RightBasis", "Complete"), ("Lambda", {8,4,2}), ("Mu", {6,5,3}), ("InputGroup", "extra-inner-Kostka")}),
+    benchmarkCaseRecord("extra-inner-S-e", "InnerProduct-extra", "SchurClassicalInnerProduct", "QQ", "Medium",
+        {("LeftBasis", "Schur"), ("RightBasis", "Elementary"), ("Lambda", {8,4,2}), ("Mu", {6,5,3}), ("InputGroup", "extra-inner-Kostka")}),
+    benchmarkCaseRecord("extra-inner-Somega-h", "InnerProduct-extra", "SchurClassicalInnerProduct", "QQ", "Medium",
+        {("LeftBasis", "SchurOmega"), ("RightBasis", "Complete"), ("Lambda", {8,4,2}), ("Mu", {6,5,3}), ("InputGroup", "extra-inner-Kostka-omega")}),
+    benchmarkCaseRecord("extra-inner-Somega-e", "InnerProduct-extra", "SchurClassicalInnerProduct", "QQ", "Medium",
+        {("LeftBasis", "SchurOmega"), ("RightBasis", "Elementary"), ("Lambda", {8,4,2}), ("Mu", {6,5,3}), ("InputGroup", "extra-inner-Kostka-omega")}),
+    benchmarkCaseRecord("extra-inner-Q-P-diagonal", "InnerProduct-extra", "HallLittlewoodDiagonalInnerProduct", "FracQQt", "Medium",
+        {("LeftBasis", "HallLittlewoodQ"), ("RightBasis", "HallLittlewoodP"), ("Lambda", {6,2}), ("Mu", {5,3}), ("InputGroup", "extra-inner-HL-diagonal")}),
+    benchmarkCaseRecord("extra-inner-B-Pomega-diagonal", "InnerProduct-extra", "HallLittlewoodDiagonalInnerProduct", "FracQQt", "Medium",
+        {("LeftBasis", "HallLittlewoodB"), ("RightBasis", "HallLittlewoodPOmega"), ("Lambda", {6,2}), ("Mu", {5,3}), ("InputGroup", "extra-inner-HL-diagonal")}),
+    benchmarkCaseRecord("extra-inner-q-m-diagonal", "InnerProduct-extra", "GeneratorDualInnerProduct", "FracQQt", "Small",
+        {("LeftBasis", "HallLittlewoodQGenerator"), ("RightBasis", "Monomial"), ("Lambda", {6,2}), ("Mu", {5,3}), ("InputGroup", "extra-inner-generator-diagonal")}),
+    benchmarkCaseRecord("extra-inner-b-ff-diagonal", "InnerProduct-extra", "GeneratorDualInnerProduct", "FracQQt", "Small",
+        {("LeftBasis", "HallLittlewoodBGenerator"), ("RightBasis", "Forgotten"), ("Lambda", {6,2}), ("Mu", {5,3}), ("InputGroup", "extra-inner-generator-diagonal")}),
+    benchmarkCaseRecord("extra-inner-ordinary-expansions", "InnerProduct-extra", "OrdinaryExpansionInnerProduct", "QQ", "Medium",
+        {("Lambda", {7,3,2}), ("Mu", {6,4,2}), ("InputGroup", "extra-inner-fallback")}),
+    benchmarkCaseRecord("extra-inner-targeted-Q-P", "InnerProduct-extra", "TargetedHallLittlewoodInnerProduct", "FracQQt", "Medium",
+        {("SourceBasis", "HallLittlewoodQ"), ("ProbeBasis", "HallLittlewoodP"), ("Lambda", {6,3,1}), ("Mu", {5,4,1}), ("Probe", {5,3,2}), ("InputGroup", "extra-inner-targeted-HL")})
+    }
+
 benchmarkCases = benchmarkUnaryCases |
                  benchmarkPowerSumTargetCases |
                  benchmarkRoundTripCases |
@@ -194,7 +250,8 @@ benchmarkCases = benchmarkUnaryCases |
                  benchmarkPlethysmCases |
                  benchmarkPlethysmCrossoverCases |
                  benchmarkHallProductCases |
-                 benchmarkInnerProductCases
+                 benchmarkInnerProductCases |
+                 benchmarkExtraCases
 
 benchmarkCaseById = hashTable apply(benchmarkCases, x -> (x#"ID", x))
 
@@ -203,8 +260,54 @@ benchmarkCase = id -> (
     benchmarkCaseById#id
     )
 
-benchmarkSelectCases = (familyFilter, tierFilter, idFilter) ->
+benchmarkVariedLight = {
+    "conv-p-four-S", "roundtrip-S-hook", "prod-small-balanced-p-to-S",
+    "pieri-three-r2-horizontal", "pleth-two-row2-combined",
+    "cross-L2-r3-combined", "hl-small-retained", "inner-p-S-sparse",
+    "extra-prod-direct-lr", "extra-inner-Q-P-diagonal"
+    }
+
+benchmarkVariedStandard = unique(benchmarkVariedLight | {
+    "conv-S-three-p", "conv-p30-h", "roundtrip-Q-three",
+    "prod-four-three-to-p", "prod-unequal-weight-p-to-S",
+    "pieri-four-r3-border", "pleth-three-row2-split-to-S",
+    "pleth-hook-row-combined", "cross-L3-r4-split-to-S",
+    "hl-row-three-ordinary", "inner-hl-pleth-small",
+    "extra-conv-p-combination-S", "extra-conv-p-parameter-S",
+    "extra-prod-post-plethysm", "extra-hl-P-retained",
+    "extra-inner-S-h", "extra-inner-q-m-diagonal"
+    })
+
+benchmarkVariedThorough = unique(benchmarkVariedStandard | {
+    "conv-Somega-three-p", "conv-Q-three-p", "conv-p8-Pomega",
+    "roundtrip-h-row", "roundtrip-Pomega-three",
+    "prod-large-three-product", "prod-large-three-p-to-S",
+    "pieri-four-r3-horizontal", "pieri-four-r3-vertical",
+    "pleth-three-balanced-row2-combined", "pleth-four-row2-split-to-S",
+    "pleth-two-multirow-to-p", "cross-L2-r6-combined",
+    "cross-L4-r2-split-to-S", "hl-three-three-retained",
+    "inner-hl-pleth-large", "inner-p-S-cycle-heavy"
+    } | apply(benchmarkExtraCases, case -> case#"ID"))
+
+benchmarkVariedProfiles = hashTable {
+    "light" => benchmarkVariedLight,
+    "standard" => benchmarkVariedStandard,
+    "thorough" => benchmarkVariedThorough
+    }
+
+benchmarkVariedCaseIds = profileName -> (
+    if not benchmarkVariedProfiles#?profileName then
+        error("unknown varied profile: ", profileName,
+              "; expected light, standard, or thorough");
+    benchmarkVariedProfiles#profileName
+    )
+
+benchmarkSelectCases = (familyFilter, tierFilter, idFilter, variedFilter) -> (
+    variedIds := if variedFilter === null then null
+                 else benchmarkVariedCaseIds variedFilter;
     select(benchmarkCases, case ->
         (familyFilter === null or case#"Family" == familyFilter) and
         (tierFilter === null or case#"Tier" == tierFilter) and
-        (idFilter === null or case#"ID" == idFilter))
+        (idFilter === null or case#"ID" == idFilter) and
+        (variedIds === null or member(case#"ID", variedIds)))
+    )

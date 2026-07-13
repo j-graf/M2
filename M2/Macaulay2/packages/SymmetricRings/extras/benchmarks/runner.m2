@@ -18,12 +18,38 @@ if benchmarkMode === null then benchmarkMode = "run"
 benchmarkFamilyFilter = benchmarkEnvironment "SYMRINGS_BENCH_FAMILY"
 benchmarkTierFilter = benchmarkEnvironment "SYMRINGS_BENCH_TIER"
 benchmarkIdFilter = benchmarkEnvironment "SYMRINGS_BENCH_CASE"
+benchmarkVariedFixedFilter = benchmarkEnvironment "SYMRINGS_BENCH_VARIED_FIXED"
 
 if benchmarkMode == "list" then (
     scan(benchmarkSelectCases(benchmarkFamilyFilter,
                               benchmarkTierFilter,
-                              benchmarkIdFilter),
+                              benchmarkIdFilter,
+                              benchmarkVariedFixedFilter),
          case -> print case#"ID");
+    exit 0
+    )
+
+if benchmarkMode == "plan" then (
+    scan(benchmarkSelectCases(benchmarkFamilyFilter,
+                              benchmarkTierFilter,
+                              benchmarkIdFilter,
+                              benchmarkVariedFixedFilter),
+         case -> print(case#"ID" | "|" | case#"Family" | "|" |
+                       case#"CoefficientRing" | "|" | case#"Tier"));
+    exit 0
+    )
+
+-- This fixed, moderately sized conversion is a machine-performance probe,
+-- not a catalog result. The shell runner invokes it in fresh processes only
+-- before and after complete benchmark families.
+if benchmarkMode == "calibration" then (
+    calibrationCase := benchmarkCase "conv-S-three-p";
+    Rbenchmark = benchmarkMakeRing(calibrationCase#"CoefficientRing");
+    calibrationCPUStart := cpuTime();
+    calibrationTiming := elapsedTiming (benchmarkExecute calibrationCase);
+    print("CALIBRATION|conv-S-three-p|" |
+          toString(cpuTime() - calibrationCPUStart) | "|" |
+          toString(calibrationTiming#0));
     exit 0
     )
 

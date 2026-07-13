@@ -1,0 +1,73 @@
+case_id	family	operation	tier	coefficient_ring	repetition	cpu_seconds	wall_seconds	result_terms	result_weight	input_group	lambda	mu	probe	lambda_weight	lambda_length	mu_weight	mu_length	expected_weight	pair_class
+extra-conv-S-to-h	BasisConversion-extra	DirectBasisConversion	Small	FracQQt	1	.000353	.000338166	11	12	extra-conv-direct-classical	{5, 4, 2, 1}	{}	{}	12	4	0	0	12	
+extra-conv-S-to-h	BasisConversion-extra	DirectBasisConversion	Small	FracQQt	2	.000349	.000330625	11	12	extra-conv-direct-classical	{5, 4, 2, 1}	{}	{}	12	4	0	0	12	
+extra-conv-S-to-h	BasisConversion-extra	DirectBasisConversion	Small	FracQQt	3	.000362	.000345542	11	12	extra-conv-direct-classical	{5, 4, 2, 1}	{}	{}	12	4	0	0	12	
+extra-conv-h-to-S	BasisConversion-extra	DirectBasisConversion	Small	FracQQt	1	.00054	.000525	26	12	extra-conv-direct-classical	{5, 4, 2, 1}	{}	{}	12	4	0	0	12	
+extra-conv-h-to-S	BasisConversion-extra	DirectBasisConversion	Small	FracQQt	2	.00054	.000524792	26	12	extra-conv-direct-classical	{5, 4, 2, 1}	{}	{}	12	4	0	0	12	
+extra-conv-h-to-S	BasisConversion-extra	DirectBasisConversion	Small	FracQQt	3	.000535	.00051825	26	12	extra-conv-direct-classical	{5, 4, 2, 1}	{}	{}	12	4	0	0	12	
+extra-conv-p-combination-S	BasisConversion-extra	PowerSumCombinationToSchur	Medium	FracQQt	1	.001284	.00126696	102	14	extra-conv-p-combination	{8, 4, 2}	{7, 4, 3}	{6, 5, 3}	14	3	14	3	14	
+extra-conv-p-combination-S	BasisConversion-extra	PowerSumCombinationToSchur	Medium	FracQQt	2	.001255	.00123733	102	14	extra-conv-p-combination	{8, 4, 2}	{7, 4, 3}	{6, 5, 3}	14	3	14	3	14	
+extra-conv-p-combination-S	BasisConversion-extra	PowerSumCombinationToSchur	Medium	FracQQt	3	.001268	.00125187	102	14	extra-conv-p-combination	{8, 4, 2}	{7, 4, 3}	{6, 5, 3}	14	3	14	3	14	
+extra-conv-p-parameter-S	BasisConversion-extra	ParameterPowerSumCombinationToSchur	Medium	FracQQt	1	.001402	.00138417	118	14	extra-conv-p-combination	{8, 4, 2}	{7, 4, 3}	{6, 5, 3}	14	3	14	3	14	
+extra-conv-p-parameter-S	BasisConversion-extra	ParameterPowerSumCombinationToSchur	Medium	FracQQt	2	.001409	.00139175	118	14	extra-conv-p-combination	{8, 4, 2}	{7, 4, 3}	{6, 5, 3}	14	3	14	3	14	
+extra-conv-p-parameter-S	BasisConversion-extra	ParameterPowerSumCombinationToSchur	Medium	FracQQt	3	.0014	.00138262	118	14	extra-conv-p-combination	{8, 4, 2}	{7, 4, 3}	{6, 5, 3}	14	3	14	3	14	
+extra-conv-S-combination-p	BasisConversion-extra	SchurCombinationToPowerSums	Medium	FracQQt	1	.006847	.00682958	114	14	extra-conv-S-combination	{8, 4, 2}	{7, 4, 3}	{6, 5, 3}	14	3	14	3	14	
+extra-conv-S-combination-p	BasisConversion-extra	SchurCombinationToPowerSums	Medium	FracQQt	2	.006775	.00691771	114	14	extra-conv-S-combination	{8, 4, 2}	{7, 4, 3}	{6, 5, 3}	14	3	14	3	14	
+extra-conv-S-combination-p	BasisConversion-extra	SchurCombinationToPowerSums	Medium	FracQQt	3	.006348	.00632942	114	14	extra-conv-S-combination	{8, 4, 2}	{7, 4, 3}	{6, 5, 3}	14	3	14	3	14	
+extra-prod-direct-lr	SchurProduct-extra	SchurProductExpanded	Medium	FracQQt	1	.000482	.000465333	54	16	extra-prod-lr	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	
+extra-prod-direct-lr	SchurProduct-extra	SchurProductExpanded	Medium	FracQQt	2	.000498	.000480917	54	16	extra-prod-lr	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	
+extra-prod-direct-lr	SchurProduct-extra	SchurProductExpanded	Medium	FracQQt	3	.000494	.000477083	54	16	extra-prod-lr	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	
+extra-prod-multiply-to-S	SchurProduct-extra	SchurProductMultiplyToBasis	Medium	FracQQt	1	.000416	.00039875	54	16	extra-prod-lr	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	
+extra-prod-multiply-to-S	SchurProduct-extra	SchurProductMultiplyToBasis	Medium	FracQQt	2	.00042	.000404125	54	16	extra-prod-lr	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	
+extra-prod-multiply-to-S	SchurProduct-extra	SchurProductMultiplyToBasis	Medium	FracQQt	3	.000431	.000410583	54	16	extra-prod-lr	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	
+extra-prod-post-plethysm	SchurProduct-extra	PlethysmSchurProductToSchur	Large	FracQQt	1	.034576	.034555	118	15	extra-prod-post-plethysm	{4, 2}	{2}	{2, 1}	6	2	2	1	15	
+extra-prod-post-plethysm	SchurProduct-extra	PlethysmSchurProductToSchur	Large	FracQQt	2	.034667	.0346408	118	15	extra-prod-post-plethysm	{4, 2}	{2}	{2, 1}	6	2	2	1	15	
+extra-prod-post-plethysm	SchurProduct-extra	PlethysmSchurProductToSchur	Large	FracQQt	3	.034293	.034268	118	15	extra-prod-post-plethysm	{4, 2}	{2}	{2, 1}	6	2	2	1	15	
+extra-hl-P-ordinary	HallLittlewoodProduct-extra	HallLittlewoodBasisProduct	Medium	FracQQt	1	.405509	.379005	27	12	extra-hl-P	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-P-ordinary	HallLittlewoodProduct-extra	HallLittlewoodBasisProduct	Medium	FracQQt	2	.404667	.3764	27	12	extra-hl-P	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-P-ordinary	HallLittlewoodProduct-extra	HallLittlewoodBasisProduct	Medium	FracQQt	3	.404738	.378577	27	12	extra-hl-P	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-P-retained	HallLittlewoodProduct-extra	HallLittlewoodBasisProductRetained	Medium	FracQQt	1	.092221	.0921889	27	12	extra-hl-P	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-P-retained	HallLittlewoodProduct-extra	HallLittlewoodBasisProductRetained	Medium	FracQQt	2	.093075	.0931341	27	12	extra-hl-P	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-P-retained	HallLittlewoodProduct-extra	HallLittlewoodBasisProductRetained	Medium	FracQQt	3	.093434	.093409	27	12	extra-hl-P	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-B-ordinary	HallLittlewoodProduct-extra	HallLittlewoodBasisProduct	Medium	FracQQt	1	.249362	.249376	27	12	extra-hl-B	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-B-ordinary	HallLittlewoodProduct-extra	HallLittlewoodBasisProduct	Medium	FracQQt	2	.252761	.252737	27	12	extra-hl-B	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-B-ordinary	HallLittlewoodProduct-extra	HallLittlewoodBasisProduct	Medium	FracQQt	3	.249952	.249957	27	12	extra-hl-B	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-B-retained	HallLittlewoodProduct-extra	HallLittlewoodBasisProductRetained	Medium	FracQQt	1	.038547	.0385234	27	12	extra-hl-B	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-B-retained	HallLittlewoodProduct-extra	HallLittlewoodBasisProductRetained	Medium	FracQQt	2	.038547	.0385141	27	12	extra-hl-B	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-B-retained	HallLittlewoodProduct-extra	HallLittlewoodBasisProductRetained	Medium	FracQQt	3	.039495	.0394553	27	12	extra-hl-B	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-Pomega-ordinary	HallLittlewoodProduct-extra	HallLittlewoodBasisProduct	Medium	FracQQt	1	.414253	.388976	27	12	extra-hl-Pomega	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-Pomega-ordinary	HallLittlewoodProduct-extra	HallLittlewoodBasisProduct	Medium	FracQQt	2	.40218	.37861	27	12	extra-hl-Pomega	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-Pomega-ordinary	HallLittlewoodProduct-extra	HallLittlewoodBasisProduct	Medium	FracQQt	3	.408745	.382216	27	12	extra-hl-Pomega	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-Pomega-retained	HallLittlewoodProduct-extra	HallLittlewoodBasisProductRetained	Medium	FracQQt	1	.095012	.0949325	27	12	extra-hl-Pomega	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-Pomega-retained	HallLittlewoodProduct-extra	HallLittlewoodBasisProductRetained	Medium	FracQQt	2	.092324	.0922935	27	12	extra-hl-Pomega	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-hl-Pomega-retained	HallLittlewoodProduct-extra	HallLittlewoodBasisProductRetained	Medium	FracQQt	3	.093682	.0936542	27	12	extra-hl-Pomega	{4, 2}	{3, 2, 1}	{}	6	2	6	3	12	
+extra-inner-S-h	InnerProduct-extra	SchurClassicalInnerProduct	Medium	QQ	1	.000233	.000215334	0	0	extra-inner-Kostka	{8, 4, 2}	{6, 5, 3}	{}	14	3	14	3	0	
+extra-inner-S-h	InnerProduct-extra	SchurClassicalInnerProduct	Medium	QQ	2	.000235	.000216709	0	0	extra-inner-Kostka	{8, 4, 2}	{6, 5, 3}	{}	14	3	14	3	0	
+extra-inner-S-h	InnerProduct-extra	SchurClassicalInnerProduct	Medium	QQ	3	.00023	.000212125	0	0	extra-inner-Kostka	{8, 4, 2}	{6, 5, 3}	{}	14	3	14	3	0	
+extra-inner-S-e	InnerProduct-extra	SchurClassicalInnerProduct	Medium	QQ	1	.000227	.000210958	0	0	extra-inner-Kostka	{8, 4, 2}	{6, 5, 3}	{}	14	3	14	3	0	
+extra-inner-S-e	InnerProduct-extra	SchurClassicalInnerProduct	Medium	QQ	2	.000249	.0002285	0	0	extra-inner-Kostka	{8, 4, 2}	{6, 5, 3}	{}	14	3	14	3	0	
+extra-inner-S-e	InnerProduct-extra	SchurClassicalInnerProduct	Medium	QQ	3	.000226	.000212208	0	0	extra-inner-Kostka	{8, 4, 2}	{6, 5, 3}	{}	14	3	14	3	0	
+extra-inner-Somega-h	InnerProduct-extra	SchurClassicalInnerProduct	Medium	QQ	1	.000306	.000287791	0	0	extra-inner-Kostka-omega	{8, 4, 2}	{6, 5, 3}	{}	14	3	14	3	0	
+extra-inner-Somega-h	InnerProduct-extra	SchurClassicalInnerProduct	Medium	QQ	2	.000315	.000284458	0	0	extra-inner-Kostka-omega	{8, 4, 2}	{6, 5, 3}	{}	14	3	14	3	0	
+extra-inner-Somega-h	InnerProduct-extra	SchurClassicalInnerProduct	Medium	QQ	3	.000337	.000315875	0	0	extra-inner-Kostka-omega	{8, 4, 2}	{6, 5, 3}	{}	14	3	14	3	0	
+extra-inner-Somega-e	InnerProduct-extra	SchurClassicalInnerProduct	Medium	QQ	1	.000321	.000302333	0	0	extra-inner-Kostka-omega	{8, 4, 2}	{6, 5, 3}	{}	14	3	14	3	0	
+extra-inner-Somega-e	InnerProduct-extra	SchurClassicalInnerProduct	Medium	QQ	2	.000314	.000296875	0	0	extra-inner-Kostka-omega	{8, 4, 2}	{6, 5, 3}	{}	14	3	14	3	0	
+extra-inner-Somega-e	InnerProduct-extra	SchurClassicalInnerProduct	Medium	QQ	3	.000359	.000338625	0	0	extra-inner-Kostka-omega	{8, 4, 2}	{6, 5, 3}	{}	14	3	14	3	0	
+extra-inner-Q-P-diagonal	InnerProduct-extra	HallLittlewoodDiagonalInnerProduct	Medium	FracQQt	1	.000307	.000288084	0	0	extra-inner-HL-diagonal	{6, 2}	{5, 3}	{}	8	2	8	2	0	
+extra-inner-Q-P-diagonal	InnerProduct-extra	HallLittlewoodDiagonalInnerProduct	Medium	FracQQt	2	.000283	.000267916	0	0	extra-inner-HL-diagonal	{6, 2}	{5, 3}	{}	8	2	8	2	0	
+extra-inner-Q-P-diagonal	InnerProduct-extra	HallLittlewoodDiagonalInnerProduct	Medium	FracQQt	3	.000279	.000262667	0	0	extra-inner-HL-diagonal	{6, 2}	{5, 3}	{}	8	2	8	2	0	
+extra-inner-B-Pomega-diagonal	InnerProduct-extra	HallLittlewoodDiagonalInnerProduct	Medium	FracQQt	1	.00027	.000252584	0	0	extra-inner-HL-diagonal	{6, 2}	{5, 3}	{}	8	2	8	2	0	
+extra-inner-B-Pomega-diagonal	InnerProduct-extra	HallLittlewoodDiagonalInnerProduct	Medium	FracQQt	2	.000276	.000258083	0	0	extra-inner-HL-diagonal	{6, 2}	{5, 3}	{}	8	2	8	2	0	
+extra-inner-B-Pomega-diagonal	InnerProduct-extra	HallLittlewoodDiagonalInnerProduct	Medium	FracQQt	3	.000296	.000279209	0	0	extra-inner-HL-diagonal	{6, 2}	{5, 3}	{}	8	2	8	2	0	
+extra-inner-q-m-diagonal	InnerProduct-extra	GeneratorDualInnerProduct	Small	FracQQt	1	.000311	.000294666	0	0	extra-inner-generator-diagonal	{6, 2}	{5, 3}	{}	8	2	8	2	0	
+extra-inner-q-m-diagonal	InnerProduct-extra	GeneratorDualInnerProduct	Small	FracQQt	2	.000325	.000305667	0	0	extra-inner-generator-diagonal	{6, 2}	{5, 3}	{}	8	2	8	2	0	
+extra-inner-q-m-diagonal	InnerProduct-extra	GeneratorDualInnerProduct	Small	FracQQt	3	.000302	.000287083	0	0	extra-inner-generator-diagonal	{6, 2}	{5, 3}	{}	8	2	8	2	0	
+extra-inner-b-ff-diagonal	InnerProduct-extra	GeneratorDualInnerProduct	Small	FracQQt	1	.000326	.000307542	0	0	extra-inner-generator-diagonal	{6, 2}	{5, 3}	{}	8	2	8	2	0	
+extra-inner-b-ff-diagonal	InnerProduct-extra	GeneratorDualInnerProduct	Small	FracQQt	2	.000314	.000296292	0	0	extra-inner-generator-diagonal	{6, 2}	{5, 3}	{}	8	2	8	2	0	
+extra-inner-b-ff-diagonal	InnerProduct-extra	GeneratorDualInnerProduct	Small	FracQQt	3	.000319	.00030075	0	0	extra-inner-generator-diagonal	{6, 2}	{5, 3}	{}	8	2	8	2	0	
+extra-inner-ordinary-expansions	InnerProduct-extra	OrdinaryExpansionInnerProduct	Medium	QQ	1	.001976	.00196046	0	0	extra-inner-fallback	{7, 3, 2}	{6, 4, 2}	{}	12	3	12	3	0	
+extra-inner-ordinary-expansions	InnerProduct-extra	OrdinaryExpansionInnerProduct	Medium	QQ	2	.001979	.00195971	0	0	extra-inner-fallback	{7, 3, 2}	{6, 4, 2}	{}	12	3	12	3	0	
+extra-inner-ordinary-expansions	InnerProduct-extra	OrdinaryExpansionInnerProduct	Medium	QQ	3	.00195	.00193258	0	0	extra-inner-fallback	{7, 3, 2}	{6, 4, 2}	{}	12	3	12	3	0	
+extra-inner-targeted-Q-P	InnerProduct-extra	TargetedHallLittlewoodInnerProduct	Medium	FracQQt	1	.038832	.0388027	0	0	extra-inner-targeted-HL	{6, 3, 1}	{5, 4, 1}	{5, 3, 2}	10	3	10	3	0	
+extra-inner-targeted-Q-P	InnerProduct-extra	TargetedHallLittlewoodInnerProduct	Medium	FracQQt	2	.039172	.039148	0	0	extra-inner-targeted-HL	{6, 3, 1}	{5, 4, 1}	{5, 3, 2}	10	3	10	3	0	
+extra-inner-targeted-Q-P	InnerProduct-extra	TargetedHallLittlewoodInnerProduct	Medium	FracQQt	3	.039034	.039006	0	0	extra-inner-targeted-HL	{6, 3, 1}	{5, 4, 1}	{5, 3, 2}	10	3	10	3	0	

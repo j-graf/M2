@@ -14,6 +14,10 @@ assert(all(benchmarkCases, case ->
     member(case#"CoefficientRing", {"QQ", "FracQQt", "QQt"})))
 assert(all(benchmarkCases, case ->
     member(case#"Tier", {"Small", "Medium", "Large", "Stress"})))
+assert(all({"light", "standard", "thorough"}, profileName ->
+    all(benchmarkVariedCaseIds profileName, caseId -> member(caseId, benchmarkCaseIds))))
+assert(all(benchmarkVariedLight, caseId -> member(caseId, benchmarkVariedStandard)))
+assert(all(benchmarkVariedStandard, caseId -> member(caseId, benchmarkVariedThorough)))
 
 scan(benchmarkCases, case -> (
         if case#?"Lambda" then benchmarkInputPartition(case, "Lambda");

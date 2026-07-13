@@ -1,0 +1,20 @@
+field	value
+captured_at	2026-07-12 19:09:36 EDT
+computer_model	MacBook Air
+model_identifier	Mac16,13
+cpu_model	Apple M4
+physical_cores	10 (4 performance and 6 efficiency)
+logical_cores	10 (4 performance and 6 efficiency)
+memory	16 GB
+memory_bytes	unknown
+os_name	macOS
+os_version	15.7.7
+os_build	24G720
+kernel	Darwin 24.6.0
+architecture	arm64
+m2_version	1.26.06-26-ga4df3f098a-dirty (stable)
+m2_executable	/Users/johngraf/M2Dev/Project-SymFcns/M2/M2/BUILD/build/M2
+git_commit	afe03aab1b7eaf1aa3b00303d738a9e119abd947
+git_branch	stable
+git_dirty	true
+cmake_build_type	Release

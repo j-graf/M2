@@ -8,7 +8,14 @@ benchmarkKnownOperations = {
     "HorizontalPieri", "VerticalPieri", "BorderStripProduct",
     "SchurPlethysm", "SchurPlethysmToPowerSums", "SchurPlethysmSplit",
     "HallLittlewoodProduct", "HallLittlewoodProductRetained",
-    "HallLittlewoodPlethysmInnerProduct", "PowerSumsSchurInnerProduct"
+    "HallLittlewoodPlethysmInnerProduct", "PowerSumsSchurInnerProduct",
+    "DirectBasisConversion", "PowerSumCombinationToSchur",
+    "ParameterPowerSumCombinationToSchur", "SchurCombinationToPowerSums",
+    "SchurProductExpanded", "SchurProductMultiplyToBasis",
+    "PlethysmSchurProductToSchur", "HallLittlewoodBasisProduct",
+    "HallLittlewoodBasisProductRetained", "SchurClassicalInnerProduct",
+    "HallLittlewoodDiagonalInnerProduct", "GeneratorDualInnerProduct",
+    "OrdinaryExpansionInnerProduct", "TargetedHallLittlewoodInnerProduct"
     }
 
 benchmarkMakeRing = ringKey -> (
@@ -71,6 +78,55 @@ benchmarkExecute = case -> (
         hallInnerProduct(plethysm(Q_lambda, Q_mu), P_(case#"Probe"))
     else if op == "PowerSumsSchurInnerProduct" then
         hallInnerProduct(p_lambda, S_mu)
+    else if op == "DirectBasisConversion" then
+        toBasis(benchmarkBasisElement(case#"SourceBasis", lambda),
+                benchmarkBasis(case#"TargetBasis"))
+    else if op == "PowerSumCombinationToSchur" then
+        toS(p_lambda + 2*p_mu + p_(case#"Probe"))
+    else if op == "ParameterPowerSumCombinationToSchur" then
+        toS(p_lambda + t*p_mu + (t+1)*p_(case#"Probe"))
+    else if op == "SchurCombinationToPowerSums" then
+        toBasis(S_lambda + 2*S_mu + S_(case#"Probe"), p)
+    else if op == "SchurProductExpanded" then
+        toS(S_lambda*S_mu)
+    else if op == "SchurProductMultiplyToBasis" then
+        multiplyToBasis(S_lambda, S_mu, S)
+    else if op == "PlethysmSchurProductToSchur" then
+        toS(plethysm(S_lambda, S_mu)*S_(case#"Probe"))
+    else if op == "HallLittlewoodBasisProduct" then (
+        Bsource := benchmarkBasis(case#"SourceBasis");
+        toBasis(benchmarkBasisElement(case#"SourceBasis", lambda) *
+                benchmarkBasisElement(case#"SourceBasis", mu), Bsource)
+        )
+    else if op == "HallLittlewoodBasisProductRetained" then (
+        Bretained := benchmarkBasis(case#"SourceBasis");
+        multiplyToBasis(benchmarkBasisElement(case#"SourceBasis", lambda),
+                        benchmarkBasisElement(case#"SourceBasis", mu), Bretained)
+        )
+    else if op == "SchurClassicalInnerProduct" then
+        hallInnerProduct(benchmarkBasisElement(case#"LeftBasis", lambda),
+                         benchmarkBasisElement(case#"RightBasis", mu),
+                         "InnerProduct" => "Ordinary")
+    else if op == "HallLittlewoodDiagonalInnerProduct" then
+        hallInnerProduct(
+            benchmarkBasisElement(case#"LeftBasis", lambda) +
+                2*benchmarkBasisElement(case#"LeftBasis", mu),
+            3*benchmarkBasisElement(case#"RightBasis", lambda) +
+                benchmarkBasisElement(case#"RightBasis", mu))
+    else if op == "GeneratorDualInnerProduct" then
+        hallInnerProduct(
+            benchmarkBasisElement(case#"LeftBasis", lambda) +
+                2*benchmarkBasisElement(case#"LeftBasis", mu),
+            3*benchmarkBasisElement(case#"RightBasis", lambda) +
+                benchmarkBasisElement(case#"RightBasis", mu))
+    else if op == "OrdinaryExpansionInnerProduct" then
+        hallInnerProduct(S_lambda + S_mu, h_lambda + 2*h_mu,
+                         "InnerProduct" => "Ordinary")
+    else if op == "TargetedHallLittlewoodInnerProduct" then
+        hallInnerProduct(toBasis(
+                benchmarkBasisElement(case#"SourceBasis", lambda) +
+                benchmarkBasisElement(case#"SourceBasis", mu), p),
+            benchmarkBasisElement(case#"ProbeBasis", case#"Probe"))
     else error("unknown benchmark operation: ", op)
     )
 
@@ -85,7 +141,15 @@ benchmarkExpectedWeight = case -> (
         leftWeight+rightWeight
     else if member(op, {"HorizontalPieri", "VerticalPieri", "BorderStripProduct"}) then
         leftWeight+case#"Degree"
-    else if member(op, {"HallLittlewoodPlethysmInnerProduct", "PowerSumsSchurInnerProduct"}) then 0
+    else if op == "PlethysmSchurProductToSchur" then
+        leftWeight*rightWeight + sum(case#"Probe")
+    else if member(op, {"SchurProductExpanded", "SchurProductMultiplyToBasis",
+                        "HallLittlewoodBasisProduct", "HallLittlewoodBasisProductRetained"}) then
+        leftWeight+rightWeight
+    else if member(op, {"HallLittlewoodPlethysmInnerProduct", "PowerSumsSchurInnerProduct",
+                        "SchurClassicalInnerProduct", "HallLittlewoodDiagonalInnerProduct",
+                        "GeneratorDualInnerProduct", "OrdinaryExpansionInnerProduct",
+                        "TargetedHallLittlewoodInnerProduct"}) then 0
     else leftWeight
     )
 

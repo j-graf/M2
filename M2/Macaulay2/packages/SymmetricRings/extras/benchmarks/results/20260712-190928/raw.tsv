@@ -1,0 +1,379 @@
+case_id	family	operation	tier	coefficient_ring	repetition	cpu_seconds	wall_seconds	result_terms	result_weight	input_group	lambda	mu	probe	lambda_weight	lambda_length	mu_weight	mu_length	expected_weight	pair_class
+conv-h16-p	BasisConversion	BasisToPowerSums	Small	QQ	1	.001368	.00194188	231	16	h16-p	{16}	{}	{}	16	1	0	0	16	
+conv-h16-p	BasisConversion	BasisToPowerSums	Small	QQ	2	.001323	.00130583	231	16	h16-p	{16}	{}	{}	16	1	0	0	16	
+conv-h16-p	BasisConversion	BasisToPowerSums	Small	QQ	3	.001252	.00123592	231	16	h16-p	{16}	{}	{}	16	1	0	0	16	
+conv-h24-p	BasisConversion	BasisToPowerSums	Small	FracQQt	1	.01936	.0193387	1575	24	h24-p	{24}	{}	{}	24	1	0	0	24	
+conv-h24-p	BasisConversion	BasisToPowerSums	Small	FracQQt	2	.019193	.0191749	1575	24	h24-p	{24}	{}	{}	24	1	0	0	24	
+conv-h24-p	BasisConversion	BasisToPowerSums	Small	FracQQt	3	.018919	.0188978	1575	24	h24-p	{24}	{}	{}	24	1	0	0	24	
+conv-h30-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	1	.047709	.0476798	5604	30	h30-p	{30}	{}	{}	30	1	0	0	30	
+conv-h30-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	2	.048315	.0482852	5604	30	h30-p	{30}	{}	{}	30	1	0	0	30	
+conv-h30-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	3	.049224	.0491984	5604	30	h30-p	{30}	{}	{}	30	1	0	0	30	
+conv-e16-p	BasisConversion	BasisToPowerSums	Small	QQ	1	.001287	.00127075	231	16	e16-p	{16}	{}	{}	16	1	0	0	16	
+conv-e16-p	BasisConversion	BasisToPowerSums	Small	QQ	2	.001319	.00130262	231	16	e16-p	{16}	{}	{}	16	1	0	0	16	
+conv-e16-p	BasisConversion	BasisToPowerSums	Small	QQ	3	.001275	.00126025	231	16	e16-p	{16}	{}	{}	16	1	0	0	16	
+conv-e24-p	BasisConversion	BasisToPowerSums	Small	FracQQt	1	.019203	.0191826	1575	24	e24-p	{24}	{}	{}	24	1	0	0	24	
+conv-e24-p	BasisConversion	BasisToPowerSums	Small	FracQQt	2	.019387	.019362	1575	24	e24-p	{24}	{}	{}	24	1	0	0	24	
+conv-e24-p	BasisConversion	BasisToPowerSums	Small	FracQQt	3	.019296	.0192753	1575	24	e24-p	{24}	{}	{}	24	1	0	0	24	
+conv-e30-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	1	.04877	.0487425	5604	30	e30-p	{30}	{}	{}	30	1	0	0	30	
+conv-e30-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	2	.048528	.0485024	5604	30	e30-p	{30}	{}	{}	30	1	0	0	30	
+conv-e30-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	3	.048331	.0482992	5604	30	e30-p	{30}	{}	{}	30	1	0	0	30	
+conv-S-hook-p	BasisConversion	BasisToPowerSums	Small	FracQQt	1	.001547	.00152904	58	12	S-hook-p	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	12	
+conv-S-hook-p	BasisConversion	BasisToPowerSums	Small	FracQQt	2	.001533	.00151554	58	12	S-hook-p	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	12	
+conv-S-hook-p	BasisConversion	BasisToPowerSums	Small	FracQQt	3	.001491	.00147396	58	12	S-hook-p	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	12	
+conv-S-rectangle-p	BasisConversion	BasisToPowerSums	Small	QQ	1	.001357	.00134	53	12	S-rectangle-p	{4, 4, 4}	{}	{}	12	3	0	0	12	
+conv-S-rectangle-p	BasisConversion	BasisToPowerSums	Small	QQ	2	.001336	.001321	53	12	S-rectangle-p	{4, 4, 4}	{}	{}	12	3	0	0	12	
+conv-S-rectangle-p	BasisConversion	BasisToPowerSums	Small	QQ	3	.00139	.0013715	53	12	S-rectangle-p	{4, 4, 4}	{}	{}	12	3	0	0	12	
+conv-S-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	1	.190082	.190053	2904	28	S-three-p	{13, 9, 6}	{}	{}	28	3	0	0	28	
+conv-S-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	2	.190986	.190955	2904	28	S-three-p	{13, 9, 6}	{}	{}	28	3	0	0	28	
+conv-S-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	3	.197116	.197111	2904	28	S-three-p	{13, 9, 6}	{}	{}	28	3	0	0	28	
+conv-Somega-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	1	.651471	.651436	1426	25	Somega-three-p	{11, 8, 6}	{}	{}	25	3	0	0	25	
+conv-Somega-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	2	.650688	.650637	1426	25	Somega-three-p	{11, 8, 6}	{}	{}	25	3	0	0	25	
+conv-Somega-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	3	.650654	.650644	1426	25	Somega-three-p	{11, 8, 6}	{}	{}	25	3	0	0	25	
+conv-m-generic-p	BasisConversion	BasisToPowerSums	Small	FracQQt	1	.000361	.000342	5	10	m-generic-p	{6, 3, 1}	{}	{}	10	3	0	0	10	
+conv-m-generic-p	BasisConversion	BasisToPowerSums	Small	FracQQt	2	.00036	.000341458	5	10	m-generic-p	{6, 3, 1}	{}	{}	10	3	0	0	10	
+conv-m-generic-p	BasisConversion	BasisToPowerSums	Small	FracQQt	3	.000344	.000327542	5	10	m-generic-p	{6, 3, 1}	{}	{}	10	3	0	0	10	
+conv-ff-generic-p	BasisConversion	BasisToPowerSums	Small	FracQQt	1	.000352	.000334334	5	10	ff-generic-p	{6, 3, 1}	{}	{}	10	3	0	0	10	
+conv-ff-generic-p	BasisConversion	BasisToPowerSums	Small	FracQQt	2	.00036	.000342375	5	10	ff-generic-p	{6, 3, 1}	{}	{}	10	3	0	0	10	
+conv-ff-generic-p	BasisConversion	BasisToPowerSums	Small	FracQQt	3	.000363	.000344459	5	10	ff-generic-p	{6, 3, 1}	{}	{}	10	3	0	0	10	
+conv-q-row-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	1	.211066	.211036	792	21	q-row-p	{21}	{}	{}	21	1	0	0	21	
+conv-q-row-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	2	.208752	.208722	792	21	q-row-p	{21}	{}	{}	21	1	0	0	21	
+conv-q-row-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	3	.218322	.218292	792	21	q-row-p	{21}	{}	{}	21	1	0	0	21	
+conv-b-row-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	1	.209824	.209795	792	21	b-row-p	{21}	{}	{}	21	1	0	0	21	
+conv-b-row-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	2	.209196	.209165	792	21	b-row-p	{21}	{}	{}	21	1	0	0	21	
+conv-b-row-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	3	.211118	.211086	792	21	b-row-p	{21}	{}	{}	21	1	0	0	21	
+conv-Q-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	1	.431428	.403681	627	20	Q-three-p	{14, 4, 2}	{}	{}	20	3	0	0	20	
+conv-Q-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	2	.425695	.398771	627	20	Q-three-p	{14, 4, 2}	{}	{}	20	3	0	0	20	
+conv-Q-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	3	.429264	.402133	627	20	Q-three-p	{14, 4, 2}	{}	{}	20	3	0	0	20	
+conv-B-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	1	.42301	.397816	627	20	B-three-p	{14, 4, 2}	{}	{}	20	3	0	0	20	
+conv-B-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	2	.430416	.398491	627	20	B-three-p	{14, 4, 2}	{}	{}	20	3	0	0	20	
+conv-B-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	3	.422134	.395305	627	20	B-three-p	{14, 4, 2}	{}	{}	20	3	0	0	20	
+conv-P-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	1	.537121	.509858	627	20	P-three-p	{14, 4, 2}	{}	{}	20	3	0	0	20	
+conv-P-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	2	.538391	.511988	627	20	P-three-p	{14, 4, 2}	{}	{}	20	3	0	0	20	
+conv-P-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	3	.544335	.516904	627	20	P-three-p	{14, 4, 2}	{}	{}	20	3	0	0	20	
+conv-Pomega-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	1	.538638	.512466	627	20	Pomega-three-p	{14, 4, 2}	{}	{}	20	3	0	0	20	
+conv-Pomega-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	2	.528819	.501909	627	20	Pomega-three-p	{14, 4, 2}	{}	{}	20	3	0	0	20	
+conv-Pomega-three-p	BasisConversion	BasisToPowerSums	Medium	FracQQt	3	.541893	.515401	627	20	Pomega-three-p	{14, 4, 2}	{}	{}	20	3	0	0	20	
+conv-p30-h	BasisConversion	PowerSumsToBasis	Medium	FracQQt	1	.047304	.0472754	5604	30	p30-h	{30}	{}	{}	30	1	0	0	30	
+conv-p30-h	BasisConversion	PowerSumsToBasis	Medium	FracQQt	2	.048829	.048798	5604	30	p30-h	{30}	{}	{}	30	1	0	0	30	
+conv-p30-h	BasisConversion	PowerSumsToBasis	Medium	FracQQt	3	.047984	.0479586	5604	30	p30-h	{30}	{}	{}	30	1	0	0	30	
+conv-p30-e	BasisConversion	PowerSumsToBasis	Medium	FracQQt	1	.047916	.0478875	5604	30	p30-e	{30}	{}	{}	30	1	0	0	30	
+conv-p30-e	BasisConversion	PowerSumsToBasis	Medium	FracQQt	2	.048156	.0481247	5604	30	p30-e	{30}	{}	{}	30	1	0	0	30	
+conv-p30-e	BasisConversion	PowerSumsToBasis	Medium	FracQQt	3	.046877	.0468498	5604	30	p30-e	{30}	{}	{}	30	1	0	0	30	
+conv-p-four-S	BasisConversion	PowerSumsToBasis	Small	FracQQt	1	.005301	.00591783	771	24	p-four-S	{9, 7, 5, 3}	{}	{}	24	4	0	0	24	
+conv-p-four-S	BasisConversion	PowerSumsToBasis	Small	FracQQt	2	.005139	.00511942	771	24	p-four-S	{9, 7, 5, 3}	{}	{}	24	4	0	0	24	
+conv-p-four-S	BasisConversion	PowerSumsToBasis	Small	FracQQt	3	.005223	.00520612	771	24	p-four-S	{9, 7, 5, 3}	{}	{}	24	4	0	0	24	
+conv-p-four-Somega	BasisConversion	PowerSumsToBasis	Small	FracQQt	1	.160321	.10613	771	24	p-four-Somega	{9, 7, 5, 3}	{}	{}	24	4	0	0	24	
+conv-p-four-Somega	BasisConversion	PowerSumsToBasis	Small	FracQQt	2	.1597	.105407	771	24	p-four-Somega	{9, 7, 5, 3}	{}	{}	24	4	0	0	24	
+conv-p-four-Somega	BasisConversion	PowerSumsToBasis	Small	FracQQt	3	.161115	.108351	771	24	p-four-Somega	{9, 7, 5, 3}	{}	{}	24	4	0	0	24	
+conv-p-ones-m	BasisConversion	PowerSumsToBasis	Small	FracQQt	1	.000962	.000944042	42	10	p-ones-m	{1, 1, 1, 1, 1, 1, 1, 1, 1, 1}	{}	{}	10	10	0	0	10	
+conv-p-ones-m	BasisConversion	PowerSumsToBasis	Small	FracQQt	2	.000948	.000928292	42	10	p-ones-m	{1, 1, 1, 1, 1, 1, 1, 1, 1, 1}	{}	{}	10	10	0	0	10	
+conv-p-ones-m	BasisConversion	PowerSumsToBasis	Small	FracQQt	3	.000944	.000925459	42	10	p-ones-m	{1, 1, 1, 1, 1, 1, 1, 1, 1, 1}	{}	{}	10	10	0	0	10	
+conv-p-ones-ff	BasisConversion	PowerSumsToBasis	Small	FracQQt	1	.001035	.0010095	42	10	p-ones-ff	{1, 1, 1, 1, 1, 1, 1, 1, 1, 1}	{}	{}	10	10	0	0	10	
+conv-p-ones-ff	BasisConversion	PowerSumsToBasis	Small	FracQQt	2	.000959	.000941417	42	10	p-ones-ff	{1, 1, 1, 1, 1, 1, 1, 1, 1, 1}	{}	{}	10	10	0	0	10	
+conv-p-ones-ff	BasisConversion	PowerSumsToBasis	Small	FracQQt	3	.000945	.000928167	42	10	p-ones-ff	{1, 1, 1, 1, 1, 1, 1, 1, 1, 1}	{}	{}	10	10	0	0	10	
+conv-p18-q	BasisConversion	PowerSumsToBasis	Small	FracQQt	1	.007465	.00744425	385	18	p18-q	{18}	{}	{}	18	1	0	0	18	
+conv-p18-q	BasisConversion	PowerSumsToBasis	Small	FracQQt	2	.007351	.00733063	385	18	p18-q	{18}	{}	{}	18	1	0	0	18	
+conv-p18-q	BasisConversion	PowerSumsToBasis	Small	FracQQt	3	.007501	.00748142	385	18	p18-q	{18}	{}	{}	18	1	0	0	18	
+conv-p18-b	BasisConversion	PowerSumsToBasis	Small	FracQQt	1	.007476	.00745521	385	18	p18-b	{18}	{}	{}	18	1	0	0	18	
+conv-p18-b	BasisConversion	PowerSumsToBasis	Small	FracQQt	2	.00736	.00733929	385	18	p18-b	{18}	{}	{}	18	1	0	0	18	
+conv-p18-b	BasisConversion	PowerSumsToBasis	Small	FracQQt	3	.007492	.00747412	385	18	p18-b	{18}	{}	{}	18	1	0	0	18	
+conv-p8-Q	BasisConversion	PowerSumsToBasis	Small	FracQQt	1	.004193	.00542417	22	8	p8-Q	{8}	{}	{}	8	1	0	0	8	
+conv-p8-Q	BasisConversion	PowerSumsToBasis	Small	FracQQt	2	.003869	.00384908	22	8	p8-Q	{8}	{}	{}	8	1	0	0	8	
+conv-p8-Q	BasisConversion	PowerSumsToBasis	Small	FracQQt	3	.003825	.00380792	22	8	p8-Q	{8}	{}	{}	8	1	0	0	8	
+conv-p8-B	BasisConversion	PowerSumsToBasis	Small	FracQQt	1	.003874	.00385688	22	8	p8-B	{8}	{}	{}	8	1	0	0	8	
+conv-p8-B	BasisConversion	PowerSumsToBasis	Small	FracQQt	2	.003838	.00381604	22	8	p8-B	{8}	{}	{}	8	1	0	0	8	
+conv-p8-B	BasisConversion	PowerSumsToBasis	Small	FracQQt	3	.003824	.003806	22	8	p8-B	{8}	{}	{}	8	1	0	0	8	
+conv-p8-P	BasisConversion	PowerSumsToBasis	Small	FracQQt	1	.000878	.000859708	22	8	p8-P	{8}	{}	{}	8	1	0	0	8	
+conv-p8-P	BasisConversion	PowerSumsToBasis	Small	FracQQt	2	.000885	.000865459	22	8	p8-P	{8}	{}	{}	8	1	0	0	8	
+conv-p8-P	BasisConversion	PowerSumsToBasis	Small	FracQQt	3	.000859	.000837625	22	8	p8-P	{8}	{}	{}	8	1	0	0	8	
+conv-p8-Pomega	BasisConversion	PowerSumsToBasis	Small	FracQQt	1	.00087	.000853125	22	8	p8-Pomega	{8}	{}	{}	8	1	0	0	8	
+conv-p8-Pomega	BasisConversion	PowerSumsToBasis	Small	FracQQt	2	.000873	.000852959	22	8	p8-Pomega	{8}	{}	{}	8	1	0	0	8	
+conv-p8-Pomega	BasisConversion	PowerSumsToBasis	Small	FracQQt	3	.00086	.000842416	22	8	p8-Pomega	{8}	{}	{}	8	1	0	0	8	
+roundtrip-S-hook	RoundTrip	BasisRoundTrip	Small	QQ	1	.008399	.00838029	1	12	S-hook	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	12	
+roundtrip-S-hook	RoundTrip	BasisRoundTrip	Small	QQ	2	.008634	.008609	1	12	S-hook	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	12	
+roundtrip-S-hook	RoundTrip	BasisRoundTrip	Small	QQ	3	.008284	.00826729	1	12	S-hook	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	12	
+roundtrip-S-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	1	1.16454	1.16506	1	20	S-three	{10, 6, 4}	{}	{}	20	3	0	0	20	
+roundtrip-S-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	2	1.18373	1.18399	1	20	S-three	{10, 6, 4}	{}	{}	20	3	0	0	20	
+roundtrip-S-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	3	1.19219	1.19276	1	20	S-three	{10, 6, 4}	{}	{}	20	3	0	0	20	
+roundtrip-h-row	RoundTrip	BasisRoundTrip	Large	FracQQt	1	8.98891	8.30118	5	24	h-row	{24}	{}	{}	24	1	0	0	24	
+roundtrip-h-row	RoundTrip	BasisRoundTrip	Large	FracQQt	2	8.97854	8.28625	5	24	h-row	{24}	{}	{}	24	1	0	0	24	
+roundtrip-h-row	RoundTrip	BasisRoundTrip	Large	FracQQt	3	8.97427	8.25716	5	24	h-row	{24}	{}	{}	24	1	0	0	24	
+roundtrip-e-row	RoundTrip	BasisRoundTrip	Large	FracQQt	1	9.07564	8.43662	5	24	e-row	{24}	{}	{}	24	1	0	0	24	
+roundtrip-e-row	RoundTrip	BasisRoundTrip	Large	FracQQt	2	8.9603	8.2822	5	24	e-row	{24}	{}	{}	24	1	0	0	24	
+roundtrip-e-row	RoundTrip	BasisRoundTrip	Large	FracQQt	3	9.11383	8.4376	5	24	e-row	{24}	{}	{}	24	1	0	0	24	
+roundtrip-Q-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	1	1.46127	1.39116	1	14	Q-three	{8, 4, 2}	{}	{}	14	3	0	0	14	
+roundtrip-Q-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	2	1.44789	1.37352	1	14	Q-three	{8, 4, 2}	{}	{}	14	3	0	0	14	
+roundtrip-Q-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	3	1.4629	1.40985	1	14	Q-three	{8, 4, 2}	{}	{}	14	3	0	0	14	
+roundtrip-B-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	1	1.45887	1.38091	1	14	B-three	{8, 4, 2}	{}	{}	14	3	0	0	14	
+roundtrip-B-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	2	1.45002	1.36929	1	14	B-three	{8, 4, 2}	{}	{}	14	3	0	0	14	
+roundtrip-B-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	3	1.47267	1.40067	1	14	B-three	{8, 4, 2}	{}	{}	14	3	0	0	14	
+roundtrip-P-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	1	1.94399	1.83962	1	14	P-three	{8, 4, 2}	{}	{}	14	3	0	0	14	
+roundtrip-P-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	2	1.93777	1.82553	1	14	P-three	{8, 4, 2}	{}	{}	14	3	0	0	14	
+roundtrip-P-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	3	1.94701	1.83772	1	14	P-three	{8, 4, 2}	{}	{}	14	3	0	0	14	
+roundtrip-Pomega-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	1	1.93367	1.82914	1	14	Pomega-three	{8, 4, 2}	{}	{}	14	3	0	0	14	
+roundtrip-Pomega-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	2	2.01929	1.95472	1	14	Pomega-three	{8, 4, 2}	{}	{}	14	3	0	0	14	
+roundtrip-Pomega-three	RoundTrip	BasisRoundTrip	Medium	FracQQt	3	1.91136	1.80515	1	14	Pomega-three	{8, 4, 2}	{}	{}	14	3	0	0	14	
+prod-small-balanced-product	SchurProduct	SchurProduct	Small	FracQQt	1	.00007	.000051375	1	12	prod-small-balanced	{3, 3}	{3, 2, 1}	{}	6	2	6	3	12	balanced-by-staircase
+prod-small-balanced-product	SchurProduct	SchurProduct	Small	FracQQt	2	.000097	.000072541	1	12	prod-small-balanced	{3, 3}	{3, 2, 1}	{}	6	2	6	3	12	balanced-by-staircase
+prod-small-balanced-product	SchurProduct	SchurProduct	Small	FracQQt	3	.000068	.000050334	1	12	prod-small-balanced	{3, 3}	{3, 2, 1}	{}	6	2	6	3	12	balanced-by-staircase
+prod-small-balanced-to-p	SchurProduct	SchurProductToPowerSums	Small	FracQQt	1	.000684	.000664042	30	12	prod-small-balanced	{3, 3}	{3, 2, 1}	{}	6	2	6	3	12	balanced-by-staircase
+prod-small-balanced-to-p	SchurProduct	SchurProductToPowerSums	Small	FracQQt	2	.000709	.000690125	30	12	prod-small-balanced	{3, 3}	{3, 2, 1}	{}	6	2	6	3	12	balanced-by-staircase
+prod-small-balanced-to-p	SchurProduct	SchurProductToPowerSums	Small	FracQQt	3	.00078	.0007525	30	12	prod-small-balanced	{3, 3}	{3, 2, 1}	{}	6	2	6	3	12	balanced-by-staircase
+prod-small-balanced-p-to-S	SchurProduct	SchurProductRoundTrip	Small	FracQQt	1	.003192	.00317492	19	12	prod-small-balanced	{3, 3}	{3, 2, 1}	{}	6	2	6	3	12	balanced-by-staircase
+prod-small-balanced-p-to-S	SchurProduct	SchurProductRoundTrip	Small	FracQQt	2	.003191	.00317133	19	12	prod-small-balanced	{3, 3}	{3, 2, 1}	{}	6	2	6	3	12	balanced-by-staircase
+prod-small-balanced-p-to-S	SchurProduct	SchurProductRoundTrip	Small	FracQQt	3	.003178	.00315958	19	12	prod-small-balanced	{3, 3}	{3, 2, 1}	{}	6	2	6	3	12	balanced-by-staircase
+prod-hook-balanced-product	SchurProduct	SchurProduct	Small	FracQQt	1	.000078	.0000575	1	16	prod-hook-balanced	{5, 1, 1, 1}	{4, 4}	{}	8	4	8	2	16	hook-by-balanced
+prod-hook-balanced-product	SchurProduct	SchurProduct	Small	FracQQt	2	.000066	.000049041	1	16	prod-hook-balanced	{5, 1, 1, 1}	{4, 4}	{}	8	4	8	2	16	hook-by-balanced
+prod-hook-balanced-product	SchurProduct	SchurProduct	Small	FracQQt	3	.000068	.0000495	1	16	prod-hook-balanced	{5, 1, 1, 1}	{4, 4}	{}	8	4	8	2	16	hook-by-balanced
+prod-hook-balanced-to-p	SchurProduct	SchurProductToPowerSums	Small	FracQQt	1	.002316	.002293	102	16	prod-hook-balanced	{5, 1, 1, 1}	{4, 4}	{}	8	4	8	2	16	hook-by-balanced
+prod-hook-balanced-to-p	SchurProduct	SchurProductToPowerSums	Small	FracQQt	2	.002282	.00226387	102	16	prod-hook-balanced	{5, 1, 1, 1}	{4, 4}	{}	8	4	8	2	16	hook-by-balanced
+prod-hook-balanced-to-p	SchurProduct	SchurProductToPowerSums	Small	FracQQt	3	.002313	.00229262	102	16	prod-hook-balanced	{5, 1, 1, 1}	{4, 4}	{}	8	4	8	2	16	hook-by-balanced
+prod-hook-balanced-p-to-S	SchurProduct	SchurProductRoundTrip	Small	FracQQt	1	.016593	.0165733	17	16	prod-hook-balanced	{5, 1, 1, 1}	{4, 4}	{}	8	4	8	2	16	hook-by-balanced
+prod-hook-balanced-p-to-S	SchurProduct	SchurProductRoundTrip	Small	FracQQt	2	.017121	.0171005	17	16	prod-hook-balanced	{5, 1, 1, 1}	{4, 4}	{}	8	4	8	2	16	hook-by-balanced
+prod-hook-balanced-p-to-S	SchurProduct	SchurProductRoundTrip	Small	FracQQt	3	.016673	.0166451	17	16	prod-hook-balanced	{5, 1, 1, 1}	{4, 4}	{}	8	4	8	2	16	hook-by-balanced
+prod-three-three-product	SchurProduct	SchurProduct	Small	FracQQt	1	.000068	.000050333	1	16	prod-three-three	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	three-row-by-repeated
+prod-three-three-product	SchurProduct	SchurProduct	Small	FracQQt	2	.000068	.000050375	1	16	prod-three-three	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	three-row-by-repeated
+prod-three-three-product	SchurProduct	SchurProduct	Small	FracQQt	3	.000073	.000056417	1	16	prod-three-three	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	three-row-by-repeated
+prod-three-three-to-p	SchurProduct	SchurProductToPowerSums	Small	FracQQt	1	.001551	.00153054	90	16	prod-three-three	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	three-row-by-repeated
+prod-three-three-to-p	SchurProduct	SchurProductToPowerSums	Small	FracQQt	2	.001545	.00152604	90	16	prod-three-three	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	three-row-by-repeated
+prod-three-three-to-p	SchurProduct	SchurProductToPowerSums	Small	FracQQt	3	.001544	.00152592	90	16	prod-three-three	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	three-row-by-repeated
+prod-three-three-p-to-S	SchurProduct	SchurProductRoundTrip	Small	FracQQt	1	.017261	.0172388	54	16	prod-three-three	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	three-row-by-repeated
+prod-three-three-p-to-S	SchurProduct	SchurProductRoundTrip	Small	FracQQt	2	.017308	.0172832	54	16	prod-three-three	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	three-row-by-repeated
+prod-three-three-p-to-S	SchurProduct	SchurProductRoundTrip	Small	FracQQt	3	.017318	.0172938	54	16	prod-three-three	{4, 3, 1}	{3, 3, 2}	{}	8	3	8	3	16	three-row-by-repeated
+prod-four-three-product	SchurProduct	SchurProduct	Medium	FracQQt	1	.000069	.000051291	1	20	prod-four-three	{4, 3, 2, 1}	{4, 3, 3}	{}	10	4	10	3	20	four-row-by-three-row
+prod-four-three-product	SchurProduct	SchurProduct	Medium	FracQQt	2	.00007	.0000505	1	20	prod-four-three	{4, 3, 2, 1}	{4, 3, 3}	{}	10	4	10	3	20	four-row-by-three-row
+prod-four-three-product	SchurProduct	SchurProduct	Medium	FracQQt	3	.000069	.000051541	1	20	prod-four-three	{4, 3, 2, 1}	{4, 3, 3}	{}	10	4	10	3	20	four-row-by-three-row
+prod-four-three-to-p	SchurProduct	SchurProductToPowerSums	Medium	FracQQt	1	.002801	.00278171	163	20	prod-four-three	{4, 3, 2, 1}	{4, 3, 3}	{}	10	4	10	3	20	four-row-by-three-row
+prod-four-three-to-p	SchurProduct	SchurProductToPowerSums	Medium	FracQQt	2	.002701	.00268004	163	20	prod-four-three	{4, 3, 2, 1}	{4, 3, 3}	{}	10	4	10	3	20	four-row-by-three-row
+prod-four-three-to-p	SchurProduct	SchurProductToPowerSums	Medium	FracQQt	3	.002684	.00266687	163	20	prod-four-three	{4, 3, 2, 1}	{4, 3, 3}	{}	10	4	10	3	20	four-row-by-three-row
+prod-four-three-p-to-S	SchurProduct	SchurProductRoundTrip	Medium	FracQQt	1	.078994	.0790225	134	20	prod-four-three	{4, 3, 2, 1}	{4, 3, 3}	{}	10	4	10	3	20	four-row-by-three-row
+prod-four-three-p-to-S	SchurProduct	SchurProductRoundTrip	Medium	FracQQt	2	.079338	.0793748	134	20	prod-four-three	{4, 3, 2, 1}	{4, 3, 3}	{}	10	4	10	3	20	four-row-by-three-row
+prod-four-three-p-to-S	SchurProduct	SchurProductRoundTrip	Medium	FracQQt	3	.079186	.0792388	134	20	prod-four-three	{4, 3, 2, 1}	{4, 3, 3}	{}	10	4	10	3	20	four-row-by-three-row
+prod-unequal-weight-product	SchurProduct	SchurProduct	Medium	FracQQt	1	.000071	.000052416	1	20	prod-unequal-weight	{4, 4, 4}	{5, 1, 1, 1}	{}	12	3	8	4	20	unequal-weight
+prod-unequal-weight-product	SchurProduct	SchurProduct	Medium	FracQQt	2	.000069	.000049917	1	20	prod-unequal-weight	{4, 4, 4}	{5, 1, 1, 1}	{}	12	3	8	4	20	unequal-weight
+prod-unequal-weight-product	SchurProduct	SchurProduct	Medium	FracQQt	3	.000068	.000050708	1	20	prod-unequal-weight	{4, 4, 4}	{5, 1, 1, 1}	{}	12	3	8	4	20	unequal-weight
+prod-unequal-weight-to-p	SchurProduct	SchurProductToPowerSums	Medium	FracQQt	1	.007273	.00724942	279	20	prod-unequal-weight	{4, 4, 4}	{5, 1, 1, 1}	{}	12	3	8	4	20	unequal-weight
+prod-unequal-weight-to-p	SchurProduct	SchurProductToPowerSums	Medium	FracQQt	2	.007292	.00726013	279	20	prod-unequal-weight	{4, 4, 4}	{5, 1, 1, 1}	{}	12	3	8	4	20	unequal-weight
+prod-unequal-weight-to-p	SchurProduct	SchurProductToPowerSums	Medium	FracQQt	3	.007296	.00727396	279	20	prod-unequal-weight	{4, 4, 4}	{5, 1, 1, 1}	{}	12	3	8	4	20	unequal-weight
+prod-unequal-weight-p-to-S	SchurProduct	SchurProductRoundTrip	Medium	FracQQt	1	.108559	.108559	25	20	prod-unequal-weight	{4, 4, 4}	{5, 1, 1, 1}	{}	12	3	8	4	20	unequal-weight
+prod-unequal-weight-p-to-S	SchurProduct	SchurProductRoundTrip	Medium	FracQQt	2	.11524	.116609	25	20	prod-unequal-weight	{4, 4, 4}	{5, 1, 1, 1}	{}	12	3	8	4	20	unequal-weight
+prod-unequal-weight-p-to-S	SchurProduct	SchurProductRoundTrip	Medium	FracQQt	3	.108816	.108803	25	20	prod-unequal-weight	{4, 4, 4}	{5, 1, 1, 1}	{}	12	3	8	4	20	unequal-weight
+prod-large-two-product	SchurProduct	SchurProduct	Large	FracQQt	1	.000077	.000051667	1	26	prod-large-two	{8, 8}	{7, 3}	{}	16	2	10	2	26	large-two-row
+prod-large-two-product	SchurProduct	SchurProduct	Large	FracQQt	2	.000064	.000048292	1	26	prod-large-two	{8, 8}	{7, 3}	{}	16	2	10	2	26	large-two-row
+prod-large-two-product	SchurProduct	SchurProduct	Large	FracQQt	3	.000066	.000048875	1	26	prod-large-two	{8, 8}	{7, 3}	{}	16	2	10	2	26	large-two-row
+prod-large-two-to-p	SchurProduct	SchurProductToPowerSums	Large	FracQQt	1	.035506	.0354756	1298	26	prod-large-two	{8, 8}	{7, 3}	{}	16	2	10	2	26	large-two-row
+prod-large-two-to-p	SchurProduct	SchurProductToPowerSums	Large	FracQQt	2	.035305	.0352775	1298	26	prod-large-two	{8, 8}	{7, 3}	{}	16	2	10	2	26	large-two-row
+prod-large-two-to-p	SchurProduct	SchurProductToPowerSums	Large	FracQQt	3	.035573	.0355473	1298	26	prod-large-two	{8, 8}	{7, 3}	{}	16	2	10	2	26	large-two-row
+prod-large-two-p-to-S	SchurProduct	SchurProductRoundTrip	Large	FracQQt	1	2.00869	1.95298	50	26	prod-large-two	{8, 8}	{7, 3}	{}	16	2	10	2	26	large-two-row
+prod-large-two-p-to-S	SchurProduct	SchurProductRoundTrip	Large	FracQQt	2	2.04043	1.99574	50	26	prod-large-two	{8, 8}	{7, 3}	{}	16	2	10	2	26	large-two-row
+prod-large-two-p-to-S	SchurProduct	SchurProductRoundTrip	Large	FracQQt	3	1.99906	1.94617	50	26	prod-large-two	{8, 8}	{7, 3}	{}	16	2	10	2	26	large-two-row
+prod-large-three-product	SchurProduct	SchurProduct	Large	FracQQt	1	.000081	.000059792	1	27	prod-large-three	{7, 4, 2}	{7, 4, 3}	{}	13	3	14	3	27	large-three-row
+prod-large-three-product	SchurProduct	SchurProduct	Large	FracQQt	2	.000067	.000048542	1	27	prod-large-three	{7, 4, 2}	{7, 4, 3}	{}	13	3	14	3	27	large-three-row
+prod-large-three-product	SchurProduct	SchurProduct	Large	FracQQt	3	.000067	.000050625	1	27	prod-large-three	{7, 4, 2}	{7, 4, 3}	{}	13	3	14	3	27	large-three-row
+prod-large-three-to-p	SchurProduct	SchurProductToPowerSums	Large	FracQQt	1	.036417	.0372486	1203	27	prod-large-three	{7, 4, 2}	{7, 4, 3}	{}	13	3	14	3	27	large-three-row
+prod-large-three-to-p	SchurProduct	SchurProductToPowerSums	Large	FracQQt	2	.03685	.0368729	1203	27	prod-large-three	{7, 4, 2}	{7, 4, 3}	{}	13	3	14	3	27	large-three-row
+prod-large-three-to-p	SchurProduct	SchurProductToPowerSums	Large	FracQQt	3	.037241	.0372998	1203	27	prod-large-three	{7, 4, 2}	{7, 4, 3}	{}	13	3	14	3	27	large-three-row
+prod-large-three-p-to-S	SchurProduct	SchurProductRoundTrip	Large	FracQQt	1	2.15631	2.09999	462	27	prod-large-three	{7, 4, 2}	{7, 4, 3}	{}	13	3	14	3	27	large-three-row
+prod-large-three-p-to-S	SchurProduct	SchurProductRoundTrip	Large	FracQQt	2	2.14851	2.09505	462	27	prod-large-three	{7, 4, 2}	{7, 4, 3}	{}	13	3	14	3	27	large-three-row
+prod-large-three-p-to-S	SchurProduct	SchurProductRoundTrip	Large	FracQQt	3	2.15258	2.09998	462	27	prod-large-three	{7, 4, 2}	{7, 4, 3}	{}	13	3	14	3	27	large-three-row
+prod-large-four-product	SchurProduct	SchurProduct	Stress	FracQQt	1	.000071	.000051625	1	30	prod-large-four	{7, 5, 3, 1}	{5, 5, 2, 2}	{}	16	4	14	4	30	large-four-row
+prod-large-four-product	SchurProduct	SchurProduct	Stress	FracQQt	2	.00008	.000058625	1	30	prod-large-four	{7, 5, 3, 1}	{5, 5, 2, 2}	{}	16	4	14	4	30	large-four-row
+prod-large-four-product	SchurProduct	SchurProduct	Stress	FracQQt	3	.000069	.000049667	1	30	prod-large-four	{7, 5, 3, 1}	{5, 5, 2, 2}	{}	16	4	14	4	30	large-four-row
+prod-large-four-to-p	SchurProduct	SchurProductToPowerSums	Stress	FracQQt	1	.043216	.0431916	1902	30	prod-large-four	{7, 5, 3, 1}	{5, 5, 2, 2}	{}	16	4	14	4	30	large-four-row
+prod-large-four-to-p	SchurProduct	SchurProductToPowerSums	Stress	FracQQt	2	.04286	.0428283	1902	30	prod-large-four	{7, 5, 3, 1}	{5, 5, 2, 2}	{}	16	4	14	4	30	large-four-row
+prod-large-four-to-p	SchurProduct	SchurProductToPowerSums	Stress	FracQQt	3	.046065	.0460407	1902	30	prod-large-four	{7, 5, 3, 1}	{5, 5, 2, 2}	{}	16	4	14	4	30	large-four-row
+prod-large-four-p-to-S	SchurProduct	SchurProductRoundTrip	Stress	FracQQt	1	6.24019	6.09962	980	30	prod-large-four	{7, 5, 3, 1}	{5, 5, 2, 2}	{}	16	4	14	4	30	large-four-row
+prod-large-four-p-to-S	SchurProduct	SchurProductRoundTrip	Stress	FracQQt	2	6.27475	6.13149	980	30	prod-large-four	{7, 5, 3, 1}	{5, 5, 2, 2}	{}	16	4	14	4	30	large-four-row
+prod-large-four-p-to-S	SchurProduct	SchurProductRoundTrip	Stress	FracQQt	3	6.26482	6.12583	980	30	prod-large-four	{7, 5, 3, 1}	{5, 5, 2, 2}	{}	16	4	14	4	30	large-four-row
+pieri-hook-r1-horizontal	PieriProduct	HorizontalPieri	Small	FracQQt	1	.000492	.00136646	3	13	pieri-hook-r1	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	13	
+pieri-hook-r1-horizontal	PieriProduct	HorizontalPieri	Small	FracQQt	2	.00027	.000253416	3	13	pieri-hook-r1	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	13	
+pieri-hook-r1-horizontal	PieriProduct	HorizontalPieri	Small	FracQQt	3	.000272	.000252458	3	13	pieri-hook-r1	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	13	
+pieri-hook-r1-vertical	PieriProduct	VerticalPieri	Small	FracQQt	1	.000281	.000262792	3	13	pieri-hook-r1	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	13	
+pieri-hook-r1-vertical	PieriProduct	VerticalPieri	Small	FracQQt	2	.000309	.000291084	3	13	pieri-hook-r1	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	13	
+pieri-hook-r1-vertical	PieriProduct	VerticalPieri	Small	FracQQt	3	.000369	.000345459	3	13	pieri-hook-r1	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	13	
+pieri-hook-r1-border	PieriProduct	BorderStripProduct	Small	FracQQt	1	.000291	.000272375	3	13	pieri-hook-r1	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	13	
+pieri-hook-r1-border	PieriProduct	BorderStripProduct	Small	FracQQt	2	.000277	.000259125	3	13	pieri-hook-r1	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	13	
+pieri-hook-r1-border	PieriProduct	BorderStripProduct	Small	FracQQt	3	.000276	.000258542	3	13	pieri-hook-r1	{8, 1, 1, 1, 1}	{}	{}	12	5	0	0	13	
+pieri-three-r2-horizontal	PieriProduct	HorizontalPieri	Medium	FracQQt	1	.000319	.000300583	10	15	pieri-three-r2	{7, 4, 2}	{}	{}	13	3	0	0	15	
+pieri-three-r2-horizontal	PieriProduct	HorizontalPieri	Medium	FracQQt	2	.000317	.00029625	10	15	pieri-three-r2	{7, 4, 2}	{}	{}	13	3	0	0	15	
+pieri-three-r2-horizontal	PieriProduct	HorizontalPieri	Medium	FracQQt	3	.000382	.000358084	10	15	pieri-three-r2	{7, 4, 2}	{}	{}	13	3	0	0	15	
+pieri-three-r2-vertical	PieriProduct	VerticalPieri	Medium	FracQQt	1	.000331	.000311917	7	15	pieri-three-r2	{7, 4, 2}	{}	{}	13	3	0	0	15	
+pieri-three-r2-vertical	PieriProduct	VerticalPieri	Medium	FracQQt	2	.000297	.000280375	7	15	pieri-three-r2	{7, 4, 2}	{}	{}	13	3	0	0	15	
+pieri-three-r2-vertical	PieriProduct	VerticalPieri	Medium	FracQQt	3	.000309	.000290209	7	15	pieri-three-r2	{7, 4, 2}	{}	{}	13	3	0	0	15	
+pieri-three-r2-border	PieriProduct	BorderStripProduct	Medium	FracQQt	1	.000296	.000279584	5	15	pieri-three-r2	{7, 4, 2}	{}	{}	13	3	0	0	15	
+pieri-three-r2-border	PieriProduct	BorderStripProduct	Medium	FracQQt	2	.000313	.000293959	5	15	pieri-three-r2	{7, 4, 2}	{}	{}	13	3	0	0	15	
+pieri-three-r2-border	PieriProduct	BorderStripProduct	Medium	FracQQt	3	.000301	.000283833	5	15	pieri-three-r2	{7, 4, 2}	{}	{}	13	3	0	0	15	
+pieri-four-r3-horizontal	PieriProduct	HorizontalPieri	Medium	FracQQt	1	.000432	.000410791	27	19	pieri-four-r3	{7, 5, 3, 1}	{}	{}	16	4	0	0	19	
+pieri-four-r3-horizontal	PieriProduct	HorizontalPieri	Medium	FracQQt	2	.000403	.000385208	27	19	pieri-four-r3	{7, 5, 3, 1}	{}	{}	16	4	0	0	19	
+pieri-four-r3-horizontal	PieriProduct	HorizontalPieri	Medium	FracQQt	3	.000443	.0004235	27	19	pieri-four-r3	{7, 5, 3, 1}	{}	{}	16	4	0	0	19	
+pieri-four-r3-vertical	PieriProduct	VerticalPieri	Medium	FracQQt	1	.000343	.000323833	15	19	pieri-four-r3	{7, 5, 3, 1}	{}	{}	16	4	0	0	19	
+pieri-four-r3-vertical	PieriProduct	VerticalPieri	Medium	FracQQt	2	.00034	.000321583	15	19	pieri-four-r3	{7, 5, 3, 1}	{}	{}	16	4	0	0	19	
+pieri-four-r3-vertical	PieriProduct	VerticalPieri	Medium	FracQQt	3	.00034	.00032325	15	19	pieri-four-r3	{7, 5, 3, 1}	{}	{}	16	4	0	0	19	
+pieri-four-r3-border	PieriProduct	BorderStripProduct	Medium	FracQQt	1	.000369	.000350875	3	19	pieri-four-r3	{7, 5, 3, 1}	{}	{}	16	4	0	0	19	
+pieri-four-r3-border	PieriProduct	BorderStripProduct	Medium	FracQQt	2	.000359	.00034225	3	19	pieri-four-r3	{7, 5, 3, 1}	{}	{}	16	4	0	0	19	
+pieri-four-r3-border	PieriProduct	BorderStripProduct	Medium	FracQQt	3	.000387	.000369875	3	19	pieri-four-r3	{7, 5, 3, 1}	{}	{}	16	4	0	0	19	
+pleth-row-row-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	1	.812929	.812981	371	24	pleth-row-row	{8}	{3}	{}	8	1	3	1	24	row-by-row
+pleth-row-row-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	2	.811561	.811601	371	24	pleth-row-row	{8}	{3}	{}	8	1	3	1	24	row-by-row
+pleth-row-row-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	3	.810097	.810205	371	24	pleth-row-row	{8}	{3}	{}	8	1	3	1	24	row-by-row
+pleth-row-row-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	1	.015654	.01563	486	24	pleth-row-row	{8}	{3}	{}	8	1	3	1	24	row-by-row
+pleth-row-row-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	2	.015348	.01532	486	24	pleth-row-row	{8}	{3}	{}	8	1	3	1	24	row-by-row
+pleth-row-row-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	3	.015759	.0157325	486	24	pleth-row-row	{8}	{3}	{}	8	1	3	1	24	row-by-row
+pleth-row-row-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	1	.825417	.82548	371	24	pleth-row-row	{8}	{3}	{}	8	1	3	1	24	row-by-row
+pleth-row-row-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	2	.828627	.82869	371	24	pleth-row-row	{8}	{3}	{}	8	1	3	1	24	row-by-row
+pleth-row-row-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	3	.834398	.834489	371	24	pleth-row-row	{8}	{3}	{}	8	1	3	1	24	row-by-row
+pleth-two-row2-combined	SchurPlethysm	SchurPlethysm	Medium	FracQQt	1	.037326	.0373085	281	20	pleth-two-row2	{7, 3}	{2}	{}	10	2	2	1	20	two-row-by-row
+pleth-two-row2-combined	SchurPlethysm	SchurPlethysm	Medium	FracQQt	2	.037384	.0373615	281	20	pleth-two-row2	{7, 3}	{2}	{}	10	2	2	1	20	two-row-by-row
+pleth-two-row2-combined	SchurPlethysm	SchurPlethysm	Medium	FracQQt	3	.037772	.0377547	281	20	pleth-two-row2	{7, 3}	{2}	{}	10	2	2	1	20	two-row-by-row
+pleth-two-row2-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Medium	FracQQt	1	.0078	.0077825	168	20	pleth-two-row2	{7, 3}	{2}	{}	10	2	2	1	20	two-row-by-row
+pleth-two-row2-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Medium	FracQQt	2	.007442	.0074215	168	20	pleth-two-row2	{7, 3}	{2}	{}	10	2	2	1	20	two-row-by-row
+pleth-two-row2-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Medium	FracQQt	3	.007795	.00777754	168	20	pleth-two-row2	{7, 3}	{2}	{}	10	2	2	1	20	two-row-by-row
+pleth-two-row2-split-to-S	SchurPlethysm	SchurPlethysmSplit	Medium	FracQQt	1	.184371	.184389	281	20	pleth-two-row2	{7, 3}	{2}	{}	10	2	2	1	20	two-row-by-row
+pleth-two-row2-split-to-S	SchurPlethysm	SchurPlethysmSplit	Medium	FracQQt	2	.181948	.181957	281	20	pleth-two-row2	{7, 3}	{2}	{}	10	2	2	1	20	two-row-by-row
+pleth-two-row2-split-to-S	SchurPlethysm	SchurPlethysmSplit	Medium	FracQQt	3	.181995	.181996	281	20	pleth-two-row2	{7, 3}	{2}	{}	10	2	2	1	20	two-row-by-row
+pleth-three-row2-combined	SchurPlethysm	SchurPlethysm	Medium	FracQQt	1	.356363	.356366	1628	26	pleth-three-row2	{7, 4, 2}	{2}	{}	13	3	2	1	26	three-row-by-row
+pleth-three-row2-combined	SchurPlethysm	SchurPlethysm	Medium	FracQQt	2	.354967	.354944	1628	26	pleth-three-row2	{7, 4, 2}	{2}	{}	13	3	2	1	26	three-row-by-row
+pleth-three-row2-combined	SchurPlethysm	SchurPlethysm	Medium	FracQQt	3	.355813	.355872	1628	26	pleth-three-row2	{7, 4, 2}	{2}	{}	13	3	2	1	26	three-row-by-row
+pleth-three-row2-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Medium	FracQQt	1	.032427	.0324054	564	26	pleth-three-row2	{7, 4, 2}	{2}	{}	13	3	2	1	26	three-row-by-row
+pleth-three-row2-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Medium	FracQQt	2	.031082	.0310701	564	26	pleth-three-row2	{7, 4, 2}	{2}	{}	13	3	2	1	26	three-row-by-row
+pleth-three-row2-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Medium	FracQQt	3	.030581	.0305708	564	26	pleth-three-row2	{7, 4, 2}	{2}	{}	13	3	2	1	26	three-row-by-row
+pleth-three-row2-split-to-S	SchurPlethysm	SchurPlethysmSplit	Medium	FracQQt	1	2.2477	2.22218	1628	26	pleth-three-row2	{7, 4, 2}	{2}	{}	13	3	2	1	26	three-row-by-row
+pleth-three-row2-split-to-S	SchurPlethysm	SchurPlethysmSplit	Medium	FracQQt	2	2.23317	2.20584	1628	26	pleth-three-row2	{7, 4, 2}	{2}	{}	13	3	2	1	26	three-row-by-row
+pleth-three-row2-split-to-S	SchurPlethysm	SchurPlethysmSplit	Medium	FracQQt	3	2.24104	2.21182	1628	26	pleth-three-row2	{7, 4, 2}	{2}	{}	13	3	2	1	26	three-row-by-row
+pleth-three-balanced-row2-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	1	.725502	.725525	2542	28	pleth-three-balanced-row2	{7, 4, 3}	{2}	{}	14	3	2	1	28	three-balanced-by-row
+pleth-three-balanced-row2-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	2	.726414	.72644	2542	28	pleth-three-balanced-row2	{7, 4, 3}	{2}	{}	14	3	2	1	28	three-balanced-by-row
+pleth-three-balanced-row2-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	3	.728607	.728654	2542	28	pleth-three-balanced-row2	{7, 4, 3}	{2}	{}	14	3	2	1	28	three-balanced-by-row
+pleth-three-balanced-row2-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	1	.041241	.0412163	773	28	pleth-three-balanced-row2	{7, 4, 3}	{2}	{}	14	3	2	1	28	three-balanced-by-row
+pleth-three-balanced-row2-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	2	.042498	.0424751	773	28	pleth-three-balanced-row2	{7, 4, 3}	{2}	{}	14	3	2	1	28	three-balanced-by-row
+pleth-three-balanced-row2-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	3	.043601	.0435772	773	28	pleth-three-balanced-row2	{7, 4, 3}	{2}	{}	14	3	2	1	28	three-balanced-by-row
+pleth-three-balanced-row2-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	1	4.74159	4.68653	2542	28	pleth-three-balanced-row2	{7, 4, 3}	{2}	{}	14	3	2	1	28	three-balanced-by-row
+pleth-three-balanced-row2-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	2	4.77832	4.73183	2542	28	pleth-three-balanced-row2	{7, 4, 3}	{2}	{}	14	3	2	1	28	three-balanced-by-row
+pleth-three-balanced-row2-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	3	4.74153	4.68718	2542	28	pleth-three-balanced-row2	{7, 4, 3}	{2}	{}	14	3	2	1	28	three-balanced-by-row
+pleth-four-row2-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	1	2.11832	2.09252	1637	26	pleth-four-row2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	four-row-by-row
+pleth-four-row2-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	2	2.09647	2.07029	1637	26	pleth-four-row2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	four-row-by-row
+pleth-four-row2-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	3	2.08946	2.06363	1637	26	pleth-four-row2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	four-row-by-row
+pleth-four-row2-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	1	.031724	.0317013	568	26	pleth-four-row2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	four-row-by-row
+pleth-four-row2-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	2	.031913	.03189	568	26	pleth-four-row2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	four-row-by-row
+pleth-four-row2-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	3	.032007	.0319798	568	26	pleth-four-row2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	four-row-by-row
+pleth-four-row2-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	1	2.12862	2.10197	1637	26	pleth-four-row2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	four-row-by-row
+pleth-four-row2-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	2	2.11781	2.08915	1637	26	pleth-four-row2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	four-row-by-row
+pleth-four-row2-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	3	2.13716	2.11056	1637	26	pleth-four-row2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	four-row-by-row
+pleth-two-multirow-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	1	6.2018	5.74448	4982	30	pleth-two-multirow	{7, 3}	{2, 1}	{}	10	2	3	2	30	two-row-by-multirow
+pleth-two-multirow-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	2	6.27659	5.71607	4982	30	pleth-two-multirow	{7, 3}	{2, 1}	{}	10	2	3	2	30	two-row-by-multirow
+pleth-two-multirow-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	3	6.07681	5.6824	4982	30	pleth-two-multirow	{7, 3}	{2, 1}	{}	10	2	3	2	30	two-row-by-multirow
+pleth-two-multirow-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	1	.007318	.00729583	264	30	pleth-two-multirow	{7, 3}	{2, 1}	{}	10	2	3	2	30	two-row-by-multirow
+pleth-two-multirow-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	2	.007476	.00745646	264	30	pleth-two-multirow	{7, 3}	{2, 1}	{}	10	2	3	2	30	two-row-by-multirow
+pleth-two-multirow-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	3	.007529	.00751017	264	30	pleth-two-multirow	{7, 3}	{2, 1}	{}	10	2	3	2	30	two-row-by-multirow
+pleth-two-multirow-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	1	6.12899	5.72695	4982	30	pleth-two-multirow	{7, 3}	{2, 1}	{}	10	2	3	2	30	two-row-by-multirow
+pleth-two-multirow-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	2	6.13159	5.74068	4982	30	pleth-two-multirow	{7, 3}	{2, 1}	{}	10	2	3	2	30	two-row-by-multirow
+pleth-two-multirow-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	3	6.48343	5.94695	4982	30	pleth-two-multirow	{7, 3}	{2, 1}	{}	10	2	3	2	30	two-row-by-multirow
+pleth-three-multirow-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	1	14.7422	14.6506	7276	32	pleth-three-multirow	{4, 3, 1}	{3, 1}	{}	8	3	4	2	32	three-row-by-multirow
+pleth-three-multirow-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	2	14.5551	14.4313	7276	32	pleth-three-multirow	{4, 3, 1}	{3, 1}	{}	8	3	4	2	32	three-row-by-multirow
+pleth-three-multirow-combined	SchurPlethysm	SchurPlethysm	Large	FracQQt	3	14.6623	14.5413	7276	32	pleth-three-multirow	{4, 3, 1}	{3, 1}	{}	8	3	4	2	32	three-row-by-multirow
+pleth-three-multirow-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	1	.029843	.0298182	533	32	pleth-three-multirow	{4, 3, 1}	{3, 1}	{}	8	3	4	2	32	three-row-by-multirow
+pleth-three-multirow-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	2	.029592	.0295632	533	32	pleth-three-multirow	{4, 3, 1}	{3, 1}	{}	8	3	4	2	32	three-row-by-multirow
+pleth-three-multirow-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Large	FracQQt	3	.029837	.0298085	533	32	pleth-three-multirow	{4, 3, 1}	{3, 1}	{}	8	3	4	2	32	three-row-by-multirow
+pleth-three-multirow-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	1	14.6955	14.5863	7276	32	pleth-three-multirow	{4, 3, 1}	{3, 1}	{}	8	3	4	2	32	three-row-by-multirow
+pleth-three-multirow-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	2	14.6161	14.4996	7276	32	pleth-three-multirow	{4, 3, 1}	{3, 1}	{}	8	3	4	2	32	three-row-by-multirow
+pleth-three-multirow-split-to-S	SchurPlethysm	SchurPlethysmSplit	Large	FracQQt	3	14.7382	14.6237	7276	32	pleth-three-multirow	{4, 3, 1}	{3, 1}	{}	8	3	4	2	32	three-row-by-multirow
+pleth-hook-row-combined	SchurPlethysm	SchurPlethysm	Medium	FracQQt	1	.024389	.0243669	105	16	pleth-hook-row	{5, 1, 1, 1}	{2}	{}	8	4	2	1	16	hook-by-row
+pleth-hook-row-combined	SchurPlethysm	SchurPlethysm	Medium	FracQQt	2	.024679	.02466	105	16	pleth-hook-row	{5, 1, 1, 1}	{2}	{}	8	4	2	1	16	hook-by-row
+pleth-hook-row-combined	SchurPlethysm	SchurPlethysm	Medium	FracQQt	3	.024722	.0246996	105	16	pleth-hook-row	{5, 1, 1, 1}	{2}	{}	8	4	2	1	16	hook-by-row
+pleth-hook-row-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Medium	FracQQt	1	.003031	.00301217	76	16	pleth-hook-row	{5, 1, 1, 1}	{2}	{}	8	4	2	1	16	hook-by-row
+pleth-hook-row-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Medium	FracQQt	2	.003183	.00316287	76	16	pleth-hook-row	{5, 1, 1, 1}	{2}	{}	8	4	2	1	16	hook-by-row
+pleth-hook-row-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Medium	FracQQt	3	.00322	.00320071	76	16	pleth-hook-row	{5, 1, 1, 1}	{2}	{}	8	4	2	1	16	hook-by-row
+pleth-hook-row-split-to-S	SchurPlethysm	SchurPlethysmSplit	Medium	FracQQt	1	.027237	.0272082	105	16	pleth-hook-row	{5, 1, 1, 1}	{2}	{}	8	4	2	1	16	hook-by-row
+pleth-hook-row-split-to-S	SchurPlethysm	SchurPlethysmSplit	Medium	FracQQt	2	.027394	.0273647	105	16	pleth-hook-row	{5, 1, 1, 1}	{2}	{}	8	4	2	1	16	hook-by-row
+pleth-hook-row-split-to-S	SchurPlethysm	SchurPlethysmSplit	Medium	FracQQt	3	.027551	.0275314	105	16	pleth-hook-row	{5, 1, 1, 1}	{2}	{}	8	4	2	1	16	hook-by-row
+pleth-repeated-row-combined	SchurPlethysm	SchurPlethysm	Medium	FracQQt	1	.008308	.00828725	101	16	pleth-repeated-row	{3, 3, 2}	{2}	{}	8	3	2	1	16	repeated-by-row
+pleth-repeated-row-combined	SchurPlethysm	SchurPlethysm	Medium	FracQQt	2	.008162	.00814079	101	16	pleth-repeated-row	{3, 3, 2}	{2}	{}	8	3	2	1	16	repeated-by-row
+pleth-repeated-row-combined	SchurPlethysm	SchurPlethysm	Medium	FracQQt	3	.008268	.00824917	101	16	pleth-repeated-row	{3, 3, 2}	{2}	{}	8	3	2	1	16	repeated-by-row
+pleth-repeated-row-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Medium	FracQQt	1	.001916	.00189629	63	16	pleth-repeated-row	{3, 3, 2}	{2}	{}	8	3	2	1	16	repeated-by-row
+pleth-repeated-row-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Medium	FracQQt	2	.001964	.00194608	63	16	pleth-repeated-row	{3, 3, 2}	{2}	{}	8	3	2	1	16	repeated-by-row
+pleth-repeated-row-to-p	SchurPlethysm	SchurPlethysmToPowerSums	Medium	FracQQt	3	.001906	.00188933	63	16	pleth-repeated-row	{3, 3, 2}	{2}	{}	8	3	2	1	16	repeated-by-row
+pleth-repeated-row-split-to-S	SchurPlethysm	SchurPlethysmSplit	Medium	FracQQt	1	.02957	.0295443	101	16	pleth-repeated-row	{3, 3, 2}	{2}	{}	8	3	2	1	16	repeated-by-row
+pleth-repeated-row-split-to-S	SchurPlethysm	SchurPlethysmSplit	Medium	FracQQt	2	.030192	.0301698	101	16	pleth-repeated-row	{3, 3, 2}	{2}	{}	8	3	2	1	16	repeated-by-row
+pleth-repeated-row-split-to-S	SchurPlethysm	SchurPlethysmSplit	Medium	FracQQt	3	.030229	.0302062	101	16	pleth-repeated-row	{3, 3, 2}	{2}	{}	8	3	2	1	16	repeated-by-row
+cross-L2-r2-combined	PlethysmCrossover	SchurPlethysm	Small	QQ	1	.014017	.013998	171	18	cross-L2-r2	{6, 3}	{2}	{}	9	2	2	1	18	determinant-dilation-crossover
+cross-L2-r2-combined	PlethysmCrossover	SchurPlethysm	Small	QQ	2	.013999	.0139795	171	18	cross-L2-r2	{6, 3}	{2}	{}	9	2	2	1	18	determinant-dilation-crossover
+cross-L2-r2-combined	PlethysmCrossover	SchurPlethysm	Small	QQ	3	.013867	.0138467	171	18	cross-L2-r2	{6, 3}	{2}	{}	9	2	2	1	18	determinant-dilation-crossover
+cross-L2-r2-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Small	QQ	1	.071132	.0711032	171	18	cross-L2-r2	{6, 3}	{2}	{}	9	2	2	1	18	determinant-dilation-crossover
+cross-L2-r2-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Small	QQ	2	.071166	.071147	171	18	cross-L2-r2	{6, 3}	{2}	{}	9	2	2	1	18	determinant-dilation-crossover
+cross-L2-r2-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Small	QQ	3	.071483	.0714619	171	18	cross-L2-r2	{6, 3}	{2}	{}	9	2	2	1	18	determinant-dilation-crossover
+cross-L3-r2-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	1	.354434	.354458	1628	26	cross-L3-r2	{7, 4, 2}	{2}	{}	13	3	2	1	26	determinant-dilation-crossover
+cross-L3-r2-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	2	.351982	.35195	1628	26	cross-L3-r2	{7, 4, 2}	{2}	{}	13	3	2	1	26	determinant-dilation-crossover
+cross-L3-r2-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	3	.349992	.349957	1628	26	cross-L3-r2	{7, 4, 2}	{2}	{}	13	3	2	1	26	determinant-dilation-crossover
+cross-L3-r2-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	1	2.20391	2.17708	1628	26	cross-L3-r2	{7, 4, 2}	{2}	{}	13	3	2	1	26	determinant-dilation-crossover
+cross-L3-r2-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	2	2.18694	2.16098	1628	26	cross-L3-r2	{7, 4, 2}	{2}	{}	13	3	2	1	26	determinant-dilation-crossover
+cross-L3-r2-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	3	2.18785	2.16117	1628	26	cross-L3-r2	{7, 4, 2}	{2}	{}	13	3	2	1	26	determinant-dilation-crossover
+cross-L4-r2-combined	PlethysmCrossover	SchurPlethysm	Large	QQ	1	2.07823	2.05299	1637	26	cross-L4-r2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	determinant-dilation-crossover
+cross-L4-r2-combined	PlethysmCrossover	SchurPlethysm	Large	QQ	2	2.09373	2.06736	1637	26	cross-L4-r2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	determinant-dilation-crossover
+cross-L4-r2-combined	PlethysmCrossover	SchurPlethysm	Large	QQ	3	2.08104	2.0552	1637	26	cross-L4-r2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	determinant-dilation-crossover
+cross-L4-r2-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Large	QQ	1	2.11508	2.08931	1637	26	cross-L4-r2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	determinant-dilation-crossover
+cross-L4-r2-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Large	QQ	2	2.10344	2.07779	1637	26	cross-L4-r2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	determinant-dilation-crossover
+cross-L4-r2-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Large	QQ	3	2.11207	2.08493	1637	26	cross-L4-r2	{5, 4, 3, 1}	{2}	{}	13	4	2	1	26	determinant-dilation-crossover
+cross-L2-r3-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	1	.014324	.0143	149	18	cross-L2-r3	{4, 2}	{3}	{}	6	2	3	1	18	determinant-dilation-crossover
+cross-L2-r3-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	2	.014513	.0144971	149	18	cross-L2-r3	{4, 2}	{3}	{}	6	2	3	1	18	determinant-dilation-crossover
+cross-L2-r3-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	3	.014512	.014492	149	18	cross-L2-r3	{4, 2}	{3}	{}	6	2	3	1	18	determinant-dilation-crossover
+cross-L2-r3-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	1	.053182	.0532252	149	18	cross-L2-r3	{4, 2}	{3}	{}	6	2	3	1	18	determinant-dilation-crossover
+cross-L2-r3-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	2	.053853	.053836	149	18	cross-L2-r3	{4, 2}	{3}	{}	6	2	3	1	18	determinant-dilation-crossover
+cross-L2-r3-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	3	.052529	.052509	149	18	cross-L2-r3	{4, 2}	{3}	{}	6	2	3	1	18	determinant-dilation-crossover
+cross-L3-r3-combined	PlethysmCrossover	SchurPlethysm	Large	QQ	1	2.10641	2.08033	1634	27	cross-L3-r3	{5, 3, 1}	{3}	{}	9	3	3	1	27	determinant-dilation-crossover
+cross-L3-r3-combined	PlethysmCrossover	SchurPlethysm	Large	QQ	2	2.0869	2.06052	1634	27	cross-L3-r3	{5, 3, 1}	{3}	{}	9	3	3	1	27	determinant-dilation-crossover
+cross-L3-r3-combined	PlethysmCrossover	SchurPlethysm	Large	QQ	3	2.06759	2.04092	1634	27	cross-L3-r3	{5, 3, 1}	{3}	{}	9	3	3	1	27	determinant-dilation-crossover
+cross-L3-r3-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Large	QQ	1	2.08232	2.05499	1634	27	cross-L3-r3	{5, 3, 1}	{3}	{}	9	3	3	1	27	determinant-dilation-crossover
+cross-L3-r3-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Large	QQ	2	2.09557	2.06848	1634	27	cross-L3-r3	{5, 3, 1}	{3}	{}	9	3	3	1	27	determinant-dilation-crossover
+cross-L3-r3-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Large	QQ	3	2.12731	2.10133	1634	27	cross-L3-r3	{5, 3, 1}	{3}	{}	9	3	3	1	27	determinant-dilation-crossover
+cross-L2-r4-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	1	.286513	.286483	458	24	cross-L2-r4	{4, 2}	{4}	{}	6	2	4	1	24	determinant-dilation-crossover
+cross-L2-r4-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	2	.288424	.288402	458	24	cross-L2-r4	{4, 2}	{4}	{}	6	2	4	1	24	determinant-dilation-crossover
+cross-L2-r4-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	3	.286201	.286168	458	24	cross-L2-r4	{4, 2}	{4}	{}	6	2	4	1	24	determinant-dilation-crossover
+cross-L2-r4-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	1	.496183	.49615	458	24	cross-L2-r4	{4, 2}	{4}	{}	6	2	4	1	24	determinant-dilation-crossover
+cross-L2-r4-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	2	.498094	.498062	458	24	cross-L2-r4	{4, 2}	{4}	{}	6	2	4	1	24	determinant-dilation-crossover
+cross-L2-r4-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	3	.494299	.494272	458	24	cross-L2-r4	{4, 2}	{4}	{}	6	2	4	1	24	determinant-dilation-crossover
+cross-L3-r4-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	1	.435165	.435167	483	24	cross-L3-r4	{3, 2, 1}	{4}	{}	6	3	4	1	24	determinant-dilation-crossover
+cross-L3-r4-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	2	.431448	.431419	483	24	cross-L3-r4	{3, 2, 1}	{4}	{}	6	3	4	1	24	determinant-dilation-crossover
+cross-L3-r4-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	3	.433656	.433629	483	24	cross-L3-r4	{3, 2, 1}	{4}	{}	6	3	4	1	24	determinant-dilation-crossover
+cross-L3-r4-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	1	.443882	.44387	483	24	cross-L3-r4	{3, 2, 1}	{4}	{}	6	3	4	1	24	determinant-dilation-crossover
+cross-L3-r4-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	2	.438828	.441359	483	24	cross-L3-r4	{3, 2, 1}	{4}	{}	6	3	4	1	24	determinant-dilation-crossover
+cross-L3-r4-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	3	.441533	.441595	483	24	cross-L3-r4	{3, 2, 1}	{4}	{}	6	3	4	1	24	determinant-dilation-crossover
+cross-L2-r6-combined	PlethysmCrossover	SchurPlethysm	Large	QQ	1	8.65445	8.46254	623	30	cross-L2-r6	{3, 2}	{6}	{}	5	2	6	1	30	determinant-dilation-crossover
+cross-L2-r6-combined	PlethysmCrossover	SchurPlethysm	Large	QQ	2	8.59059	8.40771	623	30	cross-L2-r6	{3, 2}	{6}	{}	5	2	6	1	30	determinant-dilation-crossover
+cross-L2-r6-combined	PlethysmCrossover	SchurPlethysm	Large	QQ	3	8.60518	8.42526	623	30	cross-L2-r6	{3, 2}	{6}	{}	5	2	6	1	30	determinant-dilation-crossover
+cross-L2-r6-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Large	QQ	1	8.63357	8.42341	623	30	cross-L2-r6	{3, 2}	{6}	{}	5	2	6	1	30	determinant-dilation-crossover
+cross-L2-r6-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Large	QQ	2	8.69548	8.48674	623	30	cross-L2-r6	{3, 2}	{6}	{}	5	2	6	1	30	determinant-dilation-crossover
+cross-L2-r6-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Large	QQ	3	8.6958	8.49761	623	30	cross-L2-r6	{3, 2}	{6}	{}	5	2	6	1	30	determinant-dilation-crossover
+cross-L2-r8-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	1	.766426	.766369	48	24	cross-L2-r8	{2, 1}	{8}	{}	3	2	8	1	24	determinant-dilation-crossover
+cross-L2-r8-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	2	.724954	.724887	48	24	cross-L2-r8	{2, 1}	{8}	{}	3	2	8	1	24	determinant-dilation-crossover
+cross-L2-r8-combined	PlethysmCrossover	SchurPlethysm	Medium	QQ	3	.734667	.734597	48	24	cross-L2-r8	{2, 1}	{8}	{}	3	2	8	1	24	determinant-dilation-crossover
+cross-L2-r8-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	1	.760577	.760527	48	24	cross-L2-r8	{2, 1}	{8}	{}	3	2	8	1	24	determinant-dilation-crossover
+cross-L2-r8-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	2	.742978	.742908	48	24	cross-L2-r8	{2, 1}	{8}	{}	3	2	8	1	24	determinant-dilation-crossover
+cross-L2-r8-split-to-S	PlethysmCrossover	SchurPlethysmSplit	Medium	QQ	3	.738213	.738146	48	24	cross-L2-r8	{2, 1}	{8}	{}	3	2	8	1	24	determinant-dilation-crossover
+hl-small-ordinary	HallLittlewoodProduct	HallLittlewoodProduct	Small	FracQQt	1	.063765	.0637414	15	10	hl-small	{4, 2}	{3, 1}	{}	6	2	4	2	10	
+hl-small-ordinary	HallLittlewoodProduct	HallLittlewoodProduct	Small	FracQQt	2	.063721	.0637004	15	10	hl-small	{4, 2}	{3, 1}	{}	6	2	4	2	10	
+hl-small-ordinary	HallLittlewoodProduct	HallLittlewoodProduct	Small	FracQQt	3	.063834	.0638093	15	10	hl-small	{4, 2}	{3, 1}	{}	6	2	4	2	10	
+hl-small-retained	HallLittlewoodProduct	HallLittlewoodProductRetained	Small	FracQQt	1	.009367	.00934813	15	10	hl-small	{4, 2}	{3, 1}	{}	6	2	4	2	10	
+hl-small-retained	HallLittlewoodProduct	HallLittlewoodProductRetained	Small	FracQQt	2	.009348	.00933038	15	10	hl-small	{4, 2}	{3, 1}	{}	6	2	4	2	10	
+hl-small-retained	HallLittlewoodProduct	HallLittlewoodProductRetained	Small	FracQQt	3	.00932	.00930117	15	10	hl-small	{4, 2}	{3, 1}	{}	6	2	4	2	10	
+hl-row-three-ordinary	HallLittlewoodProduct	HallLittlewoodProduct	Medium	FracQQt	1	.172138	.172103	9	12	hl-row-three	{6}	{4, 2}	{}	6	1	6	2	12	
+hl-row-three-ordinary	HallLittlewoodProduct	HallLittlewoodProduct	Medium	FracQQt	2	.170714	.170684	9	12	hl-row-three	{6}	{4, 2}	{}	6	1	6	2	12	
+hl-row-three-ordinary	HallLittlewoodProduct	HallLittlewoodProduct	Medium	FracQQt	3	.170051	.170018	9	12	hl-row-three	{6}	{4, 2}	{}	6	1	6	2	12	
+hl-row-three-retained	HallLittlewoodProduct	HallLittlewoodProductRetained	Medium	FracQQt	1	.009329	.00931154	9	12	hl-row-three	{6}	{4, 2}	{}	6	1	6	2	12	
+hl-row-three-retained	HallLittlewoodProduct	HallLittlewoodProductRetained	Medium	FracQQt	2	.009391	.00937046	9	12	hl-row-three	{6}	{4, 2}	{}	6	1	6	2	12	
+hl-row-three-retained	HallLittlewoodProduct	HallLittlewoodProductRetained	Medium	FracQQt	3	.009142	.0091245	9	12	hl-row-three	{6}	{4, 2}	{}	6	1	6	2	12	
+hl-three-three-ordinary	HallLittlewoodProduct	HallLittlewoodProduct	Large	FracQQt	1	7.15923	6.71125	89	17	hl-three-three	{5, 3, 1}	{4, 3, 1}	{}	9	3	8	3	17	
+hl-three-three-ordinary	HallLittlewoodProduct	HallLittlewoodProduct	Large	FracQQt	2	7.09636	6.64794	89	17	hl-three-three	{5, 3, 1}	{4, 3, 1}	{}	9	3	8	3	17	
+hl-three-three-ordinary	HallLittlewoodProduct	HallLittlewoodProduct	Large	FracQQt	3	7.14865	6.70745	89	17	hl-three-three	{5, 3, 1}	{4, 3, 1}	{}	9	3	8	3	17	
+hl-three-three-retained	HallLittlewoodProduct	HallLittlewoodProductRetained	Large	FracQQt	1	.708082	.678274	89	17	hl-three-three	{5, 3, 1}	{4, 3, 1}	{}	9	3	8	3	17	
+hl-three-three-retained	HallLittlewoodProduct	HallLittlewoodProductRetained	Large	FracQQt	2	.697694	.669875	89	17	hl-three-three	{5, 3, 1}	{4, 3, 1}	{}	9	3	8	3	17	
+hl-three-three-retained	HallLittlewoodProduct	HallLittlewoodProductRetained	Large	FracQQt	3	.692703	.665242	89	17	hl-three-three	{5, 3, 1}	{4, 3, 1}	{}	9	3	8	3	17	
+inner-hl-pleth-small	InnerProduct	HallLittlewoodPlethysmInnerProduct	Medium	FracQQt	1	.185929	.185896	0	0	inner-hl-small	{1, 1}	{6, 2}	{10, 4, 2}	2	2	8	2	0	
+inner-hl-pleth-small	InnerProduct	HallLittlewoodPlethysmInnerProduct	Medium	FracQQt	2	.181911	.181871	0	0	inner-hl-small	{1, 1}	{6, 2}	{10, 4, 2}	2	2	8	2	0	
+inner-hl-pleth-small	InnerProduct	HallLittlewoodPlethysmInnerProduct	Medium	FracQQt	3	.190393	.190359	0	0	inner-hl-small	{1, 1}	{6, 2}	{10, 4, 2}	2	2	8	2	0	
+inner-hl-pleth-large	InnerProduct	HallLittlewoodPlethysmInnerProduct	Large	FracQQt	1	.744333	.71725	0	0	inner-hl-large	{1, 1}	{8, 2}	{14, 4, 2}	2	2	10	2	0	
+inner-hl-pleth-large	InnerProduct	HallLittlewoodPlethysmInnerProduct	Large	FracQQt	2	.741462	.715261	0	0	inner-hl-large	{1, 1}	{8, 2}	{14, 4, 2}	2	2	10	2	0	
+inner-hl-pleth-large	InnerProduct	HallLittlewoodPlethysmInnerProduct	Large	FracQQt	3	.720145	.693322	0	0	inner-hl-large	{1, 1}	{8, 2}	{14, 4, 2}	2	2	10	2	0	
+inner-p-S-sparse	InnerProduct	PowerSumsSchurInnerProduct	Small	FracQQt	1	.000275	.000254541	0	0	inner-p-S-sparse	{8, 4, 2}	{8, 4, 2}	{}	14	3	14	3	0	
+inner-p-S-sparse	InnerProduct	PowerSumsSchurInnerProduct	Small	FracQQt	2	.000276	.0002585	0	0	inner-p-S-sparse	{8, 4, 2}	{8, 4, 2}	{}	14	3	14	3	0	
+inner-p-S-sparse	InnerProduct	PowerSumsSchurInnerProduct	Small	FracQQt	3	.000273	.000255416	0	0	inner-p-S-sparse	{8, 4, 2}	{8, 4, 2}	{}	14	3	14	3	0	
+inner-p-S-cycle-heavy	InnerProduct	PowerSumsSchurInnerProduct	Small	FracQQt	1	.000277	.000258209	0	0	inner-p-S-cycle-heavy	{12, 2}	{8, 4, 2}	{}	14	2	14	3	0	
+inner-p-S-cycle-heavy	InnerProduct	PowerSumsSchurInnerProduct	Small	FracQQt	2	.000269	.000249917	0	0	inner-p-S-cycle-heavy	{12, 2}	{8, 4, 2}	{}	14	2	14	3	0	
+inner-p-S-cycle-heavy	InnerProduct	PowerSumsSchurInnerProduct	Small	FracQQt	3	.000291	.000269625	0	0	inner-p-S-cycle-heavy	{12, 2}	{8, 4, 2}	{}	14	2	14	3	0	
