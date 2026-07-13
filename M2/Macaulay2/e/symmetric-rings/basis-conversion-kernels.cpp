@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
+#include <iterator>
 #include <map>
 #include <sstream>
 #include <string>
@@ -119,14 +120,15 @@ ring_elem SymmetricEngineRing::coefficientQuotient(ring_elem numerator, ring_ele
     return coefficientRing->zero();
   }
 
-void SymmetricEngineRing::addCoeff(CoeffMap& target, const Partition& index, ring_elem coeff) const
+void SymmetricEngineRing::addNormalizedCoeff(CoeffMap& target,
+                                             Partition index,
+                                             ring_elem coeff) const
 {
     if (coefficientRing->is_zero(coeff)) return;
-    Partition key = normalizePartition(index);
-    auto existing = target.find(key);
+    auto existing = target.find(index);
     if (existing == target.end())
       {
-        target[key] = coeff;
+        target.emplace(std::move(index), coeff);
         return;
       }
     ring_elem sum = coefficientRing->add(existing->second, coeff);
@@ -136,21 +138,29 @@ void SymmetricEngineRing::addCoeff(CoeffMap& target, const Partition& index, rin
       existing->second = sum;
   }
 
+void SymmetricEngineRing::addCoeff(CoeffMap& target,
+                                   const Partition& index,
+                                   ring_elem coeff) const
+{
+    addNormalizedCoeff(target, normalizePartition(index), coeff);
+  }
+
 void SymmetricEngineRing::addScaledCoeffMap(CoeffMap& target,
                                              ring_elem coeff,
                                              const CoeffMap& source) const
 {
     if (coefficientRing->is_zero(coeff)) return;
     for (const auto& item : source)
-      addCoeff(target,
-               item.first,
-               coefficientRing->mult(coeff, item.second));
+      addNormalizedCoeff(target,
+                         item.first,
+                         coefficientRing->mult(coeff, item.second));
   }
 
 CoeffMap SymmetricEngineRing::addCoeffMaps(const CoeffMap& a, const CoeffMap& b) const
 {
     CoeffMap result = a;
-    for (const auto& item : b) addCoeff(result, item.first, item.second);
+    for (const auto& item : b)
+      addNormalizedCoeff(result, item.first, item.second);
     return result;
   }
 
@@ -160,10 +170,16 @@ CoeffMap SymmetricEngineRing::multiplyCoeffMaps(const CoeffMap& a, const CoeffMa
     for (const auto& left : a)
       for (const auto& right : b)
         {
-          Partition index = left.first;
-          index.insert(index.end(), right.first.begin(), right.first.end());
+          Partition index;
+          index.reserve(left.first.size() + right.first.size());
+          std::merge(left.first.begin(),
+                     left.first.end(),
+                     right.first.begin(),
+                     right.first.end(),
+                     std::back_inserter(index),
+                     std::greater<int>());
           ring_elem coeff = coefficientRing->mult(left.second, right.second);
-          addCoeff(result, index, coeff);
+          addNormalizedCoeff(result, std::move(index), coeff);
         }
     return result;
   }
@@ -559,51 +575,119 @@ CoeffMap SymmetricEngineRing::powerSumPartToGeneratorMapViaLogarithmFormula(
     return result;
   }
 
-CoeffMap SymmetricEngineRing::powerSumPartToCompleteMapViaLogarithmFormula(int n) const
+CoeffMap
+SymmetricEngineRing::powerSumPartToIntegralGeneratorMapViaLogarithmFormula(
+    int n,
+    int commonSign) const
 {
-    if (n == 0) return oneCoeffMap();
-    auto cached = powerSumToCompleteMapCache.find(n);
-    if (cached != powerSumToCompleteMapCache.end()) return cached->second;
-    CoeffMap result = powerSumPartToGeneratorMapViaLogarithmFormula(
-        n, cachedInteger(n));
-    powerSumToCompleteMapCache[n] = result;
+    CoeffMap result;
+    mpz_t coefficient;
+    mpz_t divisor;
+    mpz_init(coefficient);
+    mpz_init(divisor);
+    for (const auto& lambda : partitionsOf(n))
+      {
+        // [h_lambda] p_n = (-1)^(length(lambda)-1)
+        //     n (length(lambda)-1)! / product_i multiplicity_i(lambda)!.
+        // This is always integral, so avoid constructing a rational only to
+        // multiply it by n and cancel its denominator in the coefficient ring.
+        mpz_fac_ui(coefficient, lambda.empty() ? 0 : lambda.size() - 1);
+        mpz_mul_ui(coefficient, coefficient, static_cast<unsigned long>(n));
+        if (((lambda.size() - 1) % 2 == 1) != (commonSign < 0))
+          mpz_neg(coefficient, coefficient);
+
+        for (size_t first = 0; first < lambda.size();)
+          {
+            size_t last = first + 1;
+            while (last < lambda.size() && lambda[last] == lambda[first]) ++last;
+            mpz_fac_ui(divisor, last - first);
+            mpz_divexact(coefficient, coefficient, divisor);
+            first = last;
+          }
+        addCoeff(result, lambda, coefficientRing->from_int(coefficient));
+      }
+    mpz_clear(divisor);
+    mpz_clear(coefficient);
     return result;
   }
 
-CoeffMap SymmetricEngineRing::powerSumPartToElementaryMapViaLogarithmFormula(int n) const
+const CoeffMap&
+SymmetricEngineRing::powerSumPartToCompleteMapViaLogarithmFormula(int n) const
 {
-    if (n == 0) return oneCoeffMap();
+    auto cached = powerSumToCompleteMapCache.find(n);
+    if (cached != powerSumToCompleteMapCache.end()) return cached->second;
+    CoeffMap result = n == 0
+        ? oneCoeffMap()
+        : powerSumPartToIntegralGeneratorMapViaLogarithmFormula(n, 1);
+    auto inserted = powerSumToCompleteMapCache.emplace(n, std::move(result));
+    return inserted.first->second;
+}
+
+const CoeffMap&
+SymmetricEngineRing::powerSumPartToElementaryMapViaLogarithmFormula(int n) const
+{
     auto cached = powerSumToElementaryMapCache.find(n);
     if (cached != powerSumToElementaryMapCache.end()) return cached->second;
-    ring_elem common = cachedInteger(n);
-    if (n % 2 == 0) common = coefficientRing->negate(common);
-    CoeffMap result = powerSumPartToGeneratorMapViaLogarithmFormula(n, common);
-    powerSumToElementaryMapCache[n] = result;
-    return result;
-  }
+    CoeffMap result = n == 0
+        ? oneCoeffMap()
+        : powerSumPartToIntegralGeneratorMapViaLogarithmFormula(
+              n, n % 2 == 0 ? -1 : 1);
+    auto inserted = powerSumToElementaryMapCache.emplace(n, std::move(result));
+    return inserted.first->second;
+}
 
 CoeffMap SymmetricEngineRing::powerSumIndexToCompleteMapViaLogarithmFormula(
     const Partition& index) const
 {
-    CoeffMap result = oneCoeffMap();
-    for (int part : index)
-      result = multiplyCoeffMaps(
-          result, powerSumPartToCompleteMapViaLogarithmFormula(part));
-    return result;
-  }
+    CoeffMap result;
+    bool firstFactor = true;
+    for (auto part = index.rbegin(); part != index.rend(); ++part)
+      {
+        const CoeffMap& factor =
+            powerSumPartToCompleteMapViaLogarithmFormula(*part);
+        if (firstFactor)
+          {
+            result = factor;
+            firstFactor = false;
+          }
+        else
+          result = multiplyCoeffMaps(result, factor);
+      }
+    return firstFactor ? oneCoeffMap() : result;
+}
 
 CoeffMap SymmetricEngineRing::powerSumIndexToElementaryMapViaLogarithmFormula(
     const Partition& index) const
 {
-    CoeffMap result = oneCoeffMap();
-    for (int part : index)
-      result = multiplyCoeffMaps(
-          result, powerSumPartToElementaryMapViaLogarithmFormula(part));
-    return result;
-  }
+    CoeffMap result;
+    bool firstFactor = true;
+    for (auto part = index.rbegin(); part != index.rend(); ++part)
+      {
+        const CoeffMap& factor =
+            powerSumPartToElementaryMapViaLogarithmFormula(*part);
+        if (firstFactor)
+          {
+            result = factor;
+            firstFactor = false;
+          }
+        else
+          result = multiplyCoeffMaps(result, factor);
+      }
+    return firstFactor ? oneCoeffMap() : result;
+}
 
-ring_elem SymmetricEngineRing::powerSumsToCompleteViaLogarithmFormula(
-    ring_elem f, int completeId, int completeOrder) const
+void SymmetricEngineRing::addPowerSumIndexToCompleteMapViaLogarithmFormula(
+    const Partition& index,
+    ring_elem coefficient,
+    CoeffMap& result) const
+{
+    addScaledCoeffMap(
+        result, coefficient,
+        powerSumIndexToCompleteMapViaLogarithmFormula(index));
+}
+
+CoeffMap SymmetricEngineRing::powerSumsToCompleteMapViaLogarithmFormula(
+    ring_elem f) const
 {
     CoeffMap result;
     for (const auto& term : polyValue(f)->terms)
@@ -612,13 +696,19 @@ ring_elem SymmetricEngineRing::powerSumsToCompleteViaLogarithmFormula(
         if (!powerSumIndexFromMonomial(term.monomial, index))
           {
             ERROR("expected a pure power-sum expression during basis conversion");
-            return zero();
+            return CoeffMap{};
           }
-        addScaledCoeffMap(
-            result,
-            term.coeff,
-            powerSumIndexToCompleteMapViaLogarithmFormula(index));
+        addPowerSumIndexToCompleteMapViaLogarithmFormula(
+            index, term.coeff, result);
       }
+    return result;
+  }
+
+ring_elem SymmetricEngineRing::powerSumsToCompleteViaLogarithmFormula(
+    ring_elem f, int completeId, int completeOrder) const
+{
+    CoeffMap result = powerSumsToCompleteMapViaLogarithmFormula(f);
+    if (error()) return zero();
     return coeffMapToElement(
         result, completeId, displayForBasis(completeId), completeOrder, true);
   }
@@ -656,16 +746,9 @@ CoeffMap SymmetricEngineRing::multiplySchurExpansionViaRowPieri(const CoeffMap& 
         ERROR("expected nonnegative h index during recursive h-to-Schur conversion");
         return result;
       }
-    Partition rowPartition{row};
     for (const auto& term : source)
-      for (const auto& product : littlewoodRichardsonProductViaCoefficientEnumeration(term.first, rowPartition))
-        {
-          ring_elem coeff = product.coefficient == 1
-              ? term.second
-              : coefficientRing->mult(coefficientRing->from_long(product.coefficient),
-                                      term.second);
-          addCoeff(result, product.nu, coeff);
-        }
+      for (const auto& nu : schurTimesCompleteViaHorizontalPieri(term.first, row))
+        addNormalizedCoeff(result, nu, term.second);
     return result;
   }
 
@@ -714,7 +797,12 @@ CoeffMap SymmetricEngineRing::completeToSchurCoefficientsViaRecursiveTransition(
         if (error()) return CoeffMap{};
         auto found = grouped.find(exponent);
         if (found != grouped.end())
-          result = addCoeffMaps(result, completeToSchurCoefficientsViaRecursiveTransition(found->second));
+          {
+            CoeffMap summand =
+                completeToSchurCoefficientsViaRecursiveTransition(found->second);
+            for (const auto& item : summand)
+              addNormalizedCoeff(result, item.first, item.second);
+          }
         if (error()) return CoeffMap{};
       }
     return result;

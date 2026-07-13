@@ -29,10 +29,12 @@
     ViaSchurDegreeBlocks,
     ViaSchurBorderStrips,
     ViaSchurAbacusRimHooks,
+    ViaSchurAbacusAndComplete,
     ViaSchurComplete,
     ViaSchurCharacters,
     ViaOmegaThenSchurBorderStrips,
     ViaOmegaThenSchurAbacusRimHooks,
+    ViaOmegaThenSchurAbacusAndComplete,
     ViaOmegaThenSchurComplete,
     ViaOmegaThenSchurCharacters,
     ViaCompleteLogarithmFormula,
@@ -287,6 +289,11 @@
           int targetDisplayOrder,
           bool targetIsMultiplicative) const;
   ring_elem powerSumsToSchurViaComplete(
+          ring_elem f,
+          int targetBasisId,
+          const std::string& targetDisplay,
+          int targetOrder) const;
+  ring_elem powerSumsToSchurViaAbacusAndComplete(
           ring_elem f,
           int targetBasisId,
           const std::string& targetDisplay,

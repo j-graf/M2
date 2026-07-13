@@ -111,8 +111,13 @@ ring_elem SymmetricEngineRing::completePlethysmViaAdamsRecurrence(int n,
       {
         ring_elem pIAtInner = powerSumsViaAdamsOperation(innerPowerSums, i);
         if (error()) return zero();
-        ring_elem pIAtInnerSchur = powerSumsToSchurViaCharacters(
-            pIAtInner, schurId, schurOrder);
+        // In this specialized route the retained inner Schur function is a
+        // short row, so every Adams image has only partitionCount(|inner|)
+        // power-sum terms even though its total degree is i*|inner|.  Applying
+        // rim hooks to that sparse support avoids constructing and scanning
+        // character data for the much larger dilated degree.
+        ring_elem pIAtInnerSchur = powerSumsToSchurViaAbacusRimHooks(
+            pIAtInner, schurId, schurDisplay, schurOrder);
         if (error()) return zero();
         ring_elem rest = completePlethysmViaAdamsRecurrence(n - i,
                                                       inner,

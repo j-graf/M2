@@ -2,8 +2,8 @@
 
 This directory contains the reproducible benchmark system for the
 `SymmetricRings` package.  It measures representative mathematical operations,
-compares a run with accepted baselines, records the machine and run conditions,
-and writes a human-readable report.
+compares a run with accepted baselines and fastest qualifying records, records
+the machine and run conditions, and writes a human-readable report.
 
 The suite is designed so that a contributor can run it without elevated
 privileges and without knowing the implementation details of every algorithm.
@@ -96,11 +96,15 @@ The suite records:
 
 - raw per-repetition measurements;
 - summarized median timings;
-- comparison with accepted baselines;
+- comparison with accepted baselines and the pre-run fastest records;
 - system information;
 - calibration probes before and after each family;
 - a run-condition classification;
 - a Markdown report.
+
+After writing the report, the suite automatically updates `records.tsv` with
+any lower median based on at least three repetitions. Baseline acceptance
+remains a separate manual review step.
 
 No performance monitor runs during a timed test.  Calibration occurs only
 before and after families, so the probes do not compete with benchmark work.
@@ -125,21 +129,25 @@ results/
     report.md
 ```
 
+When `--output LABEL` is supplied, the directory is named
+`YYYYMMDD-HHMMSS-LABEL`; the timestamp is never omitted.
+
 Exact auxiliary filenames may evolve.  Treat `report.md` as the stable human
 entry point and retain the entire directory locally as the audit record.
 
 The report is ordered for review:
 
 1. overall summary;
-2. baseline comparison, broken into one table per family;
+2. baseline and fastest-record comparison, broken into one table per family;
 3. comparison of CPU, RAM, and operating system with accepted baselines;
 4. system information;
 5. run conditions.
 
-The overall and family summaries use compact two-row tables.  Before each
-family's detailed results, the report summarizes improvements, regressions,
-unchanged cases, and new cases.  New cases are counted; the report does not add
-a long prose list titled “New cases without an accepted baseline.”
+The overall and family summaries use compact two-row tables. They count
+baseline improvements, regressions, stable and new cases, and records set.
+Detailed family tables contain the per-case comparisons. The report does not
+repeat improvements or regressions in prose and does not add a prose list of
+new cases.
 
 The overall table places `Baseline system` beside run health. It reports
 `same`, `different`, `mixed`, or `unknown`, based on CPU model, reported RAM,
@@ -216,8 +224,26 @@ changes materially, invalidate its old baseline rather than silently comparing
 unlike computations.  Historical reports are snapshots and should not be
 regenerated after later baseline changes.
 
-When assessing a change, compare with the accepted baseline and with the best
-credible equivalent historical time, not only the immediately preceding run.
+When assessing a change, compare with the accepted baseline and with the
+fastest qualifying time in `records.tsv`, not only the immediately preceding
+run.
+
+## Fastest records
+
+`records.tsv` contains one fastest qualifying median per case and coefficient
+ring. A qualifying value is the median CPU time of at least three repetitions;
+an unusually fast individual repetition never becomes a record.
+
+For each run, `comparison.tsv` and `report.md` use the record table as it stood
+before that run. This preserves a meaningful comparison when the current run
+sets a new record. After the report is complete, the runner automatically
+updates `records.tsv`, recording the median, repetition count, capture time,
+and source run directory.
+
+Records are historical performance observations, not accepted expectations.
+They do not replace baseline review. When evaluating an implementation update,
+compare against both: the baseline measures change from reviewed reference
+behavior, while the record measures distance from the fastest qualifying run.
 
 ## Adding a benchmark case
 
@@ -269,11 +295,13 @@ The suite is divided into small components for maintainability:
 - operation code constructs and verifies computations;
 - the runner and shell wrapper select and execute cases;
 - validation checks the tables before expensive work;
-- summarization and comparison compute medians and baseline differences;
+- summarization and comparison compute medians and baseline/record differences;
+- `update-records.awk` updates fastest qualifying medians after reporting;
 - estimation predicts duration without running cases;
 - system, condition, and calibration code describe the environment;
 - report code renders the final Markdown document;
-- baseline data stores accepted reference measurements.
+- baseline data stores accepted reference measurements;
+- `records.tsv` stores automatically maintained fastest qualifying medians.
 
 When changing one component, preserve the distinction between raw measurement,
 statistical summary, comparison policy, and presentation.  In particular, do

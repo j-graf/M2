@@ -39,6 +39,21 @@ size_t partitionCount(int weight)
     return counts[static_cast<size_t>(weight)];
 }
 
+bool completeFriendlyPowerSumIndex(const Partition& index, int weight)
+{
+    if (weight <= 0 || index.size() < 4) return false;
+    int smallCycleWeight = 0;
+    for (int part : index)
+      if (part <= 4) smallCycleWeight += part;
+    // Repeated short cycles create broad rim-hook frontiers, but their
+    // logarithmic h-expansions remain narrow.  Hybrid conversion has a fixed
+    // split-and-merge cost, so only strongly short-cycle indices should enter
+    // its complete subgroup; weaker two-thirds candidates were observed to
+    // make scattered and middle-slice supports slower than whole-input
+    // abacus conversion.
+    return 4 * smallCycleWeight >= 3 * weight;
+}
+
 std::string combinatorialTagNames(CombinatorialTags tags)
 {
     if (tags == 0) return "none";
@@ -1042,9 +1057,14 @@ SymmetricEngineRing::selectPowerSumsToTargetRoute(
           combinatorialTagMask(CombinatorialTag::Plethysm);
       const CombinatorialTags borderStripsTag =
           combinatorialTagMask(CombinatorialTag::BorderStrips);
-      if (input.combinatorialTags == plethysmTag)
+      if (hasCombinatorialTag(input.combinatorialTags,
+                              CombinatorialTag::Plethysm))
         {
-          bool completeWins = supportSquareFavorsComplete;
+          // Schur plethysm outputs acquire enough correlated short-cycle
+          // support for the complete route well before the generic density
+          // crossover.  Tiny outputs remain on abacus, where setup dominates.
+          bool completeWins = supportSquareFavorsComplete ||
+                              (weight >= 8 && termCount >= 2);
           return completeWins
               ? (omega
                   ? PowerSumsToTargetRoute::ViaOmegaThenSchurComplete
@@ -1080,7 +1100,7 @@ SymmetricEngineRing::selectPowerSumsToTargetRoute(
                 : PowerSumsToTargetRoute::ViaSchurComplete;
         }
 
-      int maximumPowerSumPart = 0;
+      size_t completeFriendlyTerms = 0;
       std::vector<int> commonPowerSumParts;
       bool firstPowerSumIndex = true;
       const auto *poly = polyValue(input.expression);
@@ -1091,8 +1111,8 @@ SymmetricEngineRing::selectPowerSumsToTargetRoute(
             return omega
                 ? PowerSumsToTargetRoute::ViaOmegaThenSchurAbacusRimHooks
                 : PowerSumsToTargetRoute::ViaSchurAbacusRimHooks;
-          if (!index.empty())
-            maximumPowerSumPart = std::max(maximumPowerSumPart, index.front());
+          if (completeFriendlyPowerSumIndex(index, weight))
+            ++completeFriendlyTerms;
           if (input.combinatorialTags == borderStripsTag)
             {
               if (firstPowerSumIndex)
@@ -1143,19 +1163,32 @@ SymmetricEngineRing::selectPowerSumsToTargetRoute(
         return omega
             ? PowerSumsToTargetRoute::ViaOmegaThenSchurComplete
             : PowerSumsToTargetRoute::ViaSchurComplete;
-      bool enoughTerms = termCount >= 8;
-      bool smallCycles = maximumPowerSumPart <= 4;
-      bool genuinelyDense = density >= 0.75;
-      bool moderatelyDenseVerySmallCycles =
-          density >= 0.20 && maximumPowerSumPart <= 5;
-      bool moderatelyDenseSmallCycles =
-          density >= 0.40 && maximumPowerSumPart <= 6;
-      if (weight >= 14 && enoughTerms &&
-          (smallCycles || genuinelyDense || moderatelyDenseVerySmallCycles ||
-           moderatelyDenseSmallCycles))
-        return omega
-            ? PowerSumsToTargetRoute::ViaOmegaThenSchurComplete
-            : PowerSumsToTargetRoute::ViaSchurComplete;
+
+      if ((input.combinatorialTags == 0 ||
+           input.combinatorialTags == borderStripsTag) &&
+          weight >= 14)
+        {
+          if (termCount >= 2 && completeFriendlyTerms == termCount)
+            return omega
+                ? PowerSumsToTargetRoute::ViaOmegaThenSchurComplete
+                : PowerSumsToTargetRoute::ViaSchurComplete;
+
+          // Mixed supports should not force every term through one route.
+          // A nontrivial short-cycle group is converted through h, while the
+          // remaining long-cycle terms retain the lower-overhead abacus path.
+          // A scattered minority does not amortize evaluating and merging two
+          // different transition systems.  Require a substantial coherent
+          // short-cycle subgroup; the stricter per-index predicate above
+          // supplies the coherence test.
+          size_t minimumCompleteGroup = std::max<size_t>(
+              8, (termCount + 3) / 4);
+          if (termCount >= 8 &&
+              completeFriendlyTerms >= minimumCompleteGroup &&
+              completeFriendlyTerms < termCount)
+            return omega
+                ? PowerSumsToTargetRoute::ViaOmegaThenSchurAbacusAndComplete
+                : PowerSumsToTargetRoute::ViaSchurAbacusAndComplete;
+        }
 
       return omega
           ? PowerSumsToTargetRoute::ViaOmegaThenSchurAbacusRimHooks
@@ -1241,6 +1274,8 @@ const char *SymmetricEngineRing::powerSumsToTargetRouteName(
           return "p->S:border-strips";
         case PowerSumsToTargetRoute::ViaSchurAbacusRimHooks:
           return "p->S:abacus-rim-hooks";
+        case PowerSumsToTargetRoute::ViaSchurAbacusAndComplete:
+          return "p->S:abacus-rim-hooks+complete";
         case PowerSumsToTargetRoute::ViaSchurComplete:
           return "p->h->S:recursive-transition";
         case PowerSumsToTargetRoute::ViaSchurCharacters:
@@ -1249,6 +1284,8 @@ const char *SymmetricEngineRing::powerSumsToTargetRouteName(
           return "p->omega(p)->S->Somega:border-strips";
         case PowerSumsToTargetRoute::ViaOmegaThenSchurAbacusRimHooks:
           return "p->omega(p)->S->Somega:abacus-rim-hooks";
+        case PowerSumsToTargetRoute::ViaOmegaThenSchurAbacusAndComplete:
+          return "p->omega(p)->S->Somega:abacus-rim-hooks+complete";
         case PowerSumsToTargetRoute::ViaOmegaThenSchurComplete:
           return "p->omega(p)->h->S->Somega";
         case PowerSumsToTargetRoute::ViaOmegaThenSchurCharacters:
@@ -1313,6 +1350,10 @@ ring_elem SymmetricEngineRing::executePowerSumsToTargetRoute(
               inSchur = powerSumsToSchurViaAbacusRimHooks(
                   omegaInputExpression, schurId, schurDisplay, schurOrder);
               break;
+            case PowerSumsToTargetRoute::ViaOmegaThenSchurAbacusAndComplete:
+              inSchur = powerSumsToSchurViaAbacusAndComplete(
+                  omegaInputExpression, schurId, schurDisplay, schurOrder);
+              break;
             case PowerSumsToTargetRoute::ViaOmegaThenSchurCharacters:
               inSchur = powerSumsToSchurLikeViaCharacters(
                   omegaInputExpression, schurId, schurOrder,
@@ -1344,6 +1385,9 @@ ring_elem SymmetricEngineRing::executePowerSumsToTargetRoute(
         case PowerSumsToTargetRoute::ViaSchurAbacusRimHooks:
           return powerSumsToSchurViaAbacusRimHooks(
               input.expression, targetBasisId, targetDisplay, targetDisplayOrder);
+        case PowerSumsToTargetRoute::ViaSchurAbacusAndComplete:
+          return powerSumsToSchurViaAbacusAndComplete(
+              input.expression, targetBasisId, targetDisplay, targetDisplayOrder);
         case PowerSumsToTargetRoute::ViaSchurCharacters:
           return powerSumsToSchurLikeViaCharacters(
               input.expression, targetBasisId, targetDisplayOrder,
@@ -1353,6 +1397,7 @@ ring_elem SymmetricEngineRing::executePowerSumsToTargetRoute(
               input.expression, targetBasisId, targetDisplay, targetDisplayOrder);
         case PowerSumsToTargetRoute::ViaOmegaThenSchurBorderStrips:
         case PowerSumsToTargetRoute::ViaOmegaThenSchurAbacusRimHooks:
+        case PowerSumsToTargetRoute::ViaOmegaThenSchurAbacusAndComplete:
         case PowerSumsToTargetRoute::ViaOmegaThenSchurCharacters:
         case PowerSumsToTargetRoute::ViaOmegaThenSchurComplete:
           return viaSchurOmega();
@@ -1477,23 +1522,52 @@ ring_elem SymmetricEngineRing::powerSumsToSchurViaComplete(
         const std::string& targetDisplay,
         int targetOrder) const
 {
-    int hId = requiredBasisIdForKind(BasisKind::Complete);
+    CoeffMap inComplete = powerSumsToCompleteMapViaLogarithmFormula(f);
     if (error()) return zero();
-    int hOrder = basisOrderForId(hId);
-    bool hIsMultiplicative = isMultiplicativeBasis(hId);
-    ring_elem inComplete = powerSumsToCompleteViaLogarithmFormula(f,
-                                                                 hId,
-                                                                 hOrder);
+    CoeffMap result = completeToSchurCoefficientsViaRecursiveTransition(
+        inComplete);
     if (error()) return zero();
-    return completeToSchurViaRecursiveTransition(inComplete,
-                                                 hId,
-                                                 displayForBasis(hId),
-                                                 hOrder,
-                                                 hIsMultiplicative,
-                                                 targetBasisId,
-                                                 targetDisplay,
-                                                 targetOrder);
+    return coeffMapToElement(
+        result, targetBasisId, targetDisplay, targetOrder, false);
   }
+
+ring_elem SymmetricEngineRing::powerSumsToSchurViaAbacusAndComplete(
+        ring_elem f,
+        int targetBasisId,
+        const std::string& targetDisplay,
+        int targetOrder) const
+{
+    CoeffMap abacusResult;
+    CoeffMap completeInput;
+    const auto *poly = polyValue(f);
+    for (const auto& term : poly->terms)
+      {
+        Partition index;
+        if (!powerSumIndexFromMonomial(term.monomial, index))
+          {
+            ERROR("expected a pure power-sum expression during hybrid basis conversion");
+            return zero();
+          }
+        int weight = partitionWeight(index);
+        if (completeFriendlyPowerSumIndex(index, weight))
+          addPowerSumIndexToCompleteMapViaLogarithmFormula(
+              index, term.coeff, completeInput);
+        else
+          addPowerSumIndexToSchurMapViaAbacusRimHooks(
+              index, term.coeff, abacusResult);
+      }
+
+    if (!completeInput.empty())
+      {
+        CoeffMap completeResult =
+            completeToSchurCoefficientsViaRecursiveTransition(completeInput);
+        if (error()) return zero();
+        for (const auto& term : completeResult)
+          addNormalizedCoeff(abacusResult, term.first, term.second);
+      }
+    return coeffMapToElement(
+        abacusResult, targetBasisId, targetDisplay, targetOrder, false);
+}
 
 ring_elem SymmetricEngineRing::runPowerSumsPipeline(
         const ConversionInput& input,
@@ -1580,6 +1654,20 @@ SymmetricEngineRing::selectSourceToTargetRoute(
         if (error()) return SourceToTargetRoute::ViaPowerSumsThenCompleteThenSchur;
         if (input.guarantees.pureBasis == completeId)
           return SourceToTargetRoute::ViaCompleteToSchurRecursiveTransition;
+        // Monomial and forgotten transitions naturally produce relatively
+        // sparse power-sum expansions.  Let the ordinary p-to-S selector use
+        // that actual support instead of unconditionally forcing the
+        // source->p->h->S composition used by denser transformed bases.
+        std::optional<int> sourceBasis = input.guarantees.expandedBasis
+            ? input.guarantees.expandedBasis
+            : input.guarantees.pureBasis;
+        if (sourceBasis)
+          {
+            BasisKind sourceKind = basisKindForId(*sourceBasis);
+            if (sourceKind == BasisKind::Monomial ||
+                sourceKind == BasisKind::Forgotten)
+              return SourceToTargetRoute::ViaSourceToPowerSumsThenTarget;
+          }
         return SourceToTargetRoute::ViaPowerSumsThenCompleteThenSchur;
       }
 

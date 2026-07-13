@@ -364,17 +364,33 @@ std::vector<Partition> SymmetricEngineRing::schurTimesCompleteViaHorizontalPieri
         return result;
       }
     Partition base = normalizePartition(lambda);
-    for (const auto& nu : partitionsContaining(base, row))
-      {
-        bool horizontal = true;
-        for (size_t i = 0; i + 1 < nu.size(); ++i)
-          if (partitionPart(nu, i + 1) > partitionPart(base, i))
-            {
-              horizontal = false;
-              break;
-            }
-        if (horizontal) result.push_back(nu);
-      }
+    Partition current(base.size() + 1, 0);
+    auto generate = [&](auto&& self, size_t position, int remaining) -> void {
+      if (position == current.size())
+        {
+          if (remaining == 0)
+            result.push_back(trimTrailingZerosPartition(current));
+          return;
+        }
+
+      int lower = position < base.size() ? base[position] : 0;
+      int upper = position == 0
+          ? lower + remaining
+          : base[position - 1];
+      int maximumAddition = std::min(remaining, upper - lower);
+      // The interlacing bounds telescope: after this row, at most `lower`
+      // further cells can be added.  Enforcing that bound avoids generating
+      // candidates that would later be rejected.
+      int minimumAddition = std::max(0, remaining - lower);
+      for (int addition = maximumAddition;
+           addition >= minimumAddition;
+           --addition)
+        {
+          current[position] = lower + addition;
+          self(self, position + 1, remaining - addition);
+        }
+    };
+    generate(generate, 0, row);
     return result;
   }
 
@@ -576,25 +592,35 @@ SymmetricEngineRing::schurTimesPowerSumViaAbacusRimHooks(
       beta.push_back(partitionPart(lambda, i) +
                      static_cast<int>(beadCount - 1 - i));
 
+    // As movedBead increases, source + part decreases.  Its insertion
+    // position in the descending beta set can therefore only move toward the
+    // back.  Retaining the previous position makes the complete pass linear
+    // in the number of beads instead of rescanning every prefix.
+    size_t searchPosition = 0;
     for (size_t movedBead = 0; movedBead < beta.size(); ++movedBead)
       {
         int source = beta[movedBead];
         int target = source + part;
-        if (std::find(beta.begin(), beta.end(), target) != beta.end()) continue;
-
-        int crossed = 0;
-        for (int bead : beta)
-          if (source < bead && bead < target) ++crossed;
-
-        std::vector<int> moved = beta;
-        moved[movedBead] = target;
-        std::sort(moved.begin(), moved.end(), std::greater<int>());
+        // The target is larger than the source, so the bead only moves toward
+        // the front of the descending beta set. A single scan of that prefix
+        // detects occupancy and finds the insertion position; the latter also
+        // gives the number of crossed beads. The shifted beta values can then
+        // be read directly without copying and sorting the full set.
+        while (searchPosition < movedBead && beta[searchPosition] > target)
+          ++searchPosition;
+        size_t newPosition = searchPosition;
+        if (newPosition < movedBead && beta[newPosition] == target) continue;
+        int crossed = static_cast<int>(movedBead - newPosition);
         Partition nu;
         nu.reserve(beadCount);
         for (size_t i = 0; i < beadCount; ++i)
           {
-            int row = moved[i] - static_cast<int>(beadCount - 1 - i);
-            if (row > 0) nu.push_back(row);
+            int bead = i == newPosition
+                ? target
+                : (newPosition < i && i <= movedBead ? beta[i - 1] : beta[i]);
+            int rowLength = bead - static_cast<int>(beadCount - 1 - i);
+            if (rowLength <= 0) break;
+            nu.push_back(rowLength);
           }
         result.push_back({nu, (crossed % 2 == 0) ? 1 : -1});
       }
@@ -604,6 +630,32 @@ SymmetricEngineRing::schurTimesPowerSumViaAbacusRimHooks(
     return inserted.first->second;
   }
 
+void SymmetricEngineRing::addPowerSumIndexToSchurMapViaAbacusRimHooks(
+    const Partition& index,
+    ring_elem coefficient,
+    CoeffMap& result) const
+{
+    CoeffMap current = oneCoeffMap();
+    // Increasing cycle sizes generally keep the intermediate
+    // Murnaghan--Nakayama frontier smaller.
+    for (auto part = index.rbegin(); part != index.rend(); ++part)
+      {
+        if (*part <= 0) continue;
+        CoeffMap next;
+        for (const auto& currentTerm : current)
+          for (const auto& product :
+               schurTimesPowerSumViaAbacusRimHooks(currentTerm.first, *part))
+            {
+              ring_elem nextCoefficient = product.coefficient == 1
+                  ? currentTerm.second
+                  : coefficientRing->negate(currentTerm.second);
+              addNormalizedCoeff(next, product.nu, nextCoefficient);
+            }
+        current = std::move(next);
+      }
+    addScaledCoeffMap(result, coefficient, current);
+}
+
 ring_elem SymmetricEngineRing::powerSumsToSchurViaAbacusRimHooks(
     ring_elem f,
     int targetBasisId,
@@ -611,37 +663,21 @@ ring_elem SymmetricEngineRing::powerSumsToSchurViaAbacusRimHooks(
     int targetDisplayOrder) const
 {
     const auto *poly = polyValue(f);
-    VECTOR(SymmetricTerm) terms;
+    CoeffMap result;
     for (const auto& term : poly->terms)
       {
-        std::vector<SchurCompatibleFactor> factors;
-        if (!term.monomial.data.empty())
+        Partition index;
+        if (!powerSumIndexFromMonomial(term.monomial, index))
           {
-            Partition index = basisElementIndex(term.monomial, 0);
-            factors.reserve(index.size());
-            for (int part : index)
-              if (part > 0)
-                factors.push_back({SchurCompatibleFactor::PowerSumAbacus,
-                                   Partition{part},
-                                   CoeffMap{},
-                                   part});
+            ERROR("expected a pure power-sum expression during basis conversion");
+            return zero();
           }
 
-        ring_elem converted;
-        if (!schurCompatibleFactorsToSchurDispatch(std::move(factors),
-                                                    targetBasisId,
-                                                    targetDisplay,
-                                                    targetDisplayOrder,
-                                                    converted))
-          return zero();
-        const auto *convertedPoly = polyValue(converted);
-        terms.reserve(terms.size() + convertedPoly->terms.size());
-        for (const auto& convertedTerm : convertedPoly->terms)
-          terms.push_back({coefficientRing->mult(term.coeff,
-                                                 convertedTerm.coeff),
-                           convertedTerm.monomial});
+        addPowerSumIndexToSchurMapViaAbacusRimHooks(
+            index, term.coeff, result);
       }
-    return fromTermVector(terms, false);
+    return coeffMapToElement(
+        result, targetBasisId, targetDisplay, targetDisplayOrder, false);
   }
 
 // ============================================================================

@@ -30,12 +30,13 @@ There are two complementary workflows.
 
 ### The systematic suite
 
-`benchmarks/` contains a table-driven suite with accepted baselines, machine
-and run-condition records, family summaries, calibrated timing, fixed and
-random representative selections, and estimates of running time.  Use it for
-package-wide comparisons and results that should remain reproducible.
+`benchmarks/` contains a table-driven suite with accepted baselines, automatic
+fastest-median records, machine and run-condition records, family summaries,
+calibrated timing, fixed and random representative selections, and estimates
+of running time. Use it for package-wide comparisons and results that should
+remain reproducible.
 
-See `benchmarks/README-NEW.md` for the commands and file format.
+See `benchmarks/README.md` for the commands and file format.
 
 ### One-off investigations
 
@@ -117,9 +118,11 @@ valuable independent checks.
 
 ## Interpreting timing changes
 
-Do not compare only with the immediately preceding run.  Compare with the best
-credible historical time as well as the accepted baseline, and inspect whether
-the mathematical route, coefficient ring, or machine conditions changed.
+Do not compare only with the immediately preceding run. Compare with the
+accepted baseline and the fastest qualifying median in `benchmarks/records.tsv`,
+and inspect whether the mathematical route, coefficient ring, or machine
+conditions changed. This comparison is especially important after changing an
+implementation or selector.
 
 An unchanged total time can conceal opposing changes in conversion and input
 construction.  A regression may come from:
@@ -152,7 +155,7 @@ When an experiment succeeds:
 
 The engine architecture and the detailed procedure for adding a `p -> S`
 route are described in the
-[engine maintainer guide](../../../e/symmetric-rings/README-NEW.md).
+[engine maintainer guide](../../../e/symmetric-rings/README.md).
 
 ## Sharing results
 

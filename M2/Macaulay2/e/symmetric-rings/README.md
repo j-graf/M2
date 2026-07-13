@@ -5,7 +5,7 @@ package.  This guide is for maintainers who need to understand or extend that
 engine, including contributors whose main background is mathematics rather
 than systems programming.
 
-The [package-level guide](../../packages/SymmetricRings/README-NEW.md) explains
+The [package-level guide](../../packages/SymmetricRings/README.md) explains
 the public Macaulay2 layer.
 This document concentrates on representation, dispatch, mathematical kernels,
 and the boundary between C++ and Macaulay2.
@@ -94,9 +94,169 @@ ordinary basis conversions pass through the general
 power sums to Schur functions should extend the conversion dispatcher, not add
 a parallel raw API.
 
+## Pipeline architecture
+
+The purpose of a pipeline is to make useful assumptions and guarantees
+explicit.  A specialized pipeline knows something about the form or origin of
+its input, so it can omit checks, scans, or reconstruction that a completely
+general workflow would require.  The general fallback makes fewer assumptions
+and is designed to work for every supported input.  Its extra inspection and
+normalization can make it slower, but it provides the broad correctness path.
+For example, the `PowerSums` pipeline is guaranteed to receive an expression
+expanded in the power-sum basis.  It can proceed to a power-sum target route
+without first discovering the bases of individual atoms or classifying
+multiplication rules.
+
+Three levels of decision are used throughout the engine:
+
+- A **pipeline** is a high-level workflow chosen from the structure and
+  guarantees available at an operation boundary.
+- A **route** is one mathematical path applicable within that workflow.
+- A **kernel** performs the algebra or combinatorics for a named route; it does
+  not decide whether it should have been selected.
+
+Pipelines do not own private sets of algorithms.  Any pipeline may use the
+same route or kernel when its preconditions are known to hold.  Pipelines
+differ primarily in which facts are available at entry, which discovery work
+can be skipped, and which structure can be preserved while reaching a shared
+kernel.  Thus “pipeline” does not mean “the fastest algorithm”; it describes
+the assumptions and workflow under which algorithms are selected.
+
+Abstractly, a structured operation follows this pattern:
+
+```text
+public mathematical operation
+        |
+        v
+request containing operands, context, and known structure
+        |
+        v
+pipeline selector
+        |-- use guarantees about separate operands
+        |-- use guarantees about a whole expression
+        |-- use guarantees about structured coordinates
+        `-- assume little and choose the general fallback
+        |
+        v
+route selector
+        |-- a direct combinatorial formula
+        |-- coefficient extraction or diagonal pairing
+        |-- an intermediate-basis computation
+        `-- the operation's broad fallback
+        |
+        v
+shared kernel or composed route
+        |
+        v
+result
+```
+
+What counts as useful structure depends on the operation.  Conversion cares
+about source and target representations; multiplication cares about separate
+factors and their combinatorial types; plethysm cares about its outer and
+inner operands; and an inner product cares about two operand profiles and an
+explicit pairing.
+
+| Operation | Preserved request structure | High-level decision | Broad fallback |
+|---|---|---|---|
+| Basis conversion | Expression, source/target guarantees, retained operands, and tags | Choose factorized, post-plethysm, power-sum, grouped, whole-expression, or termwise workflow | Convert general terms through supported source-to-power-sum and power-sum-to-target routes |
+| Product-aware conversion | Left factor, right factor, and output basis | Choose a combinatorial product rule or factorwise conversion | Multiply or convert factors through general conversion |
+| Plethysm to a basis | Outer operand, inner operand, and target basis | Choose a specialized combined route or materialize in power sums | Adams-operation plethysm followed by general conversion |
+| Inner product | Two operand profiles, pairing context, and registered metadata | Choose a diagonal, single-element, or structured-coordinate workflow | Convert both operands to power sums and apply the pairing |
+
+A specialized pipeline or route may decline an input, but it may not weaken
+correctness or silently change the requested operation.  A kernel need not
+repeat expensive structural discovery already guaranteed by its caller, but
+its preconditions must be clear enough that every applicable pipeline can
+reuse it safely.
+
+## Tracing and forcing pipeline selection
+
+Pipeline tracing shows which workflow and route the ordinary selectors choose.
+Enable conversion tracing by defining the environment variable before starting
+Macaulay2.  From the nested source tree, a complete one-command example is:
+
+```sh
+M2_SYMMETRIC_RINGS_TRACE_CONVERSION=1 \
+  BUILD/build/M2 --no-preload --silent --stop -q \
+  -e 'needsPackage "SymmetricRings"; R=symmetricRing QQ; F=p_{3,1}+2*p_{2,1,1}; G=toS F; exit 0'
+```
+
+Trace messages are written to standard error.  For conversion, expect several
+lines for one operation: the top-level `pipeline=...` line may be followed by
+`source-target`, `power-sums-target`, `whole-expression`, or
+`product-expansion` selections.  Together these lines show the nested path
+through the diagrams below.  The top-level line also reports useful known
+facts such as target, term count, weight, density, and combinatorial tags.
+Some kernels additionally emit lower-level diagnostic lines, such as the
+method selected for individual Schur factors.
+
+For an interactive session, either prefix the M2 command in the same way or
+export the variable first:
+
+```sh
+export M2_SYMMETRIC_RINGS_TRACE_CONVERSION=1
+BUILD/build/M2
+unset M2_SYMMETRIC_RINGS_TRACE_CONVERSION
+```
+
+Inner-product selection has a separate trace:
+
+```sh
+M2_SYMMETRIC_RINGS_TRACE_INNER_PRODUCT=1 BUILD/build/M2
+```
+
+It reports the inner-product context and selected pipeline, followed by the
+route, operand orientation, estimated cost, and relevant cache state.
+
+Tracing observes normal automatic selection and does not itself force a route.
+To compare algorithms on the same input, set a forcing variable and enable the
+corresponding trace at the same time.  For example:
+
+```sh
+M2_SYMMETRIC_RINGS_TRACE_CONVERSION=1 \
+M2_SYMMETRIC_RINGS_FORCE_P_TO_S_ROUTE=via-complete \
+  BUILD/build/M2 --no-preload --silent --stop -q \
+  -e 'needsPackage "SymmetricRings"; R=symmetricRing QQ; F=p_{3,1}+2*p_{2,1,1}; G=toS F; exit 0'
+```
+
+The supported `p -> S` forced-route values are:
+
+- `abacus-rim-hooks` (or the shorter alias `abacus`);
+- `via-complete`;
+- `border-strips`;
+- `grouped-characters`.
+
+The first two are the ordinary automatic alternatives.  The latter two are
+retained mainly for independent checking and algorithm benchmarks.
+
+Other focused controls follow the same runtime pattern:
+
+| Variable | Supported value or values | Purpose |
+|---|---|---|
+| `M2_SYMMETRIC_RINGS_FORCE_HALL_POWER_SUM_ROUTE` | `green-duality`, `triangular` | Compare Hall--Littlewood power-sum conversion routes; Green duality requires an applicable single power-sum index |
+| `M2_SYMMETRIC_RINGS_FORCE_HALL_LITTLEWOOD_PIPELINE` | `grouped`, `fallback` | Compare grouped and fallback Hall--Littlewood conversion workflows |
+| `M2_SYMMETRIC_RINGS_FORCE_INNER_PRODUCT_PIPELINE` | `fallback-power-sums` | Bypass specialized inner-product pipelines |
+| `M2_SYMMETRIC_RINGS_FORCE_INNER_PRODUCT_ROUTE` | A route name printed by the inner-product trace | Select that route from the applicable candidates; an inapplicable route is an error |
+
+These controls are read at runtime, so changing a trace or forced-route value
+does not require rebuilding the package.  Start a fresh M2 process with the
+desired environment for each comparison.
+
+The implementation tests whether a trace variable is present, not whether its
+value is numerically true.  Thus setting a trace to `0` still enables it; unset
+it to disable tracing.  Forced variables, by contrast, inspect the exact
+string value.  Tracing adds output and overhead, and forced routing bypasses
+production selection, so neither belongs in an accepted benchmark run.
+
 ## Basis conversion from end to end
 
-A conversion has four conceptual stages:
+Basis conversion applies this architecture to the representation of an
+expression.  A retained product or plethysm contains information that has
+already been lost in a fully expanded sum, while an expression known to be in
+one basis can skip work needed by a mixed-basis fallback.
+
+A normal conversion has these conceptual stages:
 
 ```text
 Macaulay2 toBasis request
@@ -105,33 +265,129 @@ Macaulay2 toBasis request
 rawSymmetricRingsToBasis
         |
         v
-top-level conversion-pipeline selector
+construct request and strengthen known guarantees
         |
         v
-source/target-specific route selector
+top-level pipeline selector
+        |-- retain a factorized product
+        |-- retain plethysm operands
+        |-- use expanded power sums
+        |-- use a grouped or whole-expression workflow
+        `-- use the general termwise fallback
         |
         v
-mathematical kernel or conversion workflow
+source/target route selector, when needed
+        |-- apply a direct transition
+        |-- use a target-specific route
+        |-- pass through power sums
+        `-- use the general fallback
+        |
+        v
+route execution
+        |-- one direct combinatorial kernel
+        |-- a composed intermediate-basis route
+        `-- termwise conversion
+        |
+        v
+attach output guarantees and preserve semantic tags
 ```
 
-The top-level selector currently recognizes these pipelines:
+`ConversionInput` carries the expression together with facts already known or
+cheaply inferred about it.  These conversion guarantees include such
+information as a pure or expanded basis, homogeneous weight, term count,
+factor bases, normalization, absence of skew atoms, and whether the expression
+is already closed in the target.  The selector strengthens these facts once
+and passes them down rather than repeatedly rediscovering them.  Combinatorial
+tags travel beside the guarantees and describe provenance such as plethysm,
+LR, Pieri, or border-strip structure.
 
-- `FactorizedProduct`: a product whose factorization can be exploited;
-- `PostPlethysm`: the explicit combined plethysm-and-conversion request;
-- `PowerSums`: an expanded expression whose source is the power-sum basis;
-- `GroupedMultiplicativeTarget`: grouped conversion to a multiplicative basis;
-- `GroupedHallLittlewood`: grouped Hall--Littlewood conversion;
-- `WholeExpression`: a conversion that can use the expression as a whole;
-- `FallbackTerm`: the general termwise fallback.
+### High-level conversion pipelines
+
+The top-level selector currently recognizes the following workflows:
+
+| Pipeline | When it applies | What the workflow preserves or exploits |
+|---|---|---|
+| `FactorizedProduct` | A product-aware request supplies the two operands separately | Keeps the outer multiplication visible so LR, Pieri, border-strip, Schur-compatible, or factorwise conversion can be selected before expansion destroys the distinction between factors |
+| `PostPlethysm` | A combined plethysm-and-conversion request supplies the outer and inner operands | First tries an applicable specialized combined route; otherwise computes plethysm in power sums and enters ordinary source-to-target conversion with `Plethysm` provenance |
+| `PowerSums` | The expression is already expanded in the power-sum basis | Skips source conversion and sends the whole power-sum expression to the target-specific selector |
+| `GroupedMultiplicativeTarget` | The target is multiplicative and the input is normalized and skew-free | Groups compatible factors and converts them in a form suited to construction of one multiplicative target index |
+| `GroupedHallLittlewood` | The target is a capital Hall--Littlewood basis and the factors are compatible Hall--Littlewood generators | Retains the generator grouping needed by the specialized Hall--Littlewood workflow |
+| `WholeExpression` | A direct whole-expression rule is available | Tries routes such as normalization, Schur Omega conjugation, recursive `h -> S`, Schur-compatible products, or triangular reduction without first breaking the expression into independent terms |
+| `FallbackTerm` | No more structured workflow is justified | Converts general mixed, product, or skew terms safely; this is the broad correctness fallback rather than an error case |
 
 `PostPlethysmPowerSums` is a retained internal workflow used after the combined
 post-plethysm pipeline has materialized a power-sum result. It is not selected
 as the ordinary expression pipeline.
 
-The order matters.  Explicit factorized or post-plethysm requests are handled
-first, then power sums, then grouped and whole-expression opportunities, and
-finally the fallback.  A selector should choose among routes; it should not do
-the algebra itself.
+The top-level order is deliberate.  Explicit factorized and post-plethysm
+requests are recognized before inspecting an already materialized expression.
+An expanded power-sum expression is then recognized before grouped and
+whole-expression opportunities, and the termwise fallback comes last.  A
+pipeline may itself fall through to `sourceToTargetDispatch`; fallthrough is a
+documented part of the workflow, not a second hidden top-level selector.
+
+Most substantial dispatch families use the same visible organization:
+
+```text
+select<Operation>Route       inspect facts and return an enum
+trace<Operation>Selection    report the choice when tracing is enabled
+execute<Operation>Route      execute that enum without reselecting it
+<operation>Dispatch          connect the three steps
+```
+
+This organization makes selection policy readable independently of the
+mathematical kernels and makes forced-route comparisons possible without
+duplicating implementations.
+
+### Worked example: converting `p -> S`
+
+Suppose `F` is already an expanded power-sum expression and the user asks for
+`toBasis(F,S)`.  The important control flow is:
+
+```text
+toBasis(F,S)
+    |
+    v
+top-level pipeline selector
+    |-- factorized product
+    |-- post-plethysm
+    |-- grouped or whole-expression conversion
+    |-- termwise fallback
+    `-- PowerSums                         [selected]
+            |
+            v
+    source-to-target route selector
+            |-- already in target
+            |-- direct special transition
+            |-- source -> p -> target
+            `-- selected p-to-target route [selected]
+                    |
+                    v
+            power-sum-to-Schur selector
+                    |-- abacus rim hooks
+                    `-- conversion through complete functions
+                    |
+                    v
+            Schur expansion with updated guarantees
+            and preserved tags
+```
+
+The `PowerSums` pipeline is selected because no source conversion is needed.
+Within it, `powerSumsToTargetDispatch` chooses the mathematical route expected
+to work best for the input.  The automatic `p -> S` routes are currently
+abacus rim hooks and conversion through complete functions.  Older
+border-strip and character routes remain available for independent checking
+and forced benchmarks.
+
+The selector may use coarse properties of the expression, its coefficient
+ring, and combinatorial tags.  Nonhomogeneous inputs are handled degree by
+degree.  These are performance choices only: every route computes the same
+Schur expansion, and conversion preserves the expression's semantic tags.
+
+The conversion trace described above shows the selected pipeline,
+source-to-target route, and final power-sum route.  Exact heuristics and
+thresholds belong beside `selectPowerSumsToTargetRoute` and in benchmark
+evidence, rather than being duplicated in this overview.
 
 ### Coefficient rings and the constant-QQ shadow ring
 
@@ -148,133 +404,148 @@ New algorithms should use this common mechanism rather than hard-code their
 own QQ ring construction.  The optimization must never alter the mathematical
 answer or silently approximate coefficients.
 
-### Nonhomogeneous inputs
+## Extending basis conversion
 
-Several conversion decisions depend on homogeneous weight.  A nonhomogeneous
-power-sum expression is split into degree blocks, each block is selected and
-converted independently, and the answers are recombined.  A new homogeneous
-route normally receives this behavior automatically; it should not duplicate
-degree splitting inside its kernel.
+A new conversion algorithm normally fits into the existing structure:
 
-## The current power-sum to Schur dispatcher
+1. Implement one mathematically named kernel in
+   `basis-conversion-kernels.*`, with its domain and assumptions documented.
+2. Add a route enum, trace name, and executor case in
+   `basis-conversion-dispatch.*`.
+3. Add selector policy only after tests and varied benchmarks identify when
+   the route is advantageous.
+4. Retain an independent fallback and, when useful, a forced diagnostic route.
+5. Check whether the corresponding omega target should reuse the route.
+6. Test exact agreement across boundary cases and coefficient rings.
 
-The automatic `p -> S` choice is presently between two main algorithms:
+No new raw entry point is normally needed.  Conversion kernels do not attach
+combinatorial tags, and a route executor must not hide another selection step.
+Use descriptive names such as `powerSumsToSchurVia...`; detailed naming rules
+are in this directory's `AGENTS.md`.
 
-- **abacus rim hooks**, which generates valid rim-hook extensions directly;
-- **conversion via complete functions**, which can be better for dense or
-  structurally favorable expressions.
+## Other operation pipelines
 
-Two slower diagnostic routes remain available through forced routing:
+The following operations apply the same guarantee, pipeline, route, and
+fallback pattern to different kinds of mathematical structure.
 
-- the older border-strip generator;
-- grouped character evaluation.
+### Product-aware multiplication
 
-They are useful for validation and benchmarking, but the ordinary dispatcher
-does not select them.
+Ordinary multiplication and product-aware conversion have related but
+different responsibilities.  `mult` constructs the algebraic product and
+attaches one dominant combinatorial tag.  Once expanded, the expression still
+remembers that it arose from LR, Pieri, or border-strip structure, but no
+longer retains the original two operands.
 
-The selector first honors a forced diagnostic route.  It then treats each
-homogeneous degree separately and computes statistics including:
-
-- weight;
-- number of nonzero terms;
-- the partition number in that degree;
-- support density;
-- a support-square measure;
-- largest power-sum part;
-- common cycle parts;
-- coefficient-ring information;
-- semantic combinatorial tags.
-
-The current broad policy is:
-
-- plethysm-tagged input uses the complete route for sufficiently large support
-  and otherwise uses abacus rim hooks;
-- Littlewood--Richardson and Pieri-tagged inputs use the complete route above
-  modest weight thresholds when density, support size, or the coefficient
-  ring makes that advantageous;
-- border-strip-tagged input also examines common cycle parts, since those
-  encode useful product structure;
-- large, dense general inputs with small largest parts may use the complete
-  route;
-- remaining inputs use abacus rim hooks.
-
-These are empirical dispatch rules, not mathematical identities.  Exact
-thresholds live in `selectPowerSumsToTargetRoute` and should be changed only
-with broad benchmark evidence.  Comments near a threshold should explain the
-input statistic it represents, not merely name one benchmark that motivated
-it.
-
-The omega-Schur target applies omega to the power-sum expression, uses the
-corresponding Schur route, and relabels the result.  A new Schur route may
-therefore need a corresponding omega route or executor case.
-
-Other power-sum targets use different mathematics:
-
-- `p -> h` and `p -> e` use logarithmic/generating-function formulas;
-- Hall--Littlewood targets choose among single-cycle Green-polynomial,
-  Green-duality, and triangular routes;
-- monomial and forgotten targets use their transition algorithms;
-- unsupported cases retain a termwise fallback.
-
-Do not assume that a successful heuristic for `p -> S` belongs in every
-power-sum conversion.
-
-## Adding a new `p -> S` algorithm
-
-Suppose a contributor has a new character formula, recurrence, or rim-hook
-method.  The usual contribution path is:
-
-1. State the mathematical domain clearly: homogeneous only or general,
-   required coefficient properties, supported partitions, and expected
-   output basis.
-2. Add the kernel declaration to `basis-conversion-kernels.hpp` and the
-   implementation to `basis-conversion-kernels.cpp`, in the same topic order
-   as the surrounding code.
-3. Add a descriptive value to `PowerSumsToTargetRoute`.  Use a mathematical
-   name, not a performance label such as `Fast` or `Optimized`.
-4. Add the route's printable name to conversion tracing.
-5. Add an executor case that calls the kernel.  Execution code should not
-   contain a second, hidden selector.
-6. Add a condition to `selectPowerSumsToTargetRoute` only after establishing
-   which observable input features predict a benefit.
-7. If direct comparisons are useful, add an optional forced-route value for
-   diagnostics.  Forced routing is not part of the public mathematical API.
-8. If the omega target can reuse the method, add the corresponding omega
-   handling.
-9. Verify exact equality against existing independent routes, including zero,
-   scalar, sparse, dense, homogeneous, nonhomogeneous, tagged, and different
-   coefficient-ring cases.
-10. Benchmark both forced and automatic routing.  The automatic selector must
-    improve a representative population, not just the examples used to design
-    it.
-11. Document the mathematics, limitations, complexity, and intended selection
-    region.
-
-No new raw entry point is normally required.  The kernel must not attach a
-combinatorial tag: the input's tag is preserved through basis conversion.
-
-For a single named implementation, prefer a name of the form
-`powerSumsToSchurVia...`.  Use `Via`, not `By`.  Names such as `select...Route`,
-`execute...Route`, `run...Pipeline`, and `try...` have distinct roles and
-should retain those meanings.
-
-## Why the abacus algorithm exists
-
-For a partition `lambda`, write its beta set as
+`multiplyToBasis(f,g,B)` instead creates a factorized conversion request.  The
+`FactorizedProduct` pipeline can inspect `f` and `g` separately and select a
+`ProductExpansionMethod`:
 
 ```text
-B(lambda) = { lambda_i - i }.
+FactorizedProduct pipeline
+        |
+        v
+product-method selector
+        |-- Littlewood--Richardson
+        |-- horizontal or vertical Pieri
+        |-- border strips
+        |-- compatible Schur rules
+        `-- factorwise conversion
+        |
+        v
+        expression in the requested basis
 ```
 
-Adding an `r`-rim hook corresponds to moving an occupied beta position by
-`r` steps to an unoccupied position.  The sign is determined by the number of
-occupied positions crossed.  This representation generates valid rim-hook
-extensions directly rather than generating containing partitions and then
-testing connectivity and `2 x 2` conditions.
+This is the same information-preservation principle seen in the conversion
+pipelines: do not expand away a factorization before deciding whether it is
+algorithmically valuable.  The product method attaches the tag describing the
+outer multiplication, regardless of whether the implementation literally
+enumerated LR tableaux or reached the same expansion by another route.
 
-That distinction is a useful model for contributions: the best improvement is
-often a representation that avoids invalid intermediate combinatorial
-objects, not merely a lower-level optimization of the old enumeration.
+### Plethysm
+
+Plain `plethysm(f,g)` uses power sums as its natural interchange basis and
+implements substitution through Adams operations.  A combined request such as
+the engine path used by `@` retains `f`, `g`, and the target basis separately
+and enters the `PostPlethysm` pipeline.
+
+That pipeline first probes the specialized Schur plethysm-to-Schur route when
+its shape restrictions and benchmarked crossover permit it.  If the probe
+declines, it takes the general Adams-operation path:
+
+```text
+outer operand + inner operand + target basis
+        |
+        v
+PostPlethysm pipeline
+        |-- specialized combined Schur route
+        |       `------------------------------.
+        `-- general Adams-operation route      |
+                |                              |
+                v                              |
+        materialize plethysm in p              |
+        and attach Plethysm provenance         |
+                |                              |
+                v                              |
+        power-sum-to-target selector           |
+                `------------------------------'
+                        |
+                        v
+                requested target basis
+```
+
+The retained `PostPlethysmPowerSums` workflow names this second stage, but it
+does not have an independent automatic `p -> S` decision tree.  It delegates
+to the general source-to-target and power-sum selectors, which can use the
+`Plethysm` tag among their input statistics.
+
+When extending plethysm, keep four concerns separate: the Adams-operation
+definition, the intermediate basis, conversion to the requested output basis,
+and metadata attached at the explicit plethysm boundary.  A specialized probe
+needs exact mathematical preconditions and must be able to decline cleanly to
+the general power-sum path.
+
+### Inner products
+
+Inner products have a separate dispatcher because the result depends not just
+on two bases but on an explicit pairing context.  The request contains the
+ordinary Hall, Hall--Littlewood, or other supported context, its power-sum
+pairing, registered dual/diagonal metadata, and a profile of each operand.
+
+The top-level inner-product pipelines are:
+
+| Pipeline | Opportunity it represents |
+|---|---|
+| `DiagonalBasis` | Both sides can be paired coefficientwise in a registered diagonal basis, including the power-sum diagonal formula |
+| `SingleBasisElement` | At least one operand is a single basis element, allowing coefficient extraction, Kostka formulas, or a character calculation instead of two full conversions |
+| `PowerSumsStructured` | One side is already structured in power sums and the other has a form suitable for weighted Schur-character evaluation |
+| `FallbackPowerSums` | No cheaper justified structure remains, so both operands are converted to power sums |
+
+Within a pipeline, the engine constructs applicable `InnerProductCandidate`
+values.  Their routes include registered diagonal pairing, dual-basis
+coefficient extraction, Kostka and conjugate-Kostka formulas, weighted Schur
+characters, the direct power-sum diagonal, and conversion of both sides to
+power sums.  Candidate estimates can account for operand size and whether a
+needed transition is already cached.  Selection chooses the least estimated
+applicable cost; execution does not repeat that selection.
+
+This is a useful contrast with `p -> S`.  The conversion dispatcher uses an
+empirical decision tree over one expression, whereas the inner-product
+dispatcher compares several route candidates built from two operand profiles.
+Both still obey the same separation between profiling, selection, tracing,
+execution, and fallback.
+
+The Macaulay2 layer resolves the intended inner-product context explicitly;
+the engine must not infer it from display symbols or merely from which bases
+happen to be registered.  A new shortcut should supply an independently
+testable kernel, a route candidate with exact preconditions, a defensible cost
+estimate when it competes with other candidates, and a comparison with the
+power-sum fallback.
+
+Not every engine operation needs a named pipeline family.  If an operation has
+one clear route and no representation-level workflow to preserve, a direct
+descriptively named kernel is preferable.  Pipelines should expose real
+mathematical or representational choices, not add ceremony around a single
+function call.
 
 ## Products and combinatorial tags
 
@@ -310,43 +581,6 @@ claim that the LR tableau algorithm was literally executed.
 Product-aware conversion code belongs in `basis-conversion-products.*`.
 Ordinary conversion kernels should neither infer nor mutate tags.
 
-## Plethysm
-
-Plethysm has combined and split workflows in `plethysm.*`.  It commonly uses
-power sums internally because Adams operations are simple there.  Internal
-changes of basis do not alter its semantic tag.
-
-When extending plethysm, distinguish:
-
-- the mathematical definition and Adams operations;
-- the choice of intermediate basis;
-- conversion back to the requested basis;
-- metadata applied at the explicit plethysm boundary.
-
-The retained post-plethysm conversion pipeline is currently available for
-experimentation but is not automatically selected.  Do not build correctness
-on its use.
-
-## Inner products
-
-Inner-product dispatch follows the same selector/executor pattern.  Its main
-pipelines are:
-
-- diagonal-basis evaluation;
-- a single-basis-element shortcut;
-- structured power-sum evaluation;
-- fallback conversion of both operands to power sums.
-
-Routes include registered diagonal pairings, dual-basis coefficient
-extraction, Kostka and conjugate-Kostka cases, weighted Schur characters, and
-the diagonal power-sum formula.  The Macaulay2 layer resolves the intended
-inner-product context explicitly; the C++ engine should not guess it merely
-from printed basis names.
-
-A new inner-product shortcut should have an independently testable kernel, a
-selector predicate stating its exact mathematical preconditions, and a
-fallback comparison.
-
 ## Correctness and performance work
 
 Algorithm selection is part of correctness engineering as well as
@@ -360,11 +594,11 @@ performance.  For any new route:
   boundary;
 - run with tracing to confirm which selector branch actually executed.
 
-The systematic benchmark suite is documented in
-`packages/SymmetricRings/extras/benchmarks/README-NEW.md`.  Forced routes and
-trace output are excellent diagnostic tools, but accepted baselines should use
-ordinary production dispatch unless the benchmark explicitly studies an
-algorithm in isolation.
+The systematic benchmark suite is documented in the
+[benchmark guide](../../packages/SymmetricRings/extras/benchmarks/README.md).
+Forced routes and trace output are excellent diagnostic tools, but accepted
+baselines should use ordinary production dispatch unless the benchmark
+explicitly studies an algorithm in isolation.
 
 ## Review checklist
 

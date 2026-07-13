@@ -12,6 +12,9 @@
 
   ring_elem scaled(ring_elem coeff, ring_elem f) const;
   ring_elem coefficientQuotient(ring_elem numerator, ring_elem denominator) const;
+  void addNormalizedCoeff(CoeffMap& target,
+                          Partition index,
+                          ring_elem coeff) const;
   void addCoeff(CoeffMap& target, const Partition& index, ring_elem coeff) const;
   void addScaledCoeffMap(CoeffMap& target,
                            ring_elem coeff,
@@ -86,15 +89,23 @@
   ring_elem completePartToPowerSumsViaClassicalFormula(int n) const;
   ring_elem elementaryPartToPowerSumsViaClassicalFormula(int n) const;
   ring_elem powerSumLogarithmCoefficient(const Partition& lambda) const;
+  CoeffMap powerSumPartToIntegralGeneratorMapViaLogarithmFormula(
+        int n,
+        int commonSign) const;
   CoeffMap powerSumPartToGeneratorMapViaLogarithmFormula(
         int n,
         ring_elem common) const;
-  CoeffMap powerSumPartToCompleteMapViaLogarithmFormula(int n) const;
-  CoeffMap powerSumPartToElementaryMapViaLogarithmFormula(int n) const;
+  const CoeffMap& powerSumPartToCompleteMapViaLogarithmFormula(int n) const;
+  const CoeffMap& powerSumPartToElementaryMapViaLogarithmFormula(int n) const;
   CoeffMap powerSumIndexToCompleteMapViaLogarithmFormula(
         const Partition& index) const;
   CoeffMap powerSumIndexToElementaryMapViaLogarithmFormula(
         const Partition& index) const;
+  CoeffMap powerSumsToCompleteMapViaLogarithmFormula(ring_elem f) const;
+  void addPowerSumIndexToCompleteMapViaLogarithmFormula(
+        const Partition& index,
+        ring_elem coefficient,
+        CoeffMap& result) const;
   ring_elem powerSumsToCompleteViaLogarithmFormula(ring_elem f,
                                                       int completeId,
                                                       int completeOrder) const;

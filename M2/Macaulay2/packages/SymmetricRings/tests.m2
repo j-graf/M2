@@ -1060,10 +1060,20 @@ TEST ///
     dense14 = sum(partitions14, mu -> p_(toList mu))
     largeCycleSupport = sum(take(partitions14, 64), mu -> p_(toList mu))
     smallCycleSupport = sum(take(partitions 16, -16), mu -> p_(toList mu))
+    partitions18 = toList partitions 18
+    mixedCycleSupport =
+        sum(take(partitions18, 16), mu -> p_(toList mu)) +
+        sum(take(partitions18, -48), mu -> p_(toList mu))
     assert(toS dense14 == toBasis(toBasis(dense14, h), S))
     assert(toS largeCycleSupport == toBasis(toBasis(largeCycleSupport, h), S))
     assert(toS smallCycleSupport == toBasis(toBasis(smallCycleSupport, h), S))
+    assert(toS mixedCycleSupport ==
+           toBasis(toBasis(mixedCycleSupport, h), S))
     assert(toS(dense14 + p_5) == toS(dense14) + toS(p_5))
+    assert(toS(m_{5,3,1}) ==
+           toBasis(toBasis(toBasis(m_{5,3,1}, p), h), S))
+    assert(toS(ff_{5,3,1}) ==
+           toBasis(toBasis(toBasis(ff_{5,3,1}, p), h), S))
 ///
 
 TEST ///

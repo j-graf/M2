@@ -1,8 +1,7 @@
 # SymmetricRings Extras: Agent Instructions
 
-This directory contains development notes and benchmark tooling, not package
-code loaded by `SymmetricRings.m2`. Keep `README.md` as the detailed runbook;
-this file is the concise operational authority for work in this subtree.
+This directory contains development notes and benchmark tooling, not loaded
+package code. README is the detailed runbook; this file is operational policy.
 
 ## Build and working directory
 
@@ -77,8 +76,9 @@ Optional breadth cases belong in descriptive `Family-extra` families.
 Every timed repetition uses a fresh M2 process, a temporary `HOME`, and
 sequential execution. Never parallelize cold timing processes.
 
-`--output RUN-NAME` chooses a new single-component directory under
-`benchmarks/results/`; never reuse an existing run directory. A run contains:
+Every result directory begins with `YYYYMMDD-HHMMSS`. `--output LABEL` appends
+a single-component descriptive label to that timestamp; never reuse an
+existing run directory. A run contains:
 
 ```text
 raw.tsv  summary.tsv  comparison.tsv
@@ -88,11 +88,11 @@ system.tsv  conditions.tsv  report.md
 Keep expected-weight verification enabled for production measurements;
 `--no-verify` is diagnostic only.
 
-Reports contain an overall summary, family comparison tables, a comparison of
-CPU/RAM/OS with the selected accepted baselines, system data, and run
-conditions. Put the baseline-system result beside run health in the overall
-summary. Count new cases but do not enumerate them in prose. Never add serial
-numbers, hardware UUIDs, or provisioning identifiers.
+Reports contain an overall summary, family tables comparing the current median
+with accepted baselines and the fastest qualifying record, a CPU/RAM/OS
+baseline comparison, system data, and run conditions. Put the baseline-system
+result beside run health. Keep improvements and regressions in tables; do not
+list individual cases in prose. Never include unique machine identifiers.
 
 After a suite run, `report.md` is the only result file to share or link in
 chat. Keep every TSV locally for reproducibility and diagnosis.
@@ -103,7 +103,7 @@ concurrently with timed cases. Health is `clean`, `warning`, or `compromised`.
 Review warnings and never accept a compromised run. Small pageout changes are
 informational; use the magnitude, rate, and memory thresholds in README.
 
-## Baseline policy
+## Baselines and fastest records
 
 `benchmarks/baselines.tsv` contains reviewed medians. Acceptance is always
 deliberate and never automatic. A baseline must:
@@ -115,14 +115,23 @@ deliberate and never automatic. A baseline must:
 - preserve every raw repetition;
 - invalidate a correctness-broken baseline rather than deleting it.
 
-Use median CPU time as primary. Compare against both the best valid and most
-recent accepted medians. A fastest individual repetition is not a baseline.
-For changes below about 10%, use at least five repetitions before classifying.
+Use median CPU time as primary. Compare against the best and most recent
+accepted medians and `benchmarks/records.tsv`. An individual repetition is
+never a baseline or record. Use five runs for changes below about 10%.
 
 Accept a reviewed summary explicitly with `accept-summary.awk`; pass the run's
 `system.tsv` before its `summary.tsv`, provide an acceptance date and useful
 note, and append its output to `baselines.tsv`. This records the coarse system
 configuration with each accepted timing.
+
+`benchmarks/records.tsv` separately stores the fastest median CPU time for each
+case and ring among runs of at least three repetitions. The suite compares
+against pre-run records, writes the report, then updates records automatically.
+
+When testing a code or selector update, always inspect both comparisons. The
+accepted baseline says whether established expected performance changed; the
+record says how the update compares with the fastest qualifying result seen so
+far.
 
 Run directories are historical snapshots. After accepting a baseline, do not
 regenerate that run's `comparison.tsv` or `report.md`; a case that was new when
@@ -142,15 +151,8 @@ measured must remain new in its originating report.
 ## One-off benchmark rules
 
 Use one-off timings for new expressions, selector boundaries, forced-route
-comparisons, and component diagnosis before adding a catalog case.
-
-Use a temporary `HOME`, no preload, and a fresh process per repetition:
-
-```sh
-env HOME=/private/tmp/symmetricrings-bench BUILD/build/M2 \
-  --no-preload --silent --stop -q \
-  -e 'needsPackage "SymmetricRings"; R=symmetricRing(frac(QQ[t])); time G=S_{5,3}@S_{2,1}; exit 0'
-```
+comparisons, and component diagnosis. Use a temporary `HOME`, `--no-preload`,
+and a fresh `BUILD/build/M2` process per repetition; see README for a template.
 
 - Run cold repetitions sequentially.
 - Keep setup and verification outside timing unless intentionally measured.
@@ -182,13 +184,8 @@ M2_SYMMETRIC_RINGS_FORCE_P_TO_S_ROUTE=grouped-characters
 Run each forced route in a separate cold process. Avoid grouped characters on
 medium or large inputs without a timeout. Forced routes never become baselines.
 
-Other diagnostic controls include:
-
-```sh
-M2_SYMMETRIC_RINGS_FORCE_HALL_LITTLEWOOD_PIPELINE=grouped
-M2_SYMMETRIC_RINGS_FORCE_HALL_LITTLEWOOD_PIPELINE=fallback
-M2_SYMMETRIC_RINGS_FORCE_INNER_PRODUCT_ROUTE=dual-basis-coefficient
-```
+Other forced Hall--Littlewood and inner-product controls are documented in
+README; treat them as diagnostic in the same way.
 
 ## Isolating performance changes
 
@@ -200,5 +197,4 @@ M2_SYMMETRIC_RINGS_FORCE_INNER_PRODUCT_ROUTE=dual-basis-coefficient
 - With `debug needsPackage "SymmetricRings"`, time private QQ lift, computation,
   and promotion helpers separately; private timings never replace public ones.
 
-When a one-off case becomes important, add it to the systematic catalog rather
-than maintaining an independent timing history.
+Add important one-off cases to the systematic catalog.

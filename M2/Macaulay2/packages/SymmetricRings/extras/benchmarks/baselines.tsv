@@ -149,3 +149,107 @@ extra-hl-Pomega-ordinary	2026-07-12	0.408745	FracQQt	accepted	initial extra-fami
 extra-conv-h-to-S	2026-07-12	0.00054	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
 extra-conv-S-to-h	2026-07-12	0.000353	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
 extra-hl-P-retained	2026-07-12	0.093075	FracQQt	accepted	initial extra-family baseline; warning reviewed: 81 pageouts, calibration drift within 4%	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r6-combined	2026-07-13	5.29377	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r4-combined	2026-07-13	0.192076	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r2-split-to-S	2026-07-13	0.028139	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r4-split-to-S	2026-07-13	0.192149	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L4-r2-combined	2026-07-13	0.781356	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r3-combined	2026-07-13	0.759332	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r4-combined	2026-07-13	0.03992	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r2-combined	2026-07-13	0.310626	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r3-combined	2026-07-13	0.006348	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r2-split-to-S	2026-07-13	0.801324	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r2-combined	2026-07-13	0.009893	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r8-split-to-S	2026-07-13	0.46501	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r3-split-to-S	2026-07-13	0.025323	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L4-r2-split-to-S	2026-07-13	0.790368	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r6-split-to-S	2026-07-13	5.32181	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r3-split-to-S	2026-07-13	0.759632	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r8-combined	2026-07-13	0.461247	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r4-split-to-S	2026-07-13	0.233004	QQ	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-plethysm-final	Apple M4	16 GB	macOS	15.7.7
+prod-large-four-product	2026-07-13	6.7e-05	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-unequal-weight-product	2026-07-13	6.6e-05	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-four-three-to-p	2026-07-13	0.002683	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-three-product	2026-07-13	6.5e-05	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-two-to-p	2026-07-13	0.035243	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-three-three-product	2026-07-13	6.5e-05	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-three-p-to-S	2026-07-13	1.30511	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-small-balanced-to-p	2026-07-13	0.000673	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-unequal-weight-to-p	2026-07-13	0.007075	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-four-three-product	2026-07-13	6.7e-05	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-small-balanced-product	2026-07-13	6.7e-05	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-four-p-to-S	2026-07-13	3.65152	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-three-to-p	2026-07-13	0.034829	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-hook-balanced-p-to-S	2026-07-13	0.011467	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-two-product	2026-07-13	6.4e-05	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-hook-balanced-product	2026-07-13	6.8e-05	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-four-three-p-to-S	2026-07-13	0.038567	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-four-to-p	2026-07-13	0.043859	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-hook-balanced-to-p	2026-07-13	0.002297	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-unequal-weight-p-to-S	2026-07-13	0.066267	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-small-balanced-p-to-S	2026-07-13	0.002138	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-three-three-p-to-S	2026-07-13	0.009736	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-three-three-to-p	2026-07-13	0.001559	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-two-p-to-S	2026-07-13	1.27079	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+pieri-hook-r1-border	2026-07-13	0.000272	FracQQt	accepted	algorithmic product improvements; clean production-route run 20260713-algorithmic-pieri	Apple M4	16 GB	macOS	15.7.7
+pieri-hook-r1-horizontal	2026-07-13	0.000273	FracQQt	accepted	algorithmic product improvements; clean production-route run 20260713-algorithmic-pieri	Apple M4	16 GB	macOS	15.7.7
+pieri-four-r3-horizontal	2026-07-13	0.000391	FracQQt	accepted	algorithmic product improvements; clean production-route run 20260713-algorithmic-pieri	Apple M4	16 GB	macOS	15.7.7
+pieri-four-r3-border	2026-07-13	0.000357	FracQQt	accepted	algorithmic product improvements; clean production-route run 20260713-algorithmic-pieri	Apple M4	16 GB	macOS	15.7.7
+pieri-three-r2-horizontal	2026-07-13	0.000303	FracQQt	accepted	algorithmic product improvements; clean production-route run 20260713-algorithmic-pieri	Apple M4	16 GB	macOS	15.7.7
+pieri-four-r3-vertical	2026-07-13	0.000339	FracQQt	accepted	algorithmic product improvements; clean production-route run 20260713-algorithmic-pieri	Apple M4	16 GB	macOS	15.7.7
+pieri-three-r2-vertical	2026-07-13	0.000293	FracQQt	accepted	algorithmic product improvements; clean production-route run 20260713-algorithmic-pieri	Apple M4	16 GB	macOS	15.7.7
+pieri-three-r2-border	2026-07-13	0.000299	FracQQt	accepted	algorithmic product improvements; clean production-route run 20260713-algorithmic-pieri	Apple M4	16 GB	macOS	15.7.7
+pieri-hook-r1-vertical	2026-07-13	0.000274	FracQQt	accepted	algorithmic product improvements; clean production-route run 20260713-algorithmic-pieri	Apple M4	16 GB	macOS	15.7.7
+conv-p-four-S	2026-07-13	0.004933	FracQQt	accepted	algorithmic p -> S improvements; clean production-route run 20260713-algorithmic-single-p-to-S-final	Apple M4	16 GB	macOS	15.7.7
+prod-large-four-product	2026-07-13	6.3e-05	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-unequal-weight-product	2026-07-13	6.4e-05	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-four-three-to-p	2026-07-13	0.002705	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-three-product	2026-07-13	6.6e-05	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-two-to-p	2026-07-13	0.034754	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-three-three-product	2026-07-13	6.4e-05	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-three-p-to-S	2026-07-13	0.733303	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-small-balanced-to-p	2026-07-13	0.000685	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-unequal-weight-to-p	2026-07-13	0.007202	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-four-three-product	2026-07-13	6.9e-05	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-small-balanced-product	2026-07-13	6.3e-05	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-four-p-to-S	2026-07-13	2.07969	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-three-to-p	2026-07-13	0.03484	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-hook-balanced-p-to-S	2026-07-13	0.008133	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-two-product	2026-07-13	6.8e-05	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-hook-balanced-product	2026-07-13	6.4e-05	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-four-three-p-to-S	2026-07-13	0.024966	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-four-to-p	2026-07-13	0.04286	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-hook-balanced-to-p	2026-07-13	0.002266	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-unequal-weight-p-to-S	2026-07-13	0.042572	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-small-balanced-p-to-S	2026-07-13	0.001797	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-three-three-p-to-S	2026-07-13	0.007058	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-three-three-to-p	2026-07-13	0.001562	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+prod-large-two-p-to-S	2026-07-13	0.76839	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-products	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r6-combined	2026-07-13	3.40029	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r4-combined	2026-07-13	0.129297	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r2-split-to-S	2026-07-13	0.022324	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r4-split-to-S	2026-07-13	0.128596	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L4-r2-combined	2026-07-13	0.527012	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r3-combined	2026-07-13	0.511435	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r4-combined	2026-07-13	0.040401	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r2-combined	2026-07-13	0.313776	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r3-combined	2026-07-13	0.006448	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r2-split-to-S	2026-07-13	0.547458	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r2-combined	2026-07-13	0.009969	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r8-split-to-S	2026-07-13	0.286463	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r3-split-to-S	2026-07-13	0.018298	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L4-r2-split-to-S	2026-07-13	0.545287	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r6-split-to-S	2026-07-13	3.39748	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L3-r3-split-to-S	2026-07-13	0.515751	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r8-combined	2026-07-13	0.284038	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+cross-L2-r4-split-to-S	2026-07-13	0.15358	QQ	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-plethysm	Apple M4	16 GB	macOS	15.7.7
+extra-conv-p-parameter-S	2026-07-13	0.001367	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-conversions	Apple M4	16 GB	macOS	15.7.7
+extra-conv-S-combination-p	2026-07-13	0.006743	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-conversions	Apple M4	16 GB	macOS	15.7.7
+extra-conv-p-combination-S	2026-07-13	0.001241	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-conversions	Apple M4	16 GB	macOS	15.7.7
+extra-conv-h-to-S	2026-07-13	0.000392	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-conversions	Apple M4	16 GB	macOS	15.7.7
+extra-conv-S-to-h	2026-07-13	0.000361	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-conversions	Apple M4	16 GB	macOS	15.7.7
+conv-p30-h	2026-07-13	0.037688	FracQQt	accepted	integral power-sum conversion improvements; clean production-route run 20260713-integral-p30-h	Apple M4	16 GB	macOS	15.7.7
+conv-p30-e	2026-07-13	0.037631	FracQQt	accepted	integral power-sum conversion improvements; clean production-route run 20260713-integral-p30-e	Apple M4	16 GB	macOS	15.7.7
+extra-prod-direct-lr	2026-07-13	0.000492	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-product-extra	Apple M4	16 GB	macOS	15.7.7
+extra-prod-multiply-to-S	2026-07-13	0.000428	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-product-extra	Apple M4	16 GB	macOS	15.7.7
+extra-prod-post-plethysm	2026-07-13	0.034406	FracQQt	accepted	structural p -> S improvements; clean production-route run 20260713-structural-p-to-S-product-extra	Apple M4	16 GB	macOS	15.7.7

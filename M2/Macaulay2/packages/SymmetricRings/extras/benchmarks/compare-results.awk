@@ -1,5 +1,5 @@
 #!/usr/bin/awk -f
-# Usage: compare-results.awk baselines.tsv raw-results.tsv
+# Usage: compare-results.awk baselines.tsv records.tsv raw-results.tsv
 
 BEGIN {
     FS = "\t"; OFS = "\t"
@@ -20,7 +20,14 @@ inputFile == 1 && NF >= 5 {
     }
     next
 }
-inputFile == 2 && NF >= 11 {
+inputFile == 2 && NF >= 6 {
+    key = $1 SUBSEP $4
+    value = $3 + 0
+    if (!(key in fastestRecord) || value < fastestRecord[key])
+        fastestRecord[key] = value
+    next
+}
+inputFile == 3 && NF >= 11 {
     key = $1 SUBSEP $5
     n = ++counts[key]
     values[key, n] = $7 + 0
@@ -31,7 +38,8 @@ END {
     print "case_id", "family", "operation", "tier", "coefficient_ring", \
           "runs", "current_median", "best_valid_baseline", \
           "change_vs_best_percent", "most_recent_baseline", \
-          "change_vs_recent_percent", "classification"
+          "change_vs_recent_percent", "fastest_record", \
+          "change_vs_record_percent", "record_status", "classification"
     for (key in counts) {
         n = counts[key]
         for (i = 1; i <= n; ++i) sorted[i] = values[key, i]
@@ -54,10 +62,21 @@ END {
             classification = bestChange >= threshold ? "regression" : \
                 (bestChange <= -threshold ? "improvement" : "stable")
         }
+        if (!(key in fastestRecord)) {
+            recordText = recordChangeText = "NA"
+            recordStatus = n >= 3 ? "first-record" : "ineligible"
+        } else {
+            recordText = sprintf("%.9g", fastestRecord[key])
+            recordChange = fastestRecord[key] == 0 ? 0 : \
+                100 * (current / fastestRecord[key] - 1)
+            recordChangeText = sprintf("%+.2f", recordChange)
+            recordStatus = n < 3 ? "ineligible" : \
+                (current < fastestRecord[key] ? "new-record" : \
+                    (current == fastestRecord[key] ? "ties-record" : "not-record"))
+        }
         print caseId[key], family[key], operation[key], tier[key], coefficientRing[key], \
               n, sprintf("%.9g", current), bestText, bestChangeText, recentText, \
-              recentChangeText, classification
+              recentChangeText, recordText, recordChangeText, recordStatus, classification
         for (i = 1; i <= n; ++i) delete sorted[i]
     }
 }
-

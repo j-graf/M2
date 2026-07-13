@@ -37,40 +37,26 @@ fi
 printf '## Overall summary\n\n'
 awk -F '\t' -v run_health="$run_health" \
     -v baseline_system_status="$baseline_system_status" '
-function comparisonDetail(case_id, versus_best, versus_recent) {
-    return "`" case_id "` (" versus_best "% vs best; " \
-        versus_recent "% vs recent)"
-}
-function appendDetail(current, detail) {
-    return current == "" ? detail : current ", " detail
-}
 NR == 1 { next }
 {
     cases++
     if (!seen_family[$2]++) families++
     classification = $NF
     counts[classification]++
-    if (classification == "improvement")
-        improvements = appendDetail(improvements,
-            comparisonDetail($1, $9, $11))
-    else if (classification == "regression")
-        regressions = appendDetail(regressions,
-            comparisonDetail($1, $9, $11))
+    recordStatus = $(NF - 1)
+    if (recordStatus == "new-record" || recordStatus == "first-record")
+        recordsSet++
 }
 END {
-    printf "| Run health | Baseline system | Families | Cases | Improvements | Regressions | Stable | New |\n"
-    printf "|---|---|---:|---:|---:|---:|---:|---:|\n"
-    printf "| **%s** | **%s** | %d | %d | %d | %d | %d | %d |\n\n", \
+    printf "| Run health | Baseline system | Families | Cases | Baseline improvements | Baseline regressions | Baseline stable | New | Records set |\n"
+    printf "|---|---|---:|---:|---:|---:|---:|---:|---:|\n"
+    printf "| **%s** | **%s** | %d | %d | %d | %d | %d | %d | %d |\n\n", \
         run_health, baseline_system_status, families + 0, cases + 0, \
         counts["improvement"] + 0, counts["regression"] + 0, \
-        counts["stable"] + 0, counts["new"] + 0
-    if (improvements != "")
-        printf "Improvements: %s.\n\n", improvements
-    if (regressions != "")
-        printf "Regressions: %s.\n\n", regressions
+        counts["stable"] + 0, counts["new"] + 0, recordsSet + 0
 }' "$COMPARISON_FILE"
 
-printf '## Baseline comparison\n\n'
+printf '## Performance comparison\n\n'
 families=$(awk -F '\t' 'NR > 1 { print $2 }' "$COMPARISON_FILE" | LC_ALL=C sort -u)
 
 if [ -z "$families" ]; then
@@ -83,13 +69,6 @@ else
         gsub(/\|/, "\\|", value)
         return value
     }
-    function comparisonDetail(case_id, versus_best, versus_recent) {
-        return "`" case_id "` (" versus_best "% vs best; " \
-            versus_recent "% vs recent)"
-    }
-    function appendDetail(current, detail) {
-        return current == "" ? detail : current ", " detail
-    }
     NR == 1 {
         field_count = NF
         for (i = 1; i <= NF; i++) header[i] = $i
@@ -100,25 +79,18 @@ else
         for (i = 1; i <= NF; i++) rows[row_count, i] = $i
         classification = $NF
         counts[classification]++
-        if (classification == "improvement")
-            improvements = appendDetail(improvements,
-                comparisonDetail($1, $9, $11))
-        else if (classification == "regression")
-            regressions = appendDetail(regressions,
-                comparisonDetail($1, $9, $11))
+        recordStatus = $(NF - 1)
+        if (recordStatus == "new-record" || recordStatus == "first-record")
+            recordsSet++
     }
     END {
         printf "### %s\n\n", selected_family
-        printf "| Cases | Improvements | Regressions | Stable | New |\n"
-        printf "|---:|---:|---:|---:|---:|\n"
-        printf "| %d | %d | %d | %d | %d |\n\n", \
+        printf "| Cases | Baseline improvements | Baseline regressions | Baseline stable | New | Records set |\n"
+        printf "|---:|---:|---:|---:|---:|---:|\n"
+        printf "| %d | %d | %d | %d | %d | %d |\n\n", \
             row_count, counts["improvement"] + 0, \
             counts["regression"] + 0, counts["stable"] + 0, \
-            counts["new"] + 0
-        if (improvements != "")
-            printf "Improvements: %s.\n\n", improvements
-        if (regressions != "")
-            printf "Regressions: %s.\n\n", regressions
+            counts["new"] + 0, recordsSet + 0
 
         printf "|"
         for (i = 1; i <= field_count; i++)

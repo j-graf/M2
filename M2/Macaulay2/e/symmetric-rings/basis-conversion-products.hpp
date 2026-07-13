@@ -61,6 +61,10 @@
   const std::vector<LRProductTerm>& schurTimesPowerSumViaAbacusRimHooks(
           const Partition& lambda,
           int part) const;
+  void addPowerSumIndexToSchurMapViaAbacusRimHooks(
+          const Partition& index,
+          ring_elem coefficient,
+          CoeffMap& result) const;
   ring_elem powerSumsToSchurViaAbacusRimHooks(
           ring_elem f,
           int targetBasisId,

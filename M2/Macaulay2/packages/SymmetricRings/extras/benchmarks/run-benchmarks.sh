@@ -12,6 +12,7 @@ RUN_NAME=
 LIST_ONLY=0
 VERIFY=1
 BASELINES="$SCRIPT_DIR/baselines.tsv"
+RECORDS="$SCRIPT_DIR/records.tsv"
 VARIED_MODE=
 VARIED_LEVEL=
 RANDOM_SEED=
@@ -23,7 +24,7 @@ usage() {
     printf '%s\n' \
       "Usage: $0 [--family NAME] [--tier NAME] [--case ID] [--repetitions N]" \
       "          [--varied-fixed LEVEL | --varied-random LEVEL] [--seed N]" \
-      "          [--new] [--output RUN-NAME] [--baselines FILE]" \
+      "          [--new] [--output LABEL] [--baselines FILE] [--records FILE]" \
       "          [--list | --estimate] [--no-verify]" \
       "" \
       "Varied levels: light, standard, thorough." \
@@ -58,6 +59,7 @@ while [ "$#" -gt 0 ]; do
         --estimate) ESTIMATE_ONLY=1; shift ;;
         --output) RUN_NAME=$2; shift 2 ;;
         --baselines) BASELINES=$2; shift 2 ;;
+        --records) RECORDS=$2; shift 2 ;;
         --list) LIST_ONLY=1; shift ;;
         --no-verify) VERIFY=0; shift ;;
         -h|--help) usage; exit 0 ;;
@@ -210,13 +212,16 @@ if [ -z "$case_plan" ]; then
     exit 2
 fi
 
-if [ -z "$RUN_NAME" ]; then
-    RUN_NAME=$(date '+%Y%m%d-%H%M%S')
-fi
-
 case "$RUN_NAME" in
     .|..|*/*) printf 'Benchmark run name must be one path component: %s\n' "$RUN_NAME" >&2; exit 2 ;;
 esac
+
+RUN_TIMESTAMP=$(date '+%Y%m%d-%H%M%S')
+if [ -z "$RUN_NAME" ]; then
+    RUN_NAME=$RUN_TIMESTAMP
+else
+    RUN_NAME="$RUN_TIMESTAMP-$RUN_NAME"
+fi
 
 RUN_DIR="$SCRIPT_DIR/results/$RUN_NAME"
 
@@ -248,6 +253,8 @@ printf 'configuration\trun\tselection\tnew_only\t%s\n' \
     "$new_only_value" >> "$conditions_file"
 printf 'configuration\trun\tselection\tnew_reference_run\t%s\n' \
     "$NEW_REFERENCE_RUN" >> "$conditions_file"
+printf 'configuration\trun\tidentity\trun_name\t%s\n' \
+    "$RUN_NAME" >> "$conditions_file"
 "$SCRIPT_DIR/collect-run-conditions.sh" before >> "$conditions_file"
 
 run_calibration() {
@@ -320,13 +327,29 @@ done
 printf 'Raw results written to %s\n' "$raw_file" >&2
 
 "$SCRIPT_DIR/summarize-results.awk" "$raw_file" > "$summary_file"
-"$SCRIPT_DIR/compare-results.awk" "$BASELINES" "$raw_file" > "$comparison_file"
+if [ -f "$RECORDS" ]; then
+    records_for_comparison=$RECORDS
+else
+    records_for_comparison="$TMP_HOME/empty-records.tsv"
+    printf 'case_id\trecorded_at\tmedian_cpu_seconds\tcoefficient_ring\truns\trun_name\n' \
+        > "$records_for_comparison"
+fi
+"$SCRIPT_DIR/compare-results.awk" \
+    "$BASELINES" "$records_for_comparison" "$raw_file" > "$comparison_file"
 "$SCRIPT_DIR/make-report.sh" "$system_file" "$comparison_file" \
     "$conditions_file" "$BASELINES" > "$report_file"
+
+records_update="$TMP_HOME/records.tsv"
+recorded_at=$(awk -F '\t' '$1 == "captured_at" {print $2; exit}' "$system_file")
+RECORD_RUN_NAME="$RUN_NAME" RECORD_RECORDED_AT="$recorded_at" \
+    "$SCRIPT_DIR/update-records.awk" \
+    "$records_for_comparison" "$summary_file" > "$records_update"
+mv "$records_update" "$RECORDS"
 printf 'Summary written to %s\n' "$summary_file" >&2
-printf 'Baseline comparison written to %s\n' "$comparison_file" >&2
+printf 'Performance comparison written to %s\n' "$comparison_file" >&2
 printf 'System information written to %s\n' "$system_file" >&2
 printf 'Run conditions written to %s\n' "$conditions_file" >&2
 printf 'Markdown report written to %s\n' "$report_file" >&2
-printf '\nBaseline comparison:\n' >&2
+printf 'Fastest qualifying records updated in %s\n' "$RECORDS" >&2
+printf '\nPerformance comparison:\n' >&2
 cat "$comparison_file" >&2
