@@ -824,25 +824,9 @@ ring_elem SymmetricEngineRing::runFallbackPowerSumsPipeline(
     int pId = requiredBasisIdForKind(BasisKind::PowerSum);
     if (error()) return coefficientRing->zero();
 
-    ring_elem fP = toBasis(request.left,
-                           pId,
-                           displayForBasis(pId),
-                           basisOrderForId(pId),
-                           isMultiplicativeBasis(pId),
-                           pId,
-                           displayForBasis(pId),
-                           basisOrderForId(pId),
-                           isMultiplicativeBasis(pId));
+    ring_elem fP = toBasis(request.left, pId);
     if (error()) return coefficientRing->zero();
-    ring_elem gP = toBasis(request.right,
-                           pId,
-                           displayForBasis(pId),
-                           basisOrderForId(pId),
-                           isMultiplicativeBasis(pId),
-                           pId,
-                           displayForBasis(pId),
-                           basisOrderForId(pId),
-                           isMultiplicativeBasis(pId));
+    ring_elem gP = toBasis(request.right, pId);
     if (error()) return coefficientRing->zero();
 
     CoeffMap fCoeffs = coefficientsInBasis(fP, pId);

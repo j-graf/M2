@@ -142,9 +142,9 @@ END {
 
     printf "## Run conditions\n\n"
     printf "Overall health: **%s**.\n\n", status
-    printf "- **Clean:** conditions were stable and no acceptance concern was detected.\n"
-    printf "- **Warning:** moderate drift or resource pressure was detected; review before accepting baselines.\n"
-    printf "- **Compromised:** severe drift, thermal pressure, or a performance-limiting mode makes the run unsuitable as a baseline.\n\n"
+    printf "- **Clean:** conditions were stable and no comparison concern was detected.\n"
+    printf "- **Warning:** moderate drift or resource pressure was detected; review performance conclusions.\n"
+    printf "- **Compromised:** severe drift, thermal pressure, or a performance-limiting mode makes the run unsuitable for performance conclusions.\n\n"
 
     if (note_count == 0)
         printf "No run-condition warnings were detected.\n\n"

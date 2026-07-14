@@ -6,19 +6,6 @@
 // Declaration fragment included inside SymmetricEngineRing.
 
   // ============================================================================
-  // Basis-Expansion Inspection
-  // ============================================================================
-
-  bool singleScaledBasisElement(ring_elem f,
-                                int basisId,
-                                Partition& index,
-                                ring_elem& coefficient) const;
-  CoeffMap coefficientsInBasis(ring_elem f, int basisId) const;
-  bool coefficientsInBasisIfPossible(ring_elem f,
-                                      int basisId,
-                                      CoeffMap& result) const;
-
-  // ============================================================================
   // Diagonal Pairing Kernels
   // ============================================================================
 

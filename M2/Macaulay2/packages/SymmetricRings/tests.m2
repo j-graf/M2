@@ -1,3 +1,7 @@
+-- ============================================================================
+-- Ring Construction, Storage, And Display
+-- ============================================================================
+
 TEST ///
     R0 = symmetricRing QQ
     f0 = S_{3,1,2}*h_5 + e_2
@@ -40,6 +44,15 @@ TEST ///
 TEST ///
     R0 = symmetricRing QQ
     assert((basisData "S")#"BasisSymbol" == "S")
+    storedCompleteMetadata = basis "h"
+    assert(all({"Omega", "InnerProductData", "Specialization"},
+            key -> not storedCompleteMetadata#?key))
+    assert(all({"Constructor", "IsMultiplicativeIndex", "Straighten",
+                "TriangularData", "PlethysmBehavior", "Display", "Documentation"},
+            key -> not storedCompleteMetadata#?key))
+    publicCompleteMetadata = basisData "h"
+    assert(publicCompleteMetadata#"Omega" == "Elementary")
+    assert(publicCompleteMetadata#?"InnerProductData")
     assert((bases R0)#"S" == "Schur basis")
     assert(not ((bases R0)#?"Somega"))
     assert(not ((bases R0)#?"Q"))
@@ -173,6 +186,10 @@ TEST ///
     assert(match("/", displayedSkew))
 ///
 
+-- ============================================================================
+-- Transformed And Specialized Basis Registration
+-- ============================================================================
+
 TEST ///
     R0 = symmetricRing QQ
     registerTransformedBasis("HScaledSolo", "h",
@@ -239,6 +256,13 @@ TEST ///
     assert(toBasis(SDomLower_2, S) == S_2 + S_{1,1})
     assert(toBasis(S_2, "SDomLower") == SDomLower_2 - SDomLower_{1,1})
     assert(not ((basisData "SDomLower")#?"TransformData"))
+    storedSDomLower = basis "SDomLower"
+    assert(all({"Omega", "InnerProductData", "Specialization"},
+            key -> not storedSDomLower#?key))
+    storedSDomLowerTransform = storedSDomLower#"TransformData"
+    assert(all({"BasisKey", "DisplayName", "DisplayOrder", "Alphabet",
+                "Triangular", "TriangularOrder"},
+            key -> not storedSDomLowerTransform#?key))
     SDomLowerData = (basisData "SDomLower")#"TransformedBasisData"
     assert(SDomLowerData#"SourceBasis" == "Schur")
     assert(SDomLowerData#"SumOver" == "DominanceLower")
@@ -307,7 +331,9 @@ TEST ///
     A = frac(QQ[t])
     R0 = symmetricRing A
     oldX = value getSymbol "X"
-    assert((basis "q")#"Omega" === null)
+    assert(not ((basis "q")#?"Omega"))
+    assert(not ((basis "q")#?"InnerProductData"))
+    assert(not ((basis "q")#?"Specialization"))
     assert((basisData "q")#"Omega" == "HallLittlewoodBGenerator")
     assert(try (registerTransformedBasis("KnownAlphaH", "h",
                 "Alphabet" => "(1-t)*X"); false) else true)
@@ -326,7 +352,8 @@ TEST ///
     assert(AlphaHAlias_2 == q_2)
     assert(toString AlphaHAlias_2 == "q_2")
     assert((basis "AlphaHAlias")#"BasisSymbol" == "q")
-    assert((basisData "AlphaHAlias")#"BasisAliasOf" == "HallLittlewoodQGenerator")
+    assert((basisData "AlphaHAlias")#"BasisSymbol" == "q")
+    assert((basisData "AlphaHAlias")#"BasisId" == (basisData "q")#"BasisId")
     assert(not ((bases R0)#?"AlphaHAlias"))
     assert(not any(bases(R0, "verbose" => true), B0 -> B0#"BasisSymbol" == "AlphaHAlias"))
     assert((aliases R0)#"q" == {"AlphaHAlias"})
@@ -501,6 +528,10 @@ TEST ///
     assert(toString Somega_3 == "S_{1,1,1}")
 ///
 
+-- ============================================================================
+-- Omega And Straightening
+-- ============================================================================
+
 TEST ///
     R0 = symmetricRing QQ
     assert(omegaInvolution(h_2*S_1 + e_1) == e_2*S_1 + h_1)
@@ -524,6 +555,10 @@ TEST ///
            S_{2,1,1} + 2*S_{2,2})
     assert(omegaInvolution(S_3, "useSomega" => true) == Somega_3)
 ///
+
+-- ============================================================================
+-- Products, Plethysm, And Classical Conversion
+-- ============================================================================
 
 TEST ///
     R0 = symmetricRing QQ
@@ -616,6 +651,10 @@ TEST ///
     assert(omegaInvolution omegaInvolution(S_{2,1} + Q_2) == S_{2,1} + Q_2)
     assert(omegaInvolution(Q_{{2,1}, {1}}) == B_{{2,1}, {1}})
 ///
+
+-- ============================================================================
+-- Hall-Littlewood Pairings And Coefficient Extraction
+-- ============================================================================
 
 TEST ///
     A = QQ[t]
@@ -822,7 +861,7 @@ TEST ///
     assert(Q_{{8,2}, {6}} == Q_2*Q_2)
     assert(Q_{{8,2}, {6}} - Q_2*Q_2 == 0_R4)
     assert(toS(Q_2*S_2) == toS(toP(Q_2*S_2)))
-    assert(multiplyToS(Q_2, S_2) == toS(Q_2*S_2))
+    assert(multiplyToBasis(Q_2, S_2, S) == toS(Q_2*S_2))
 ///
 
 TEST ///
@@ -954,6 +993,10 @@ TEST ///
     assert(try (hallInnerProduct(S_1, S_1, "InnerProduct" => "Macdonald"); false) else true)
 ///
 
+-- ============================================================================
+-- Conversion Pipelines, Tags, And QQ Shadowing
+-- ============================================================================
+
 TEST ///
     debug needsPackage "SymmetricRings"
     R0 = symmetricRing QQ
@@ -988,7 +1031,7 @@ TEST ///
     assert(toS(S_{1,3}*p_2) == toBasis(toP(S_{1,3}*p_2), S))
     assert(toS(S_{1,3}*h_2) == toBasis(toP(S_{1,3}*h_2), S))
     assert(toS(S_{1,3}*e_2) == toBasis(toP(S_{1,3}*e_2), S))
-    assert(multiplyToS(S_2*h_2*e_1, p_2) == toS(S_2*h_2*e_1*p_2))
+    assert(multiplyToBasis(S_2*h_2*e_1, p_2, S) == toS(S_2*h_2*e_1*p_2))
     assert(multiplyToBasis(m_2, p_1, m) == toBasis(m_2*p_1, m))
 ///
 

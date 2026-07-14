@@ -28,9 +28,6 @@ bool rawSymmetricRingsRememberBasis(const Ring *R,
                                     bool isMultiplicative);
 const RingElement *rawSymmetricRingsBasisElement(const Ring *R,
                                                 int basisId,
-                                                M2_string displaySymbol,
-                                                int displayOrder,
-                                                bool isMultiplicative,
                                                 int innerLength,
                                                 M2_arrayint index);
 const RingElement *rawSymmetricRingsSum(const Ring *R,
@@ -43,47 +40,19 @@ const RingElement *rawSymmetricRingsProduct(const Ring *R,
                                             engine_RawRingElementArray elements);
 const RingElement *rawSymmetricRingsJacobiTrudi(const Ring *R,
                                                 int basisId,
-                                                M2_string displaySymbol,
-                                                int displayOrder,
-                                                bool isMultiplicative,
                                                 M2_arrayint outer,
                                                 M2_arrayint inner);
 const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
-                                            int powerSumBasisId,
-                                            M2_string powerSumDisplaySymbol,
-                                            int powerSumDisplayOrder,
-                                            bool powerSumIsMultiplicative,
-                                            int targetBasisId,
-                                            M2_string targetDisplaySymbol,
-                                            int targetDisplayOrder,
-                                            bool targetIsMultiplicative);
+                                            int targetBasisId);
 const RingElement *rawSymmetricRingsProductToBasisDispatch(
     const RingElement *f,
     const RingElement *g,
-    int powerSumBasisId,
-    M2_string powerSumDisplaySymbol,
-    int powerSumDisplayOrder,
-    bool powerSumIsMultiplicative,
-    int targetBasisId,
-    M2_string targetDisplaySymbol,
-    int targetDisplayOrder,
-    bool targetIsMultiplicative);
+    int targetBasisId);
 const RingElement *rawSymmetricRingsPlethysm(const RingElement *f,
-                                             const RingElement *g,
-                                             int powerSumBasisId,
-                                             M2_string powerSumDisplaySymbol,
-                                             int powerSumDisplayOrder,
-                                             bool powerSumIsMultiplicative);
+                                             const RingElement *g);
 const RingElement *rawSymmetricRingsPlethysmToBasis(const RingElement *f,
                                                     const RingElement *g,
-                                                    int powerSumBasisId,
-                                                    M2_string powerSumDisplaySymbol,
-                                                    int powerSumDisplayOrder,
-                                                    bool powerSumIsMultiplicative,
-                                                    int targetBasisId,
-                                                    M2_string targetDisplaySymbol,
-                                                    int targetDisplayOrder,
-                                                    bool targetIsMultiplicative);
+                                                    int targetBasisId);
 int rawSymmetricRingsSingleBasisId(const RingElement *f);
 bool rawSymmetricRingsHasPlethysmProvenance(const RingElement *f);
 bool rawSymmetricRingsCopyConversionMetadata(const RingElement *source,
@@ -107,8 +76,6 @@ M2_arrayint rawSymmetricRingsPresentationTermIndices(const RingElement *f,
 M2_arrayint rawSymmetricRingsPresentationTermMonomial(const RingElement *f,
                                                       int i);
 M2_string rawSymmetricRingsElementToString(const RingElement *f);
-M2_string rawSymmetricRingsElementToStringLimited(const RingElement *f,
-                                                  int maxTerms);
 int rawSymmetricRingsElementWeight(const RingElement *f);
 
 #if defined(__cplusplus)

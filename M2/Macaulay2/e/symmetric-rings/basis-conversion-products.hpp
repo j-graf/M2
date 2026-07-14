@@ -5,10 +5,53 @@
 
 // Declaration fragment included inside SymmetricEngineRing.
 
+  struct SchurCompatibleFactor
+  {
+    enum Kind
+    {
+      General,
+      Horizontal,
+      Vertical,
+      PowerSum,
+      PowerSumAbacus,
+      SchurExpansion
+    };
+    Kind kind;
+    Partition index;
+    CoeffMap expansion;
+    int weight;
+  };
+
+  enum class SchurFactorMethod
+  {
+    AlreadySchur,
+    ViaLittlewoodRichardson,
+    ViaHorizontalPieri,
+    ViaVerticalPieri,
+    ViaBorderStrips,
+    ViaAbacusRimHooks,
+    ViaLittlewoodRichardsonExpansion
+  };
+
+  enum class ProductToTargetRoute
+  {
+    ViaSchurCompatibleFactors,
+    ViaMonomialLikeExpansion,
+    ViaHallLittlewoodGenerators,
+    ViaConvertRightFactor,
+    ViaConvertLeftFactor,
+    AlreadyInTarget,
+    NoApplicableRoute
+  };
+
 // ============================================================================
 // Littlewood-Richardson And Skew Schur Rules
 // ============================================================================
 // Tableau and coefficient enumeration for Schur products and skew expansion.
+
+  std::string littlewoodRichardsonProductCacheKey(
+      const Partition& lambda,
+      const Partition& mu) const;
 
   long littlewoodRichardsonCoefficientViaTableaux(const Partition& lambda,
                          const Partition& content,
@@ -21,11 +64,11 @@
                                    std::vector<Partition>& result) const;
   std::vector<Partition> partitionsContaining(const Partition& lambda,
                                                   int addedWeight) const;
-  const std::vector<LRProductTerm>& littlewoodRichardsonProductViaCoefficientEnumeration(const Partition& a,
+  const std::vector<PartitionCoefficientTerm>& littlewoodRichardsonProductViaCoefficientEnumeration(const Partition& a,
                                                   const Partition& b) const;
-  const std::vector<LRProductTerm>& littlewoodRichardsonProductViaTableauEnumeration(const Partition& a,
+  const std::vector<PartitionCoefficientTerm>& littlewoodRichardsonProductViaTableauEnumeration(const Partition& a,
                                                        const Partition& b) const;
-  const std::vector<LRProductTerm>& skewSchurToSchurViaLittlewoodRichardson(const Partition& outer,
+  const std::vector<PartitionCoefficientTerm>& skewSchurToSchurViaLittlewoodRichardson(const Partition& outer,
                                                           const Partition& inner) const;
 
 // ============================================================================
@@ -51,14 +94,14 @@
                                      const Partition& nu) const;
   bool addedBorderStripHasNoTwoByTwo(const Partition& lambda,
                                          const Partition& nu) const;
-  const std::vector<LRProductTerm>& schurTimesPowerSumViaBorderStrips(const Partition& lambda,
+  const std::vector<PartitionCoefficientTerm>& schurTimesPowerSumViaBorderStrips(const Partition& lambda,
                                                             int part) const;
   ring_elem powerSumsToSchurViaBorderStrips(
           ring_elem f,
           int targetBasisId,
           const std::string& targetDisplay,
           int targetDisplayOrder) const;
-  const std::vector<LRProductTerm>& schurTimesPowerSumViaAbacusRimHooks(
+  const std::vector<PartitionCoefficientTerm>& schurTimesPowerSumViaAbacusRimHooks(
           const Partition& lambda,
           int part) const;
   void addPowerSumIndexToSchurMapViaAbacusRimHooks(
@@ -131,7 +174,7 @@
   long monomialProductCoefficientViaExponentSplittings(const Partition& lambda,
                                       const Partition& mu,
                                       const Partition& nu) const;
-  const std::vector<LRProductTerm>& monomialProductViaExponentSplittings(const Partition& a,
+  const std::vector<PartitionCoefficientTerm>& monomialProductViaExponentSplittings(const Partition& a,
                                                        const Partition& b) const;
   bool tryMonomialLikeBasisElementToCoeffMap(const SymmetricMonomial& monomial,
                                       size_t pos,

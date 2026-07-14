@@ -1,6 +1,6 @@
 -- Manual cold regression benchmarks for SymmetricRings.
 --
--- This file is intentionally not loaded by the package.  Each benchmark is a
+-- This file is intentionally separate from the systematic suite. Each benchmark is a
 -- self-contained block: select the whole block and run it.  The SymmetricRings
 -- blocks use frac(QQ[t]) by default, because that is the coefficient field
 -- most likely to expose regressions in the current code.

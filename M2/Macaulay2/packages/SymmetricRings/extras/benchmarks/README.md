@@ -1,9 +1,9 @@
 # SymmetricRings systematic benchmark suite
 
 This directory contains the reproducible benchmark system for the
-`SymmetricRings` package.  It measures representative mathematical operations,
-compares a run with accepted baselines and fastest qualifying records, records
-the machine and run conditions, and writes a human-readable report.
+`SymmetricRings` package. It measures representative mathematical operations,
+compares a run with the fastest qualifying records, records the machine and run
+conditions, and writes a human-readable report.
 
 The suite is designed so that a contributor can run it without elevated
 privileges and without knowing the implementation details of every algorithm.
@@ -28,8 +28,8 @@ Each run creates one timestamped directory under `results/`.  Its final
 `report.md` contains the comparison intended for people to read.  When sharing
 a run in chat, share **only `report.md`**, not all of the auxiliary files.
 
-Before a long run, use estimate mode with the same selection options.  It reads
-the latest available timings and accepted baselines but does not execute tests
+Before a long run, use estimate mode with the same selection options. It reads
+the latest available timings and fastest records but does not execute tests
 or create a results directory:
 
 ```sh
@@ -76,15 +76,15 @@ Record the seed when sharing a random run.  The coverage levels select
 increasing numbers of cases per family; they describe breadth, not a promise
 about execution speed.
 
-To execute only cases that have no accepted baseline and no result in the
-single most recently modified run, use:
+To execute only cases that have no fastest record and no result in the single
+most recently modified run, use:
 
 ```sh
 ./run-benchmarks.sh --new
 ```
 
-“New” deliberately checks only the accepted baseline and that one latest run.
-It does not scan all historical result directories.
+“New” deliberately checks only `records.tsv` and that one latest run. It does
+not scan all historical result directories.
 
 ## What happens during a run
 
@@ -96,22 +96,21 @@ The suite records:
 
 - raw per-repetition measurements;
 - summarized median timings;
-- comparison with accepted baselines and the pre-run fastest records;
+- comparison with the pre-run fastest records;
 - system information;
 - calibration probes before and after each family;
 - a run-condition classification;
 - a Markdown report.
 
 After writing the report, the suite automatically updates `records.tsv` with
-any lower median based on at least three repetitions. Baseline acceptance
-remains a separate manual review step.
+any lower median based on at least three repetitions.
 
 No performance monitor runs during a timed test.  Calibration occurs only
 before and after families, so the probes do not compete with benchmark work.
 All system and memory information is collected without elevated privileges.
 
 The time estimate uses the most recent run median when one is available,
-otherwise the accepted baseline, plus the suite's startup and calibration
+otherwise the fastest record, plus the suite's startup and calibration
 model.  It is an estimate rather than a scheduling guarantee.
 
 ## Results directories
@@ -138,26 +137,19 @@ entry point and retain the entire directory locally as the audit record.
 The report is ordered for review:
 
 1. overall summary;
-2. baseline and fastest-record comparison, broken into one table per family;
-3. comparison of CPU, RAM, and operating system with accepted baselines;
-4. system information;
-5. run conditions.
+2. fastest-record comparison, broken into one table per family;
+3. system information;
+4. run conditions.
 
 The overall and family summaries use compact two-row tables. They count
-baseline improvements, regressions, stable and new cases, and records set.
-Detailed family tables contain the per-case comparisons. The report does not
-repeat improvements or regressions in prose and does not add a prose list of
-new cases.
-
-The overall table places `Baseline system` beside run health. It reports
-`same`, `different`, `mixed`, or `unknown`, based on CPU model, reported RAM,
-and operating-system name/version stored with the most recent accepted
-baseline for each selected case. The detailed comparison makes any mismatch
-visible; this classification does not alter timing classifications.
+improvements, regressions, stable cases, and new cases relative to the fastest
+record; they also count records set. Detailed family tables contain per-case
+classifications. The report does not repeat improvements or regressions in
+prose or list new cases in prose.
 
 ## Repetitions and timing
 
-The reported comparison uses median CPU time.  A normal baseline-quality run
+The reported comparison uses median CPU time. A record-qualifying run
 uses at least three repetitions.  Very short or noisy comparisons should use
 five or more.  Keep the number of repetitions the same when comparing closely
 matched runs.
@@ -204,30 +196,6 @@ For cleaner measurements:
 - avoid builds, indexing, backups, and large downloads;
 - rerun important regressions independently.
 
-## Accepted baselines
-
-An accepted baseline is a reviewed reference result, not simply the most recent
-run.  Baselines should come from:
-
-- production automatic routing, unless a case explicitly studies a route;
-- the same mathematical input and coefficient ring as the case definition;
-- at least three repetitions, or more for noisy short cases;
-- a run that is not classified as compromised;
-- a correctly functioning package revision.
-
-Acceptance is an explicit operation.  The runner never promotes new results
-automatically.  Review the report and raw measurements first, then use the
-suite's acceptance command described by `--help`.
-
-Preserve the source run directory after acceptance.  If a case definition
-changes materially, invalidate its old baseline rather than silently comparing
-unlike computations.  Historical reports are snapshots and should not be
-regenerated after later baseline changes.
-
-When assessing a change, compare with the accepted baseline and with the
-fastest qualifying time in `records.tsv`, not only the immediately preceding
-run.
-
 ## Fastest records
 
 `records.tsv` contains one fastest qualifying median per case and coefficient
@@ -240,10 +208,14 @@ sets a new record. After the report is complete, the runner automatically
 updates `records.tsv`, recording the median, repetition count, capture time,
 and source run directory.
 
-Records are historical performance observations, not accepted expectations.
-They do not replace baseline review. When evaluating an implementation update,
-compare against both: the baseline measures change from reviewed reference
-behavior, while the record measures distance from the fastest qualifying run.
+Records are the active development comparison. They measure distance from the
+fastest qualifying run observed for the same case and coefficient ring.
+
+The record classification uses the configured percentage threshold.
+`record_status` is separate and exact: it says whether an eligible run sets,
+ties, or misses the record. Thus a small record-setting change may correctly
+have `record_status = new-record` while its thresholded record classification
+is `stable`.
 
 ## Adding a benchmark case
 
@@ -258,7 +230,7 @@ To add a case:
    routine check.
 6. Validate the tables and list the case before executing it.
 7. Run it with enough repetitions and inspect its report.
-8. Accept a baseline only after correctness and run conditions are reviewed.
+8. Run at least three repetitions so the case can establish a record.
 
 Cases should collectively vary shapes, weights, support densities, coefficient
 rings, and semantic constructions.  Prefer mathematically recognizable inputs
@@ -277,9 +249,9 @@ answering two different questions:
 - Which mathematical kernel is fastest for this fixed expanded input?
 - Does automatic dispatch choose well for realistic inputs?
 
-Keep these questions separate.  First compare exact outputs of forced routes,
-then time them, then run the ordinary unforced case.  An accepted general
-baseline should normally reflect the ordinary selector.
+Keep these questions separate. First compare exact outputs of forced routes,
+then time them, then run the ordinary unforced case. General catalog records
+should normally reflect the ordinary selector.
 
 For a selector change, include examples on both sides of every proposed
 threshold and examples from several semantic sources.  Weight alone is often
@@ -295,17 +267,16 @@ The suite is divided into small components for maintainability:
 - operation code constructs and verifies computations;
 - the runner and shell wrapper select and execute cases;
 - validation checks the tables before expensive work;
-- summarization and comparison compute medians and baseline/record differences;
+- summarization and comparison compute medians and record differences;
 - `update-records.awk` updates fastest qualifying medians after reporting;
 - estimation predicts duration without running cases;
 - system, condition, and calibration code describe the environment;
 - report code renders the final Markdown document;
-- baseline data stores accepted reference measurements;
 - `records.tsv` stores automatically maintained fastest qualifying medians.
 
 When changing one component, preserve the distinction between raw measurement,
 statistical summary, comparison policy, and presentation.  In particular, do
-not encode report wording in a mathematical operation or baseline policy in a
+not encode report wording in a mathematical operation or archive policy in a
 case definition.
 
 ## Troubleshooting
@@ -325,9 +296,9 @@ If timings unexpectedly regress:
 7. inspect whether input construction, shadow-QQ conversion, or the target
    operation is actually responsible.
 
-If a new case is not classified as new, remember that `--new` consults both the
-accepted baseline and the single most recent raw run.  A result in that latest
-run is enough to make the case non-new even if it has not been accepted.
+If a new case is not classified as new, remember that `--new` consults both
+`records.tsv` and the single most recent raw run. A result in either is enough
+to make the case non-new.
 
 ## Reporting a benchmark result
 

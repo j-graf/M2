@@ -12,25 +12,25 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace symmetric_rings {
 
+// ============================================================================
+// Basis Metadata
+// ============================================================================
+
 bool SymmetricEngineRing::isMultiplicativeBasis(int basisId) const
 {
-    auto it = multiplicativeBases.find(basisId);
-    return it != multiplicativeBases.end() && it->second;
-  }
-
-bool SymmetricEngineRing::isPowerSumBasis(int basisId) const
-{
-    return powerSumBasisId >= 0 && basisId == powerSumBasisId;
+    return requireBasis(basisId).multiplicative;
   }
 
 SymmetricEngineRing::BasisKind SymmetricEngineRing::basisKindForId(int basisId) const
 {
-    auto found = basisKinds.find(basisId);
-    return found == basisKinds.end() ? BasisKind::Custom : found->second;
+    auto found = basisDescriptors.find(basisId);
+    return found == basisDescriptors.end() ? BasisKind::Custom
+                                           : found->second.kind;
   }
 
 SymmetricEngineRing::BasisKind
@@ -65,6 +65,11 @@ int SymmetricEngineRing::basisIdForKind(BasisKind kind) const
     return found == basisIdsByKind.end() ? -1 : found->second;
   }
 
+int SymmetricEngineRing::registeredPowerSumBasisId() const
+{
+    return basisIdForKind(BasisKind::PowerSum);
+  }
+
 int SymmetricEngineRing::requiredBasisIdForKind(BasisKind kind) const
 {
     int id = basisIdForKind(kind);
@@ -95,52 +100,43 @@ const char *SymmetricEngineRing::basisKindName(BasisKind kind) const
     return "Custom";
   }
 
-void SymmetricEngineRing::rememberBasis(int basisId,
-                     const std::string& display,
-                     int order,
-                     bool isMultiplicative) const
+const SymmetricEngineRing::BasisDescriptor&
+SymmetricEngineRing::requireBasis(int basisId) const
 {
-    if (!display.empty()) basisDisplays[basisId] = display;
-    basisOrders[basisId] = order;
-    multiplicativeBases[basisId] = isMultiplicative;
+    auto found = basisDescriptors.find(basisId);
+    if (found != basisDescriptors.end()) return found->second;
+    ERROR("metadata for symmetric-function basis id ", basisId,
+          " is not available");
+    static const BasisDescriptor missing{"", "", 0, false, BasisKind::Custom};
+    return missing;
   }
 
 void SymmetricEngineRing::rememberBasesFrom(const SymmetricEngineRing *R) const
 {
-    for (const auto& item : R->basisDisplays) basisDisplays[item.first] = item.second;
-    for (const auto& item : R->basisKeys) basisKeys[item.first] = item.second;
-    for (const auto& item : R->basisOrders) basisOrders[item.first] = item.second;
-    for (const auto& item : R->multiplicativeBases)
-      multiplicativeBases[item.first] = item.second;
-    for (const auto& item : R->basisKinds) basisKinds[item.first] = item.second;
+    for (const auto& item : R->basisDescriptors)
+      if (basisDescriptors.find(item.first) == basisDescriptors.end())
+        basisDescriptors[item.first] = item.second;
     for (const auto& item : R->basisIdsByKind) basisIdsByKind[item.first] = item.second;
-    if (powerSumBasisId < 0) powerSumBasisId = R->powerSumBasisId;
   }
 
 std::string SymmetricEngineRing::displayForBasis(int basisId) const
 {
-    auto it = basisDisplays.find(basisId);
-    if (it != basisDisplays.end()) return it->second;
-    return "basis" + std::to_string(basisId);
+    return requireBasis(basisId).displaySymbol;
   }
 
 std::string SymmetricEngineRing::basisKeyForId(int basisId) const
 {
-    auto it = basisKeys.find(basisId);
-    if (it != basisKeys.end()) return it->second;
-    ERROR("stable key metadata for symmetric-function basis id ", basisId,
-          " is not available");
-    return "";
+    return requireBasis(basisId).canonicalKey;
   }
 
 int SymmetricEngineRing::basisOrderForId(int basisId) const
 {
-    auto it = basisOrders.find(basisId);
-    if (it != basisOrders.end()) return it->second;
-    ERROR("display metadata for symmetric-function basis id ", basisId,
-          " is not available");
-    return 0;
+    return requireBasis(basisId).displayOrder;
   }
+
+// ============================================================================
+// Shared Character, Coefficient, And Hall-Littlewood State
+// ============================================================================
 
 const CharacterTable& SymmetricEngineRing::characterTable(int degree) const
 {
@@ -223,34 +219,35 @@ ring_elem SymmetricEngineRing::hallLittlewoodFactor(const Partition& mu) const
     return result;
   }
 
-ring_elem SymmetricEngineRing::basisElementFromIndex(int basisId,
-                                  const std::string& display,
-                                  int order,
-                                  bool isMultiplicative,
-                                  const Partition& index) const
+// ============================================================================
+// Basis-Element Construction
+// ============================================================================
+
+ring_elem SymmetricEngineRing::basisElementFromIndex(
+    int basisId,
+    const Partition& index) const
 {
-    rememberBasis(basisId, display, order, isMultiplicative);
+    const auto& basis = requireBasis(basisId);
     auto result = new SymmetricRingPoly;
     SymmetricMonomial monomial;
-    appendAtomBlock(monomial, makeAtomBlock(order, basisId, 0, index));
+    appendAtomBlock(
+        monomial, makeAtomBlock(basis.displayOrder, basisId, 0, index));
     result->terms.push_back({coefficientRing->one(), canonicalMonomial(monomial)});
     return makePolyValue(result);
   }
 
-ring_elem SymmetricEngineRing::basisElementFromSkewIndex(int basisId,
-                                      const std::string& display,
-                                      int order,
-                                      bool isMultiplicative,
-                                      const Partition& outer,
-                                      const Partition& inner) const
+ring_elem SymmetricEngineRing::basisElementFromSkewIndex(
+    int basisId,
+    const Partition& outer,
+    const Partition& inner) const
 {
-    rememberBasis(basisId, display, order, isMultiplicative);
+    const auto& basis = requireBasis(basisId);
     Partition payload = outer;
     payload.insert(payload.end(), inner.begin(), inner.end());
     auto result = new SymmetricRingPoly;
     SymmetricMonomial monomial;
     appendAtomBlock(monomial,
-                    makeAtomBlock(order,
+                    makeAtomBlock(basis.displayOrder,
                                   basisId,
                                   static_cast<int>(inner.size()),
                                   payload));
@@ -258,16 +255,16 @@ ring_elem SymmetricEngineRing::basisElementFromSkewIndex(int basisId,
     return makePolyValue(result);
   }
 
-ring_elem SymmetricEngineRing::basisPartElement(int basisId,
-                             const std::string& display,
-                             int order,
-                             bool isMultiplicative,
-                             int n) const
+ring_elem SymmetricEngineRing::basisPartElement(int basisId, int n) const
 {
     if (n < 0) return zero();
     if (n == 0) return one();
-    return basisElementFromIndex(basisId, display, order, isMultiplicative, Partition{n});
+    return basisElementFromIndex(basisId, Partition{n});
   }
+
+// ============================================================================
+// Ring Lifecycle And Public Metadata
+// ============================================================================
 
 SymmetricEngineRing::SymmetricEngineRing(const Ring *A)
       : coefficientRing(A), hallLittlewoodParameter(A->from_long(0))
@@ -292,12 +289,27 @@ void SymmetricEngineRing::rememberBasisMetadata(int basisId,
                              int order,
                              bool isMultiplicative) const
 {
-    rememberBasis(basisId, display, order, isMultiplicative);
-    basisKeys[basisId] = canonicalBasisKey;
     BasisKind kind = basisKindFromCanonicalKey(canonicalBasisKey);
-    basisKinds[basisId] = kind;
+    BasisDescriptor descriptor{
+        canonicalBasisKey, display, order, isMultiplicative, kind};
+    auto found = basisDescriptors.find(basisId);
+    if (found != basisDescriptors.end())
+      {
+        const auto& existing = found->second;
+        if (existing.canonicalKey != descriptor.canonicalKey ||
+            existing.displaySymbol != descriptor.displaySymbol ||
+            existing.displayOrder != descriptor.displayOrder ||
+            existing.multiplicative != descriptor.multiplicative ||
+            existing.kind != descriptor.kind)
+          {
+            ERROR("conflicting metadata for symmetric-function basis id ",
+                  basisId);
+            return;
+          }
+      }
+    else
+      basisDescriptors.emplace(basisId, std::move(descriptor));
     if (kind != BasisKind::Custom) basisIdsByKind[kind] = basisId;
-    if (kind == BasisKind::PowerSum) powerSumBasisId = basisId;
   }
 
 bool SymmetricEngineRing::setHallLittlewoodParameter(const RingElement *t) const

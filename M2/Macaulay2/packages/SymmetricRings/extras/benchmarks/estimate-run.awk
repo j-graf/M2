@@ -25,15 +25,11 @@ function duration(seconds) {
     return sprintf("%.2f h", seconds / 3600)
 }
 
-FILENAME == baselineFile {
+FILENAME == recordFile {
     if (FNR == 1) next
     split($0, field, "\t")
-    if (field[5] != "accepted" && field[5] != "valid") next
     key = field[1] SUBSEP field[4]
-    if (!(key in baselineDate) || field[2] >= baselineDate[key]) {
-        baselineDate[key] = field[2]
-        baselineValue[key] = field[3] + 0
-    }
+    recordValue[key] = field[3] + 0
     next
 }
 
@@ -63,9 +59,9 @@ END {
         if (recentCount[key] > 0) {
             estimate = medianRecent(key)
             recentSources++
-        } else if (key in baselineValue) {
-            estimate = baselineValue[key]
-            baselineSources++
+        } else if (key in recordValue) {
+            estimate = recordValue[key]
+            recordSources++
         } else {
             unknownSources++
             familyUnknown[family]++
@@ -97,10 +93,10 @@ END {
     }
     total = totalWork + totalOverhead + totalCalibration
     printf "\nEstimated total wall time: **%s**.\n\n", duration(total)
-    printf "Timing sources: %d latest-run medians, %d accepted baselines, %d unknown.\n\n", \
-        recentSources, baselineSources, unknownSources
+    printf "Timing sources: %d latest-run medians, %d fastest records, %d unknown.\n\n", \
+        recentSources, recordSources, unknownSources
     printf "Model assumptions: %.2f s fresh-process overhead per worker and %.2f s per calibration computation. ", \
         processOverhead, calibrationSeconds
-    printf "Latest-run wall medians are preferred; baseline CPU medians approximate wall time. "
+    printf "Latest-run wall medians are preferred; record CPU medians approximate wall time. "
     printf "Override the model with SYMRINGS_BENCH_PROCESS_OVERHEAD_SECONDS or SYMRINGS_BENCH_CALIBRATION_SECONDS.\n"
 }

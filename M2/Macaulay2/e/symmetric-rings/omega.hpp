@@ -5,8 +5,17 @@
 
 // Declaration fragment included inside SymmetricEngineRing.
 
+// ============================================================================
+// Direct Power-Sum And Schur Kernels
+// ============================================================================
+
   ring_elem omegaPowerSums(ring_elem f) const;
   ring_elem schurOmegaBasisElementAsSchur(const Partition& alpha) const;
+
+// ============================================================================
+// Metadata-Driven Basis And Monomial Mapping
+// ============================================================================
+
   ring_elem omegaBasisElementDirect(const SymmetricMonomial& monomial,
                               size_t pos,
                               const std::map<int, OmegaTarget>& omegaTargets,
@@ -15,6 +24,10 @@
                             const std::map<int, OmegaTarget>& omegaTargets,
                             bool useSomega) const;
   std::map<int, OmegaTarget> omegaTargetMap(M2_arrayint omegaMap) const;
+
+// ============================================================================
+// Public Omega Entry Point
+// ============================================================================
 
  public:
   ring_elem omegaInvolution(ring_elem f, M2_arrayint omegaMap, bool useSomega) const;

@@ -62,11 +62,11 @@ Levels are `light`, `standard`, and `thorough`; they describe breadth, not
 timing. Fixed profiles are nested and reproducible. Random profiles select at
 most 1, 2, or 4 cases per eligible family; record or supply the seed.
 
-Use `--new` for cases absent from both the selected baseline table and the
-single most recently modified result run. Older non-baseline runs are ignored.
+Use `--new` for cases absent from both `records.tsv` and the single most
+recently modified result run. Older result runs are ignored.
 
 Use `--estimate` for a non-running wall-time estimate with any selection. It
-prefers the most recent run, falls back to accepted baselines, models fresh M2
+prefers the most recent run, falls back to fastest records, models fresh M2
 processes and family calibration, and creates no result directory.
 
 Optional breadth cases belong in descriptive `Family-extra` families.
@@ -88,11 +88,10 @@ system.tsv  conditions.tsv  report.md
 Keep expected-weight verification enabled for production measurements;
 `--no-verify` is diagnostic only.
 
-Reports contain an overall summary, family tables comparing the current median
-with accepted baselines and the fastest qualifying record, a CPU/RAM/OS
-baseline comparison, system data, and run conditions. Put the baseline-system
-result beside run health. Keep improvements and regressions in tables; do not
-list individual cases in prose. Never include unique machine identifiers.
+Reports contain an overall summary, family tables classifying changes against
+fastest qualifying records, system data, and run conditions. Keep improvements
+and regressions in tables; do not list individual cases in prose. Never include
+unique machine identifiers.
 
 After a suite run, `report.md` is the only result file to share or link in
 chat. Keep every TSV locally for reproducibility and diagnosis.
@@ -100,41 +99,22 @@ chat. Keep every TSV locally for reproducibility and diagnosis.
 Condition collection must remain unprivileged. Run one fixed calibration probe
 in a fresh process immediately before and after each family; run no monitor
 concurrently with timed cases. Health is `clean`, `warning`, or `compromised`.
-Review warnings and never accept a compromised run. Small pageout changes are
+Review warnings and rerun compromised measurements. Small pageout changes are
 informational; use the magnitude, rate, and memory thresholds in README.
 
-## Baselines and fastest records
+## Fastest records
 
-`benchmarks/baselines.tsv` contains reviewed medians. Acceptance is always
-deliberate and never automatic. A baseline must:
+`benchmarks/records.tsv` is the active comparison source. It stores the fastest
+median CPU time for each case and ring among runs of at least three repetitions.
+The suite compares against pre-run records, writes the report, then updates
+records automatically. An individual repetition is never a record. Use five
+runs for changes below about 10%.
 
-- use automatic production routing, not forced or traced diagnostics;
-- match the mathematical case and coefficient ring;
-- use fresh sequential processes and at least three repetitions;
-- come from a reviewed, non-compromised run;
-- preserve every raw repetition;
-- invalidate a correctness-broken baseline rather than deleting it.
+When testing a code or selector update, inspect the record comparison. It says
+how the update compares with the fastest qualifying result seen so far.
 
-Use median CPU time as primary. Compare against the best and most recent
-accepted medians and `benchmarks/records.tsv`. An individual repetition is
-never a baseline or record. Use five runs for changes below about 10%.
-
-Accept a reviewed summary explicitly with `accept-summary.awk`; pass the run's
-`system.tsv` before its `summary.tsv`, provide an acceptance date and useful
-note, and append its output to `baselines.tsv`. This records the coarse system
-configuration with each accepted timing.
-
-`benchmarks/records.tsv` separately stores the fastest median CPU time for each
-case and ring among runs of at least three repetitions. The suite compares
-against pre-run records, writes the report, then updates records automatically.
-
-When testing a code or selector update, always inspect both comparisons. The
-accepted baseline says whether established expected performance changed; the
-record says how the update compares with the fastest qualifying result seen so
-far.
-
-Run directories are historical snapshots. After accepting a baseline, do not
-regenerate that run's `comparison.tsv` or `report.md`; a case that was new when
+Run directories are historical snapshots. Do not regenerate a run's
+`comparison.tsv` or `report.md` after records change; a case that was new when
 measured must remain new in its originating report.
 
 ## Catalog maintenance
@@ -160,7 +140,7 @@ and a fresh `BUILD/build/M2` process per repetition; see README for a template.
 - Use at least three repetitions initially and five for sub-10% differences.
 - Retain all CPU and wall times; compare medians, not fastest samples.
 - Record the expression, ring, revision, routes, term counts, and min/median/max.
-- Never mix traced, forced, exploratory, or invalid data with baselines.
+- Never mix traced, forced, exploratory, or invalid data with catalog records.
 - Take condition snapshots between groups, never monitor during short timings.
 
 ## Routing diagnostics
@@ -182,7 +162,7 @@ M2_SYMMETRIC_RINGS_FORCE_P_TO_S_ROUTE=grouped-characters
 ```
 
 Run each forced route in a separate cold process. Avoid grouped characters on
-medium or large inputs without a timeout. Forced routes never become baselines.
+medium or large inputs without a timeout. Forced routes never become records.
 
 Other forced Hall--Littlewood and inner-product controls are documented in
 README; treat them as diagnostic in the same way.

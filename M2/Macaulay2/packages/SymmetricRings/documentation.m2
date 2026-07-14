@@ -802,7 +802,8 @@ doc ///
     conventions, and optional mathematical structures such as omega partners,
     power-sum conversion, transformed-basis data, and diagonal
     @TO hallInnerProduct@ pairings. The key and numeric basis id determine
-    mathematical identity; a ring-local symbol controls notation only.
+    mathematical identity; a ring-local symbol controls notation only. Asking
+    for basisData through an alias returns the canonical basis data.
    Text
     For transformed bases, the key "TransformedBasisData" gives a compact
     summary of the source basis, alphabet, summation policy, output basis,
@@ -871,7 +872,7 @@ doc ///
         "OnEquivalentBasis" => "CreateAlias")
     DocAliasQ_2
     aliases R
-    (basisData "DocAliasQ")#"BasisAliasOf"
+    (basisData "DocAliasQ")#"BasisSymbol"
   SeeAlso
    bases
    basisData

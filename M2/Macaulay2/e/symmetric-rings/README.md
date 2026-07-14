@@ -42,13 +42,13 @@ The principal files are:
 |---|---|
 | `symmetric-engine-ring.*` | The engine ring and its central data types |
 | `storage.*` | Canonical storage, term collection, and representation helpers |
+| `presentation.cpp` | Stable presentation ordering and string rendering |
 | `partitions.*` | Partition utilities and combinatorial enumeration |
 | `arithmetic.*` | Addition, multiplication, scalar operations, and product tagging |
+| `expression-inspection.cpp` | Shared expression-shape and coefficient-map inspection |
 | `basis-conversion-dispatch.*` | Conversion analysis, route selection, and route execution |
-| `basis-conversion-kernels.*` | Mathematical basis-conversion algorithms |
+| `basis-conversion-kernels.*` | Basis-family formulas, Jacobi--Trudi, characters, Hall--Littlewood transitions, and straightening |
 | `basis-conversion-products.*` | Product-aware conversion workflows |
-| `schur-conversion.*` | Schur helpers, characters, Jacobi--Trudi, and LR-related conversion |
-| `hall-classical-conversion.*` | Classical and Hall--Littlewood transition machinery |
 | `inner-product-dispatch.*` | Inner-product context resolution and route selection |
 | `inner-product-kernels.*` | Mathematical inner-product algorithms |
 | `plethysm.*` | Plethysm workflows and their kernels |
@@ -86,6 +86,12 @@ Macaulay2 layer.
 `raw-interface.*` translates Macaulay2 requests into engine operations.  It
 checks and converts arguments, calls the relevant engine method, and converts
 the result back to a Macaulay2 value.
+
+Basis descriptors are registered once when a basis is installed on an engine
+ring. Subsequent raw operations pass basis IDs only; the engine resolves the
+canonical key, display symbol, display order, multiplicativity, and built-in
+kind through its descriptor registry. Alternate M2 input symbols are aliases
+of the same ID and are never registered as additional engine bases.
 
 Raw functions should be small.  They should not contain route-selection
 heuristics or substantial symmetric-function mathematics.  For example, all
@@ -596,9 +602,9 @@ performance.  For any new route:
 
 The systematic benchmark suite is documented in the
 [benchmark guide](../../packages/SymmetricRings/extras/benchmarks/README.md).
-Forced routes and trace output are excellent diagnostic tools, but accepted
-baselines should use ordinary production dispatch unless the benchmark
-explicitly studies an algorithm in isolation.
+Forced routes and trace output are excellent diagnostic tools, but cataloged
+record-setting runs should use ordinary production dispatch unless the
+benchmark explicitly studies an algorithm in isolation.
 
 ## Review checklist
 

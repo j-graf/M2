@@ -3,8 +3,6 @@
 #ifndef M2_SYMMETRIC_RINGS_PARTITIONS_HPP_
 #define M2_SYMMETRIC_RINGS_PARTITIONS_HPP_
 
-#include "interface/symmetric-rings.h"
-
 #include <limits>
 #include <map>
 #include <string>
@@ -29,6 +27,9 @@ std::string partitionKey(const Partition& p);
 Partition normalizePartition(const Partition& p);
 int partitionWeight(const Partition& p);
 int partitionLength(const Partition& p);
+bool isPartitionIndex(const Partition& p);
+int partitionPart(const Partition& p, size_t i);
+bool partitionContains(const Partition& outer, const Partition& inner);
 bool lexLessPartition(const Partition& a, const Partition& b);
 Partition trimTrailingZerosPartition(const Partition& p);
 Partition conjugatePartition(const Partition& p);
@@ -36,7 +37,6 @@ std::pair<int, Partition> straightenSchurIndex(const Partition& alpha);
 std::vector<Partition> partitionsOf(int n);
 long pToMonomialCoefficient(const Partition& lambda, const Partition& mu);
 long zValue(const Partition& lambda);
-Partition partitionFromM2Array(M2_arrayint a);
 int characterValue(const Partition& lambda, const Partition& mu);
 
 } // namespace symmetric_rings

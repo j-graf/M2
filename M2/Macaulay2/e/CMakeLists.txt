@@ -98,6 +98,7 @@ set(HPPONLYFILES
   basic-rings/aring-glue.hpp
   basic-rings/aring-QQ.hpp
   basic-rings/aring-translate.hpp
+  symmetric-rings/operation-records.hpp
   )
 
 # these files have .cpp file, but NOT .hpp file
@@ -152,6 +153,7 @@ set(CPPONLYFILES
   interface/symmetric-rings.cpp
   interface/symmetric-rings.h
   rings/ring-vecs.cpp
+  symmetric-rings/arithmetic.cpp
   )
 
 # these files all have .hpp and .cpp files
@@ -170,8 +172,9 @@ set(SRCLIST
   M2FreeAlgebra
   symmetric-rings/partitions
   symmetric-rings/storage
+  symmetric-rings/presentation
   symmetric-rings/symmetric-engine-ring
-  symmetric-rings/arithmetic
+  symmetric-rings/expression-inspection
   symmetric-rings/basis-conversion-dispatch
   symmetric-rings/basis-conversion-kernels
   symmetric-rings/basis-conversion-products

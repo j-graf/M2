@@ -79,26 +79,35 @@ functions from `Core`, and loads these files in order:
 
 1. `registeringBases.m2`
 2. `operators.m2`
-3. `symmetricRingsAndElements.m2`
-4. `computations.m2`
-5. `documentation.m2`
-6. `tests.m2`
+3. `transformedBases.m2`
+4. `builtInBases.m2`
+5. `symmetricRingsAndElements.m2`
+6. `computations.m2`
+7. `documentation.m2`
+8. `tests.m2`
 
 The ordering matters: later files use types, registries, and helper methods
 defined earlier.
 
 ### `registeringBases.m2`
 
-This file owns basis identity and cross-basis metadata. It defines:
+This file owns basis identity, registries, cross-basis metadata, and the
+low-level installation primitives used by later files. A canonical basis has
+one metadata record and one engine ID. An alias is only a symbol-to-key entry;
+lookup resolves it to that canonical basis rather than cloning its metadata.
 
-- the core M2 types, including `SymmetricBasis`;
-- stable basis registries and public aliases;
-- built-in basis declarations;
-- omega links, specialization rules, and inner-product pairings;
-- low-level basis registration;
-- transformed-basis and generated-specialization machinery.
+### `transformedBases.m2`
 
-The built-in bases are:
+This file owns transformed and specialized basis definitions: alphabet
+parsing, forward and inverse conversion hooks, companion inference, generated
+specializations, transactional cluster installation, and the public
+registration functions.
+
+### `builtInBases.m2`
+
+This file declares built-in pairing and specialization metadata and installs
+the standard bases after transformed-basis support is available. The built-in
+bases are:
 
 | Mathematical family | Registry key | Default symbol |
 |---|---|---|
@@ -193,7 +202,7 @@ is involved, `toBasisFallback` performs the required M2-level work and uses
 power sums as the common interchange basis.
 
 Built-in conversion is planned in the C++ engine. See the
-[engine maintainer guide](../../e/symmetric-rings/README-NEW.md) for conversion
+[engine maintainer guide](../../e/symmetric-rings/README.md) for conversion
 guarantees, pipelines, the current `p -> S` dispatcher, and the procedure for
 adding a route.
 
@@ -336,4 +345,4 @@ ring happened to install a global basis symbol previously.
 
 Performance-sensitive work should also add or update a mathematical case in
 `extras/benchmarks/`; forced-route experiments are diagnostics and must not be
-accepted as production baselines.
+recorded as production results.

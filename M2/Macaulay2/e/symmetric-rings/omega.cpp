@@ -16,6 +16,10 @@
 
 namespace symmetric_rings {
 
+// ============================================================================
+// Direct Power-Sum And Schur Kernels
+// ============================================================================
+
 ring_elem SymmetricEngineRing::omegaPowerSums(ring_elem f) const
 {
     const auto *poly = polyValue(f);
@@ -44,14 +48,15 @@ ring_elem SymmetricEngineRing::schurOmegaBasisElementAsSchur(
     if (straightened.first == 0) return zero();
     int schurId = requiredBasisIdForKind(BasisKind::Schur);
     if (error()) return zero();
-    ring_elem term = basisElementFromIndex(schurId,
-                                           displayForBasis(schurId),
-                                           basisOrderForId(schurId),
-                                           isMultiplicativeBasis(schurId),
-                                           conjugatePartition(straightened.second));
+    ring_elem term = basisElementFromIndex(
+        schurId, conjugatePartition(straightened.second));
     if (straightened.first < 0) term = negate(term);
     return term;
   }
+
+// ============================================================================
+// Metadata-Driven Basis And Monomial Mapping
+// ============================================================================
 
 ring_elem SymmetricEngineRing::omegaBasisElementDirect(
                                                const SymmetricMonomial& monomial,
@@ -61,15 +66,12 @@ ring_elem SymmetricEngineRing::omegaBasisElementDirect(
 {
     int basisId = atomBasisIdAt(monomial, pos);
     BasisKind kind = basisKindForId(basisId);
-    if (basisId == powerSumBasisId)
+    if (basisId == registeredPowerSumBasisId())
       {
         Partition index = basisElementIndex(monomial, pos);
         long sign = ((partitionWeight(index) - partitionLength(index)) % 2 == 0) ? 1 : -1;
-        ring_elem term = basisElementFromIndex(powerSumBasisId,
-                                               displayForBasis(powerSumBasisId),
-                                               basisOrderForId(powerSumBasisId),
-                                               true,
-                                               index);
+        ring_elem term =
+            basisElementFromIndex(registeredPowerSumBasisId(), index);
         return scaled(coefficientRing->from_long(sign), term);
       }
 
@@ -78,14 +80,10 @@ ring_elem SymmetricEngineRing::omegaBasisElementDirect(
         int schurId = requiredBasisIdForKind(BasisKind::Schur);
         if (error()) return zero();
         if (atomIsSkewAt(monomial, pos))
-          return basisElementFromSkewIndex(schurId,
-                                           displayForBasis(schurId),
-                                           basisOrderForId(schurId),
-                                           false,
-                                           conjugatePartition(
-                                               basisElementOuterIndex(monomial, pos)),
-                                           conjugatePartition(
-                                               basisElementInnerIndex(monomial, pos)));
+          return basisElementFromSkewIndex(
+              schurId,
+              conjugatePartition(basisElementOuterIndex(monomial, pos)),
+              conjugatePartition(basisElementInnerIndex(monomial, pos)));
         return schurOmegaBasisElementAsSchur(
             basisElementIndex(monomial, pos));
       }
@@ -100,15 +98,11 @@ ring_elem SymmetricEngineRing::omegaBasisElementDirect(
     if (target != omegaTargets.end())
       {
         Partition payload = basisElementIndex(monomial, pos);
-        std::string targetDisplay = displayForBasis(target->second.basisId);
-        rememberBasis(target->second.basisId,
-                      targetDisplay,
-                      target->second.order,
-                      target->second.isMultiplicative);
+        const auto& targetBasis = requireBasis(target->second.basisId);
         auto *poly = new SymmetricRingPoly;
         SymmetricMonomial targetMonomial;
         appendAtomBlock(targetMonomial,
-                        makeAtomBlock(target->second.order,
+                        makeAtomBlock(targetBasis.displayOrder,
                                       target->second.basisId,
                                       atomInnerLengthAt(monomial, pos),
                                       payload));
@@ -143,18 +137,20 @@ std::map<int, OmegaTarget> SymmetricEngineRing::omegaTargetMap(M2_arrayint omega
 {
     std::map<int, OmegaTarget> result;
     if (omegaMap == nullptr) return result;
-    if (omegaMap->len % 4 != 0)
+    if (omegaMap->len % 2 != 0)
       {
         ERROR("invalid omega metadata map");
         return result;
       }
-    for (int i = 0; i < omegaMap->len; i += 4)
+    for (int i = 0; i < omegaMap->len; i += 2)
       result[omegaMap->array[i]] =
-          OmegaTarget{omegaMap->array[i + 1],
-                      omegaMap->array[i + 2],
-                      omegaMap->array[i + 3] != 0};
+          OmegaTarget{omegaMap->array[i + 1]};
     return result;
   }
+
+// ============================================================================
+// Public Omega Entry Point
+// ============================================================================
 
 ring_elem SymmetricEngineRing::omegaInvolution(ring_elem f, M2_arrayint omegaMap, bool useSomega) const
 {

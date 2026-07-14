@@ -11,7 +11,6 @@ CASE_ID=
 RUN_NAME=
 LIST_ONLY=0
 VERIFY=1
-BASELINES="$SCRIPT_DIR/baselines.tsv"
 RECORDS="$SCRIPT_DIR/records.tsv"
 VARIED_MODE=
 VARIED_LEVEL=
@@ -24,7 +23,7 @@ usage() {
     printf '%s\n' \
       "Usage: $0 [--family NAME] [--tier NAME] [--case ID] [--repetitions N]" \
       "          [--varied-fixed LEVEL | --varied-random LEVEL] [--seed N]" \
-      "          [--new] [--output LABEL] [--baselines FILE] [--records FILE]" \
+      "          [--new] [--output LABEL] [--records FILE]" \
       "          [--list | --estimate] [--no-verify]" \
       "" \
       "Varied levels: light, standard, thorough." \
@@ -58,7 +57,6 @@ while [ "$#" -gt 0 ]; do
         --new) NEW_ONLY=1; shift ;;
         --estimate) ESTIMATE_ONLY=1; shift ;;
         --output) RUN_NAME=$2; shift 2 ;;
-        --baselines) BASELINES=$2; shift 2 ;;
         --records) RECORDS=$2; shift 2 ;;
         --list) LIST_ONLY=1; shift ;;
         --no-verify) VERIFY=0; shift ;;
@@ -154,8 +152,8 @@ if [ "$NEW_ONLY" -eq 1 ] && [ -n "$case_plan" ]; then
     known_cases_file="$TMP_HOME/known-cases.txt"
     plan_file="$TMP_HOME/case-plan.txt"
     printf '%s\n' __known_case_sentinel__ > "$known_cases_file"
-    if [ -f "$BASELINES" ]; then
-        awk -F '\t' 'NR > 1 && $1 != "" {print $1}' "$BASELINES" >> "$known_cases_file"
+    if [ -f "$RECORDS" ]; then
+        awk -F '\t' 'NR > 1 && $1 != "" {print $1}' "$RECORDS" >> "$known_cases_file"
     fi
     most_recent_result=$(find_most_recent_result)
     if [ -n "$most_recent_result" ]; then
@@ -195,15 +193,20 @@ if [ "$ESTIMATE_ONLY" -eq 1 ]; then
     fi
     PROCESS_OVERHEAD_SECONDS=${SYMRINGS_BENCH_PROCESS_OVERHEAD_SECONDS:-0.30}
     CALIBRATION_SECONDS=${SYMRINGS_BENCH_CALIBRATION_SECONDS:-0.19}
+    if [ -f "$RECORDS" ]; then
+        estimate_records=$RECORDS
+    else
+        estimate_records=/dev/null
+    fi
     "$SCRIPT_DIR/estimate-run.awk" \
-        -v baselineFile="$BASELINES" \
+        -v recordFile="$estimate_records" \
         -v recentFile="$most_recent_result" \
         -v planFile="$estimate_plan" \
         -v repetitions="$REPETITIONS" \
         -v processOverhead="$PROCESS_OVERHEAD_SECONDS" \
         -v calibrationSeconds="$CALIBRATION_SECONDS" \
         -v recentLabel="$recent_label" \
-        "$BASELINES" "$most_recent_result" "$estimate_plan"
+        "$estimate_records" "$most_recent_result" "$estimate_plan"
     exit 0
 fi
 
@@ -335,9 +338,9 @@ else
         > "$records_for_comparison"
 fi
 "$SCRIPT_DIR/compare-results.awk" \
-    "$BASELINES" "$records_for_comparison" "$raw_file" > "$comparison_file"
+    "$records_for_comparison" "$raw_file" > "$comparison_file"
 "$SCRIPT_DIR/make-report.sh" "$system_file" "$comparison_file" \
-    "$conditions_file" "$BASELINES" > "$report_file"
+    "$conditions_file" > "$report_file"
 
 records_update="$TMP_HOME/records.tsv"
 recorded_at=$(awk -F '\t' '$1 == "captured_at" {print $2; exit}' "$system_file")

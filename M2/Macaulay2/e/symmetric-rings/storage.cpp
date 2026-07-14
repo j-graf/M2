@@ -9,6 +9,10 @@
 
 namespace symmetric_rings {
 
+// ============================================================================
+// M2 And Engine Value Wrappers
+// ============================================================================
+
 std::string fromM2String(M2_string s)
 {
   if (s == nullptr) return "";
@@ -46,6 +50,10 @@ ring_elem makePolyValue(SymmetricRingPoly *f)
 {
   return ring_elem(reinterpret_cast<const void *>(f));
 }
+
+// ============================================================================
+// Atom Access And Canonical Ordering
+// ============================================================================
 
 std::string coeffToString(const Ring *R, ring_elem c)
 {
@@ -107,6 +115,10 @@ int compareMonomials(const SymmetricMonomial& a, const SymmetricMonomial& b)
   if (monomialLess(b, a)) return GT;
   return EQ;
 }
+
+// ============================================================================
+// Atom Construction And Monomial Keys
+// ============================================================================
 
 std::vector<int> atomBlockAt(const SymmetricMonomial& monomial, size_t pos)
 {

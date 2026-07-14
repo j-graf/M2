@@ -32,17 +32,11 @@ bool rawSymmetricRingsRememberBasis(const Ring *R,
 
 const RingElement *rawSymmetricRingsBasisElement(const Ring *R,
                                                 int basisId,
-                                                M2_string displaySymbol,
-                                                int displayOrder,
-                                                bool isMultiplicative,
                                                 int innerLength,
                                                 M2_arrayint index)
 {
   return symmetric_rings::rawSymmetricRingsBasisElement(R,
                                                         basisId,
-                                                        displaySymbol,
-                                                        displayOrder,
-                                                        isMultiplicative,
                                                         innerLength,
                                                         index);
 }
@@ -73,103 +67,44 @@ const RingElement *rawSymmetricRingsProduct(const Ring *R,
 
 const RingElement *rawSymmetricRingsJacobiTrudi(const Ring *R,
                                                 int basisId,
-                                                M2_string displaySymbol,
-                                                int displayOrder,
-                                                bool isMultiplicative,
                                                 M2_arrayint outer,
                                                 M2_arrayint inner)
 {
   return symmetric_rings::rawSymmetricRingsJacobiTrudi(R,
                                                        basisId,
-                                                       displaySymbol,
-                                                       displayOrder,
-                                                       isMultiplicative,
                                                        outer,
                                                        inner);
 }
 
 const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
-                                            int powerSumBasisId,
-                                            M2_string powerSumDisplaySymbol,
-                                            int powerSumDisplayOrder,
-                                            bool powerSumIsMultiplicative,
-                                            int targetBasisId,
-                                            M2_string targetDisplaySymbol,
-                                            int targetDisplayOrder,
-                                            bool targetIsMultiplicative)
+                                            int targetBasisId)
 {
-  return symmetric_rings::rawSymmetricRingsToBasis(f,
-                                                   powerSumBasisId,
-                                                   powerSumDisplaySymbol,
-                                                   powerSumDisplayOrder,
-                                                   powerSumIsMultiplicative,
-                                                   targetBasisId,
-                                                   targetDisplaySymbol,
-                                                   targetDisplayOrder,
-                                                   targetIsMultiplicative);
+  return symmetric_rings::rawSymmetricRingsToBasis(f, targetBasisId);
 }
 
 const RingElement *rawSymmetricRingsProductToBasisDispatch(
     const RingElement *f,
     const RingElement *g,
-    int powerSumBasisId,
-    M2_string powerSumDisplaySymbol,
-    int powerSumDisplayOrder,
-    bool powerSumIsMultiplicative,
-    int targetBasisId,
-    M2_string targetDisplaySymbol,
-    int targetDisplayOrder,
-    bool targetIsMultiplicative)
+    int targetBasisId)
 {
   return symmetric_rings::rawSymmetricRingsProductToBasisDispatch(
       f,
       g,
-      powerSumBasisId,
-      powerSumDisplaySymbol,
-      powerSumDisplayOrder,
-      powerSumIsMultiplicative,
-      targetBasisId,
-      targetDisplaySymbol,
-      targetDisplayOrder,
-      targetIsMultiplicative);
+      targetBasisId);
 }
 
 const RingElement *rawSymmetricRingsPlethysm(const RingElement *f,
-                                             const RingElement *g,
-                                             int powerSumBasisId,
-                                             M2_string powerSumDisplaySymbol,
-                                             int powerSumDisplayOrder,
-                                             bool powerSumIsMultiplicative)
+                                             const RingElement *g)
 {
-  return symmetric_rings::rawSymmetricRingsPlethysm(f,
-                                                    g,
-                                                    powerSumBasisId,
-                                                    powerSumDisplaySymbol,
-                                                    powerSumDisplayOrder,
-                                                    powerSumIsMultiplicative);
+  return symmetric_rings::rawSymmetricRingsPlethysm(f, g);
 }
 
 const RingElement *rawSymmetricRingsPlethysmToBasis(const RingElement *f,
                                                     const RingElement *g,
-                                                    int powerSumBasisId,
-                                                    M2_string powerSumDisplaySymbol,
-                                                    int powerSumDisplayOrder,
-                                                    bool powerSumIsMultiplicative,
-                                                    int targetBasisId,
-                                                    M2_string targetDisplaySymbol,
-                                                    int targetDisplayOrder,
-                                                    bool targetIsMultiplicative)
+                                                    int targetBasisId)
 {
-  return symmetric_rings::rawSymmetricRingsPlethysmToBasis(f,
-                                                           g,
-                                                           powerSumBasisId,
-                                                           powerSumDisplaySymbol,
-                                                           powerSumDisplayOrder,
-                                                           powerSumIsMultiplicative,
-                                                           targetBasisId,
-                                                           targetDisplaySymbol,
-                                                           targetDisplayOrder,
-                                                           targetIsMultiplicative);
+  return symmetric_rings::rawSymmetricRingsPlethysmToBasis(
+      f, g, targetBasisId);
 }
 
 int rawSymmetricRingsSingleBasisId(const RingElement *f)
@@ -249,12 +184,6 @@ M2_arrayint rawSymmetricRingsPresentationTermMonomial(const RingElement *f,
 M2_string rawSymmetricRingsElementToString(const RingElement *f)
 {
   return symmetric_rings::rawSymmetricRingsElementToString(f);
-}
-
-M2_string rawSymmetricRingsElementToStringLimited(const RingElement *f,
-                                                  int maxTerms)
-{
-  return symmetric_rings::rawSymmetricRingsElementToStringLimited(f, maxTerms);
 }
 
 int rawSymmetricRingsElementWeight(const RingElement *f)

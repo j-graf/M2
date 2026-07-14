@@ -22,10 +22,6 @@
   CoeffMap addCoeffMaps(const CoeffMap& a, const CoeffMap& b) const;
   CoeffMap multiplyCoeffMaps(const CoeffMap& a, const CoeffMap& b) const;
   CoeffMap oneCoeffMap() const;
-  bool isPartitionIndex(const Partition& p) const;
-  int partitionPart(const Partition& p, size_t i) const;
-  bool partitionContains(const Partition& outer, const Partition& inner) const;
-  std::string littlewoodRichardsonProductCacheKey(const Partition& lambda, const Partition& mu) const;
   ring_elem cachedInteger(long n) const;
   Partition leadingPartition(const CoeffMap& H) const;
   ring_elem coeffMapToElement(const CoeffMap& H,
@@ -68,15 +64,9 @@
   int selectedGreaterThan(size_t mask, size_t col, size_t n) const;
   ring_elem jacobiTrudi(const Partition& outer,
                             const Partition& inner,
-                            int basisId,
-                            const std::string& display,
-                            int order,
-                            bool isMultiplicative) const;
+                            int basisId) const;
  public:
   ring_elem jacobiTrudiBasis(int basisId,
-                                 const std::string& display,
-                                 int order,
-                                 bool isMultiplicative,
                                  const Partition& outer,
                                  const Partition& inner) const;
 
@@ -261,28 +251,10 @@
                                           ring_elem& result) const;
 
 // ============================================================================
-// Generic Basis-Element Conversion
+// Termwise Conversion Kernels
 // ============================================================================
-// Per-basis-element conversion feeds monomial, expression, and termwise fallback routes.
+// Per-index formulas used by the general conversion fallback.
 
-  BasisElementToPowerSumsRoute selectBasisElementToPowerSumsRoute(
-        const SymmetricMonomial& monomial,
-        size_t pos) const;
-  const char *basisElementToPowerSumsRouteName(
-        BasisElementToPowerSumsRoute route) const;
-  void traceBasisElementToPowerSumsSelection(
-        BasisElementToPowerSumsRoute route,
-        const std::string& sourceDisplay) const;
-  ring_elem executeBasisElementToPowerSumsRoute(
-        BasisElementToPowerSumsRoute route,
-        const SymmetricMonomial& monomial,
-        size_t pos) const;
-  ring_elem basisElementToPowerSumsDispatch(
-        const SymmetricMonomial& monomial,
-        size_t pos) const;
-  ring_elem monomialToPowerSumsViaBasisElementRoutes(
-        const SymmetricMonomial& monomial) const;
-  ring_elem expressionToPowerSumsViaBasisElementRoutes(ring_elem f) const;
   ring_elem powerSumIndexToTargetViaTermwiseKernel(const Partition& index,
                                          const std::string& targetDisplay,
                                          int targetBasisId,
@@ -293,41 +265,6 @@
                                           const std::string& targetDisplay,
                                           int targetDisplayOrder,
                                           bool targetIsMultiplicative) const;
-  bool tryBasisElementToTarget(const SymmetricMonomial& monomial,
-                              size_t pos,
-                              int targetBasisId,
-                              const std::string& targetDisplay,
-                              int targetDisplayOrder,
-                              bool targetIsMultiplicative,
-                              ring_elem& result) const;
-  bool tryMonomialToTarget(const SymmetricMonomial& monomial,
-                                  int targetBasisId,
-                                  const std::string& targetDisplay,
-                                  int targetDisplayOrder,
-                                  bool targetIsMultiplicative,
-                                  ring_elem& result) const;
-  ExpressionToTargetRoute selectExpressionToTargetRoute(
-          int targetBasisId,
-          bool targetIsMultiplicative) const;
-  const char *expressionToTargetRouteName(
-                                 ExpressionToTargetRoute route) const;
-  void traceExpressionToTargetSelection(
-                                 ExpressionToTargetRoute route,
-                                 const std::string& targetDisplay) const;
-  bool executeExpressionToTargetRoute(
-                                 ExpressionToTargetRoute route,
-                                 ring_elem f,
-                                 int targetBasisId,
-                                 const std::string& targetDisplay,
-                                 int targetDisplayOrder,
-                                 bool targetIsMultiplicative,
-                                 ring_elem& result) const;
-  bool tryExpressionToTarget(ring_elem f,
-                                 int targetBasisId,
-                                 const std::string& targetDisplay,
-                                 int targetDisplayOrder,
-                                 bool targetIsMultiplicative,
-                                 ring_elem& result) const;
 
 // ============================================================================
 // Straightening

@@ -16,6 +16,10 @@
 
 namespace symmetric_rings {
 
+// ============================================================================
+// Adams-Operation Plethysm
+// ============================================================================
+
 ring_elem SymmetricEngineRing::powerSumsViaAdamsOperation(ring_elem f, int multiplier) const
 {
     const auto *poly = polyValue(f);
@@ -68,6 +72,10 @@ ring_elem SymmetricEngineRing::powerSumPlethysmViaAdamsOperations(ring_elem fPow
       }
     return result;
   }
+
+// ============================================================================
+// Specialized Schur Plethysm
+// ============================================================================
 
 bool SymmetricEngineRing::singleSchurPartition(ring_elem f, int schurId, Partition& lambda) const
 {
@@ -235,33 +243,16 @@ bool SymmetricEngineRing::trySchurPlethysmToSchurViaAdamsJacobiTrudi(ring_elem f
     return !error();
   }
 
-ring_elem SymmetricEngineRing::plethysm(ring_elem f,
-                     ring_elem g,
-                     int pBasisId,
-                     const std::string& pDisplay,
-                     int pOrder,
-                     bool pIsMultiplicative) const
+// ============================================================================
+// Public Plethysm Entry Points
+// ============================================================================
+
+ring_elem SymmetricEngineRing::plethysm(ring_elem f, ring_elem g) const
 {
-    rememberBasis(pBasisId, pDisplay, pOrder, pIsMultiplicative);
-    ring_elem fPowerSums = toBasis(f,
-                                   pBasisId,
-                                   pDisplay,
-                                   pOrder,
-                                   pIsMultiplicative,
-                                   pBasisId,
-                                   pDisplay,
-                                   pOrder,
-                                   pIsMultiplicative);
+    int pBasisId = requiredBasisIdForKind(BasisKind::PowerSum);
+    ring_elem fPowerSums = toBasis(f, pBasisId);
     if (error()) return zero();
-    ring_elem gPowerSums = toBasis(g,
-                                   pBasisId,
-                                   pDisplay,
-                                   pOrder,
-                                   pIsMultiplicative,
-                                   pBasisId,
-                                   pDisplay,
-                                   pOrder,
-                                   pIsMultiplicative);
+    ring_elem gPowerSums = toBasis(g, pBasisId);
     if (error()) return zero();
     ring_elem result = powerSumPlethysmViaAdamsOperations(fPowerSums, gPowerSums);
     if (error()) return zero();
@@ -291,17 +282,11 @@ ring_elem SymmetricEngineRing::plethysm(ring_elem f,
 
 ring_elem SymmetricEngineRing::plethysmToBasisDispatch(ring_elem f,
                             ring_elem g,
-                            int pBasisId,
-                            const std::string& pDisplay,
-                            int pOrder,
-                            bool pIsMultiplicative,
-                            int targetBasisId,
-                            const std::string& targetDisplay,
-                            int targetOrder,
-                            bool targetIsMultiplicative) const
+                            int targetBasisId) const
 {
-    rememberBasis(pBasisId, pDisplay, pOrder, pIsMultiplicative);
-    rememberBasis(targetBasisId, targetDisplay, targetOrder, targetIsMultiplicative);
+    int pBasisId = requiredBasisIdForKind(BasisKind::PowerSum);
+    const auto& powerSums = requireBasis(pBasisId);
+    const auto& target = requireBasis(targetBasisId);
 
     ConversionGuarantees guarantees;
     ConversionGuarantees outerGuarantees =
@@ -324,12 +309,12 @@ ring_elem SymmetricEngineRing::plethysmToBasisDispatch(ring_elem f,
         g};
     return conversionRequestToBasisDispatch(request,
                                             pBasisId,
-                                            pDisplay,
-                                            pOrder,
-                                            pIsMultiplicative,
+                                            powerSums.displaySymbol,
+                                            powerSums.displayOrder,
+                                            powerSums.multiplicative,
                                             targetBasisId,
-                                            targetDisplay,
-                                            targetOrder,
-                                            targetIsMultiplicative);
+                                            target.displaySymbol,
+                                            target.displayOrder,
+                                            target.multiplicative);
   }
 } // namespace symmetric_rings

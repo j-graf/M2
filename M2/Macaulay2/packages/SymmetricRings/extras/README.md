@@ -30,11 +30,10 @@ There are two complementary workflows.
 
 ### The systematic suite
 
-`benchmarks/` contains a table-driven suite with accepted baselines, automatic
-fastest-median records, machine and run-condition records, family summaries,
-calibrated timing, fixed and random representative selections, and estimates
-of running time. Use it for package-wide comparisons and results that should
-remain reproducible.
+`benchmarks/` contains a table-driven suite with automatic fastest-median
+records, machine and run-condition records, family summaries, calibrated
+timing, fixed and random representative selections, and estimates of running
+time.
 
 See `benchmarks/README.md` for the commands and file format.
 
@@ -54,6 +53,10 @@ investigating one expression.  Such a benchmark should still be disciplined:
 - include examples where the proposed method is expected to lose as well as
   win;
 - avoid other substantial work on the machine while collecting results.
+
+The retained cold-regression notebook is
+`manual-regression-benchmarks.m2`. It should contain only manual comparisons
+that are not represented by the systematic suite.
 
 For very short operations, batch many identical or comparable operations so
 that the total measurement is meaningful.  For long operations, fewer
@@ -118,11 +121,10 @@ valuable independent checks.
 
 ## Interpreting timing changes
 
-Do not compare only with the immediately preceding run. Compare with the
-accepted baseline and the fastest qualifying median in `benchmarks/records.tsv`,
-and inspect whether the mathematical route, coefficient ring, or machine
-conditions changed. This comparison is especially important after changing an
-implementation or selector.
+Compare with the fastest qualifying median in `benchmarks/records.tsv`, not
+only the immediately preceding run, and inspect whether the mathematical route,
+coefficient ring, or machine conditions changed. This is especially important
+after changing an implementation or selector.
 
 An unchanged total time can conceal opposing changes in conversion and input
 construction.  A regression may come from:

@@ -23,6 +23,15 @@ namespace symmetric_rings {
 // ============================================================================
 // Tableau and coefficient enumeration for Schur products and skew expansion.
 
+std::string SymmetricEngineRing::littlewoodRichardsonProductCacheKey(
+    const Partition& lambda,
+    const Partition& mu) const
+{
+    if (lexLessPartition(mu, lambda))
+      return partitionKey(mu) + "*" + partitionKey(lambda);
+    return partitionKey(lambda) + "*" + partitionKey(mu);
+  }
+
 long SymmetricEngineRing::littlewoodRichardsonCoefficientViaTableaux(const Partition& lambda,
                      const Partition& content,
                      const Partition& nu) const
@@ -146,7 +155,7 @@ std::vector<Partition> SymmetricEngineRing::partitionsContaining(const Partition
     return result;
   }
 
-const std::vector<LRProductTerm>& SymmetricEngineRing::littlewoodRichardsonProductViaCoefficientEnumeration(const Partition& a,
+const std::vector<PartitionCoefficientTerm>& SymmetricEngineRing::littlewoodRichardsonProductViaCoefficientEnumeration(const Partition& a,
                                               const Partition& b) const
 {
     Partition lambda = normalizePartition(a);
@@ -155,7 +164,7 @@ const std::vector<LRProductTerm>& SymmetricEngineRing::littlewoodRichardsonProdu
     auto cached = littlewoodRichardsonCoefficientProductCache.find(key);
     if (cached != littlewoodRichardsonCoefficientProductCache.end()) return cached->second;
 
-    std::vector<LRProductTerm> result;
+    std::vector<PartitionCoefficientTerm> result;
     if (lambda.empty())
       {
         result.push_back({mu, 1});
@@ -178,7 +187,7 @@ const std::vector<LRProductTerm>& SymmetricEngineRing::littlewoodRichardsonProdu
     return inserted.first->second;
   }
 
-const std::vector<LRProductTerm>& SymmetricEngineRing::littlewoodRichardsonProductViaTableauEnumeration(
+const std::vector<PartitionCoefficientTerm>& SymmetricEngineRing::littlewoodRichardsonProductViaTableauEnumeration(
     const Partition& a,
     const Partition& b) const
 {
@@ -190,7 +199,7 @@ const std::vector<LRProductTerm>& SymmetricEngineRing::littlewoodRichardsonProdu
     auto cached = littlewoodRichardsonTableauProductCache.find(key);
     if (cached != littlewoodRichardsonTableauProductCache.end()) return cached->second;
 
-    std::vector<LRProductTerm> result;
+    std::vector<PartitionCoefficientTerm> result;
     if (first.empty())
       {
         result.push_back({second, 1});
@@ -308,7 +317,7 @@ const std::vector<LRProductTerm>& SymmetricEngineRing::littlewoodRichardsonProdu
     return inserted.first->second;
   }
 
-const std::vector<LRProductTerm>& SymmetricEngineRing::skewSchurToSchurViaLittlewoodRichardson(
+const std::vector<PartitionCoefficientTerm>& SymmetricEngineRing::skewSchurToSchurViaLittlewoodRichardson(
     const Partition& outer0,
     const Partition& inner0) const
 {
@@ -318,7 +327,7 @@ const std::vector<LRProductTerm>& SymmetricEngineRing::skewSchurToSchurViaLittle
     auto cached = skewSchurToSchurViaLittlewoodRichardsonCache.find(key);
     if (cached != skewSchurToSchurViaLittlewoodRichardsonCache.end()) return cached->second;
 
-    std::vector<LRProductTerm> result;
+    std::vector<PartitionCoefficientTerm> result;
     if (!partitionContains(outer, inner))
       {
         auto inserted = skewSchurToSchurViaLittlewoodRichardsonCache.emplace(key, std::move(result));
@@ -479,7 +488,7 @@ bool SymmetricEngineRing::addedBorderStripHasNoTwoByTwo(
     return true;
   }
 
-const std::vector<LRProductTerm>& SymmetricEngineRing::schurTimesPowerSumViaBorderStrips(
+const std::vector<PartitionCoefficientTerm>& SymmetricEngineRing::schurTimesPowerSumViaBorderStrips(
     const Partition& lambda0,
     int part) const
 {
@@ -488,7 +497,7 @@ const std::vector<LRProductTerm>& SymmetricEngineRing::schurTimesPowerSumViaBord
     auto cached = schurTimesPowerSumViaBorderStripsCache.find(key);
     if (cached != schurTimesPowerSumViaBorderStripsCache.end()) return cached->second;
 
-    std::vector<LRProductTerm> result;
+    std::vector<PartitionCoefficientTerm> result;
     if (part < 0)
       {
         auto inserted = schurTimesPowerSumViaBorderStripsCache.emplace(key, std::move(result));
@@ -556,7 +565,7 @@ ring_elem SymmetricEngineRing::powerSumsToSchurViaBorderStrips(
     return fromTermVector(terms, false);
   }
 
-const std::vector<LRProductTerm>&
+const std::vector<PartitionCoefficientTerm>&
 SymmetricEngineRing::schurTimesPowerSumViaAbacusRimHooks(
     const Partition& lambda0,
     int part) const
@@ -567,7 +576,7 @@ SymmetricEngineRing::schurTimesPowerSumViaAbacusRimHooks(
     if (cached != schurTimesPowerSumViaAbacusRimHooksCache.end())
       return cached->second;
 
-    std::vector<LRProductTerm> result;
+    std::vector<PartitionCoefficientTerm> result;
     if (part < 0)
       {
         auto inserted = schurTimesPowerSumViaAbacusRimHooksCache.emplace(
@@ -649,7 +658,7 @@ void SymmetricEngineRing::addPowerSumIndexToSchurMapViaAbacusRimHooks(
               ring_elem nextCoefficient = product.coefficient == 1
                   ? currentTerm.second
                   : coefficientRing->negate(currentTerm.second);
-              addNormalizedCoeff(next, product.nu, nextCoefficient);
+              addNormalizedCoeff(next, product.partition, nextCoefficient);
             }
         current = std::move(next);
       }
@@ -708,7 +717,7 @@ ring_elem SymmetricEngineRing::multiplySchurExpansionsViaLittlewoodRichardson(ri
                   ? baseCoeff
                   : coefficientRing->mult(coefficientRing->from_long(product.coefficient),
                                           baseCoeff);
-              addCoeff(result, product.nu, coeff);
+              addCoeff(result, product.partition, coeff);
             }
         }
     return coeffMapToElement(result, schurId, schurDisplay, schurOrder, false);
@@ -780,7 +789,7 @@ bool SymmetricEngineRing::trySchurProductMonomialToSchurViaLittlewoodRichardson(
                       ? term.second
                       : coefficientRing->mult(coefficientRing->from_long(product.coefficient),
                                               term.second);
-                  addCoeff(next, product.nu, coeff);
+                  addCoeff(next, product.partition, coeff);
                 }
             current = next;
           }
@@ -833,7 +842,7 @@ bool SymmetricEngineRing::trySchurCompatibleFactorsFromMonomial(
                  skewSchurToSchurViaLittlewoodRichardson(
                      basisElementOuterIndex(monomial, pos),
                      basisElementInnerIndex(monomial, pos)))
-              addCoeff(expansion, item.nu, cachedInteger(item.coefficient));
+              addCoeff(expansion, item.partition, cachedInteger(item.coefficient));
             factors.push_back({SchurCompatibleFactor::SchurExpansion,
                                Partition{},
                                expansion,
@@ -965,11 +974,7 @@ bool SymmetricEngineRing::schurCompatibleFactorsToSchurDispatch(
       {
         traceSchurFactorMethod(SchurFactorMethod::AlreadySchur,
                                factors.front());
-        result = basisElementFromIndex(targetBasisId,
-                                       targetDisplay,
-                                       targetDisplayOrder,
-                                       false,
-                                       factors.front().index);
+        result = basisElementFromIndex(targetBasisId, factors.front().index);
         return true;
       }
 
@@ -982,7 +987,7 @@ bool SymmetricEngineRing::schurCompatibleFactorsToSchurDispatch(
         const auto& product = littlewoodRichardsonProductViaTableauEnumeration(factors[0].index, factors[1].index);
         VECTOR(SymmetricTerm) terms;
         terms.reserve(product.size());
-        rememberBasis(targetBasisId, targetDisplay, targetDisplayOrder, false);
+        requireBasis(targetBasisId);
         for (const auto& item : product)
           {
             SymmetricMonomial termMonomial;
@@ -990,7 +995,7 @@ bool SymmetricEngineRing::schurCompatibleFactorsToSchurDispatch(
                             makeAtomBlock(targetDisplayOrder,
                                           targetBasisId,
                                           0,
-                                          item.nu));
+                                          item.partition));
             terms.push_back({cachedInteger(item.coefficient),
                              canonicalMonomial(termMonomial)});
           }
@@ -1047,7 +1052,7 @@ bool SymmetricEngineRing::schurCompatibleFactorsToSchurDispatch(
                         ? term.second
                         : coefficientRing->mult(cachedInteger(product.coefficient),
                                                 term.second);
-                    addCoeff(next, product.nu, coeff);
+                    addCoeff(next, product.partition, coeff);
                   }
               }
             else if (method == SchurFactorMethod::ViaAbacusRimHooks)
@@ -1060,7 +1065,7 @@ bool SymmetricEngineRing::schurCompatibleFactorsToSchurDispatch(
                         ? term.second
                         : coefficientRing->mult(cachedInteger(product.coefficient),
                                                 term.second);
-                    addCoeff(next, product.nu, coeff);
+                    addCoeff(next, product.partition, coeff);
                   }
               }
             else if (method == SchurFactorMethod::ViaLittlewoodRichardsonExpansion)
@@ -1077,7 +1082,7 @@ bool SymmetricEngineRing::schurCompatibleFactorsToSchurDispatch(
                             ? expansionCoeff
                             : coefficientRing->mult(cachedInteger(product.coefficient),
                                                     expansionCoeff);
-                        addCoeff(next, product.nu, coeff);
+                        addCoeff(next, product.partition, coeff);
                       }
                   }
               }
@@ -1089,7 +1094,7 @@ bool SymmetricEngineRing::schurCompatibleFactorsToSchurDispatch(
                         ? term.second
                         : coefficientRing->mult(cachedInteger(product.coefficient),
                                                 term.second);
-                    addCoeff(next, product.nu, coeff);
+                    addCoeff(next, product.partition, coeff);
                   }
               }
           }
@@ -1239,7 +1244,7 @@ long SymmetricEngineRing::monomialProductCoefficientViaExponentSplittings(
     return total;
   }
 
-const std::vector<LRProductTerm>& SymmetricEngineRing::monomialProductViaExponentSplittings(
+const std::vector<PartitionCoefficientTerm>& SymmetricEngineRing::monomialProductViaExponentSplittings(
     const Partition& a,
     const Partition& b) const
 {
@@ -1250,7 +1255,7 @@ const std::vector<LRProductTerm>& SymmetricEngineRing::monomialProductViaExponen
     auto cached = monomialProductViaExponentSplittingsCache.find(key);
     if (cached != monomialProductViaExponentSplittingsCache.end()) return cached->second;
 
-    std::vector<LRProductTerm> result;
+    std::vector<PartitionCoefficientTerm> result;
     if (first.empty())
       {
         result.push_back({second, 1});
@@ -1621,10 +1626,7 @@ bool SymmetricEngineRing::tryProductToTarget(ring_elem f,
                           bool targetIsMultiplicative,
                           ring_elem& result) const
 {
-    rememberBasis(targetBasisId,
-                  targetDisplay,
-                  targetDisplayOrder,
-                  targetIsMultiplicative);
+    requireBasis(targetBasisId);
 
     ProductToTargetRoute route = selectProductToTargetRoute(
         f, g, targetBasisId, targetDisplay, targetIsMultiplicative);

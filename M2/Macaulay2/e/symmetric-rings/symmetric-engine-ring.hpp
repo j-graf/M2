@@ -4,6 +4,7 @@
 #define M2_SYMMETRIC_RINGS_SYMMETRIC_ENGINE_RING_HPP_
 
 #include "symmetric-rings/partitions.hpp"
+#include "symmetric-rings/operation-records.hpp"
 #include "symmetric-rings/storage.hpp"
 
 #include "buffer.hpp"
@@ -41,75 +42,20 @@ class SymmetricEngineRing : public Ring
     HallLittlewoodPOmega
   };
 
-  struct SchurCompatibleFactor
+  struct BasisDescriptor
   {
-    enum Kind
-    {
-      General,
-      Horizontal,
-      Vertical,
-      PowerSum,
-      PowerSumAbacus,
-      SchurExpansion
-    };
-    Kind kind;
-    Partition index;
-    CoeffMap expansion;
-    int weight;
-  };
-  enum class SchurFactorMethod
-  {
-    AlreadySchur,
-    ViaLittlewoodRichardson,
-    ViaHorizontalPieri,
-    ViaVerticalPieri,
-    ViaBorderStrips,
-    ViaAbacusRimHooks,
-    ViaLittlewoodRichardsonExpansion
-  };
-  enum class ProductToTargetRoute
-  {
-    ViaSchurCompatibleFactors,
-    ViaMonomialLikeExpansion,
-    ViaHallLittlewoodGenerators,
-    ViaConvertRightFactor,
-    ViaConvertLeftFactor,
-    AlreadyInTarget,
-    NoApplicableRoute
-  };
-  enum class ExpressionToTargetRoute
-  {
-    ViaSchurTriangularReduction,
-    ViaHallLittlewoodTriangularReduction,
-    ViaFactorwiseConversion,
-    NoApplicableRoute
-  };
-  enum class BasisElementToPowerSumsRoute
-  {
-    AlreadyPowerSums,
-    ViaCompleteClassicalFormula,
-    ViaElementaryClassicalFormula,
-    ViaHallLittlewoodGeneratorClassicalFormula,
-    ViaSchurCharacters,
-    ViaSchurOmegaCharacters,
-    ViaMonomialTransition,
-    ViaForgottenTransition,
-    ViaHallLittlewoodRaisingOperators,
-    ViaHallLittlewoodCapitalNormalization,
-    ViaSkewSchurJacobiTrudiComplete,
-    ViaSkewSchurOmegaJacobiTrudiElementary,
-    ViaSkewHallLittlewood,
-    NoApplicableRoute
+    std::string canonicalKey;
+    std::string displaySymbol;
+    int displayOrder;
+    bool multiplicative;
+    BasisKind kind;
   };
 
   const Ring *coefficientRing;
-  mutable std::map<int, std::string> basisDisplays;
-  mutable std::map<int, std::string> basisKeys;
-  mutable std::map<int, int> basisOrders;
-  mutable std::map<int, bool> multiplicativeBases;
-  mutable std::map<int, BasisKind> basisKinds;
+  mutable std::map<int, BasisDescriptor> basisDescriptors;
   mutable std::map<BasisKind, int> basisIdsByKind;
-  mutable int powerSumBasisId = -1;
+
+  // Classical and Hall-Littlewood conversion state.
   mutable GCMap<int, ring_elem> completeToPowerSumsCache;
   mutable GCMap<int, ring_elem> elementaryToPowerSumsCache;
   mutable GCMap<int, ring_elem> hallLittlewoodQGeneratorToPowerSumsCache;
@@ -131,20 +77,24 @@ class SymmetricEngineRing : public Ring
   mutable GCMap<int, CoeffMap> powerSumToBGeneratorMapCache;
   mutable GCMap<int, GCMap<std::string, ring_elem>> monomialToPowerSumCache;
   mutable GCMap<int, GCMap<std::string, ring_elem>> forgottenToPowerSumCache;
+
+  // Schur conversion and product state.
   mutable std::map<std::string, std::vector<SchurConversionRecipeEntry>>
       powerSumsToSchurRecipeCache;
-  mutable std::map<std::string, std::vector<LRProductTerm>> littlewoodRichardsonCoefficientProductCache;
-  mutable std::map<std::pair<Partition, Partition>, std::vector<LRProductTerm>>
+  mutable std::map<std::string, std::vector<PartitionCoefficientTerm>> littlewoodRichardsonCoefficientProductCache;
+  mutable std::map<std::pair<Partition, Partition>, std::vector<PartitionCoefficientTerm>>
       littlewoodRichardsonTableauProductCache;
-  mutable std::map<std::pair<Partition, Partition>, std::vector<LRProductTerm>>
+  mutable std::map<std::pair<Partition, Partition>, std::vector<PartitionCoefficientTerm>>
       skewSchurToSchurViaLittlewoodRichardsonCache;
   mutable std::map<std::pair<Partition, Partition>, long> kostkaNumberCache;
-  mutable std::map<std::pair<Partition, int>, std::vector<LRProductTerm>>
+  mutable std::map<std::pair<Partition, int>, std::vector<PartitionCoefficientTerm>>
       schurTimesPowerSumViaBorderStripsCache;
-  mutable std::map<std::pair<Partition, int>, std::vector<LRProductTerm>>
+  mutable std::map<std::pair<Partition, int>, std::vector<PartitionCoefficientTerm>>
       schurTimesPowerSumViaAbacusRimHooksCache;
-  mutable std::map<std::pair<Partition, Partition>, std::vector<LRProductTerm>>
+  mutable std::map<std::pair<Partition, Partition>, std::vector<PartitionCoefficientTerm>>
       monomialProductViaExponentSplittingsCache;
+
+  // Shared scalar, plethysm, and determinant state.
   mutable GCMap<long, ring_elem> smallIntegerCoeffCache;
   // Cache for Schur plethysm via Adams operations and Jacobi-Trudi.
   mutable GCMap<std::string, ring_elem> schurCompletePlethysmCache;
@@ -157,17 +107,14 @@ class SymmetricEngineRing : public Ring
   // ============================================================================
 
   bool isMultiplicativeBasis(int basisId) const;
-  bool isPowerSumBasis(int basisId) const;
   BasisKind basisKindForId(int basisId) const;
   BasisKind basisKindFromCanonicalKey(const std::string& key) const;
   bool hasBasisKind(int basisId, BasisKind kind) const;
   int basisIdForKind(BasisKind kind) const;
+  int registeredPowerSumBasisId() const;
   int requiredBasisIdForKind(BasisKind kind) const;
   const char *basisKindName(BasisKind kind) const;
-  void rememberBasis(int basisId,
-                       const std::string& display,
-                       int order,
-                       bool isMultiplicative) const;
+  const BasisDescriptor& requireBasis(int basisId) const;
   void rememberBasesFrom(const SymmetricEngineRing *R) const;
   std::string displayForBasis(int basisId) const;
   std::string basisKeyForId(int basisId) const;
@@ -178,21 +125,13 @@ class SymmetricEngineRing : public Ring
   void clearHallLittlewoodCaches() const;
   ring_elem hallLittlewoodFactor(const Partition& mu) const;
   ring_elem basisElementFromIndex(int basisId,
-                                    const std::string& display,
-                                    int order,
-                                    bool isMultiplicative,
                                     const Partition& index) const;
   ring_elem basisElementFromSkewIndex(int basisId,
-                                        const std::string& display,
-                                        int order,
-                                        bool isMultiplicative,
                                         const Partition& outer,
                                         const Partition& inner) const;
-  ring_elem basisPartElement(int basisId,
-                               const std::string& display,
-                               int order,
-                               bool isMultiplicative,
-                               int n) const;
+  ring_elem basisPartElement(int basisId, int n) const;
+
+#include "symmetric-rings/expression-inspection.hpp"
 
   // ============================================================================
   // Topic-Specific Engine Declarations
@@ -229,6 +168,7 @@ class SymmetricEngineRing : public Ring
   ring_elem fromAccumulator(
         const GCMap<std::vector<int>, ring_elem>& accumulator) const;
   bool promoteInputElement(const RingElement *input, ring_elem &result) const;
+  CombinatorialTags selectMultiplicationTags(ring_elem f, ring_elem g) const;
 
  public:
   // ============================================================================
@@ -246,21 +186,10 @@ class SymmetricEngineRing : public Ring
   bool setHallLittlewoodParameter(const RingElement *t) const;
   ring_elem fromCoeff(ring_elem coeff) const;
   ring_elem basisElement(int basisId,
-                           const std::string& display,
-                           int order,
-                           bool isMultiplicative,
                            int innerLength,
                            M2_arrayint index) const;
   bool getScalar(const SymmetricRingPoly *f, ring_elem &result) const;
-  bool hasPowerSumConversionHook(const SymmetricMonomial& monomial, size_t pos) const;
-  std::string displayIndex(const SymmetricMonomial& monomial, size_t pos) const;
-  std::string displayBasisElement(const SymmetricMonomial& monomial, size_t pos) const;
-  std::string displayMonomial(const SymmetricMonomial& monomial) const;
-  int compareBasisIdsForPresentation(int aBasis, int bBasis) const;
-  std::vector<size_t> presentationAtomPositions(const SymmetricMonomial& monomial) const;
-  std::vector<int> presentationMonomialData(const SymmetricMonomial& monomial) const;
-  std::vector<size_t> presentationTermOrder(ring_elem f) const;
-  std::string elementString(ring_elem f, int maxTerms = -1) const;
+#include "symmetric-rings/presentation.hpp"
   int elementWeight(ring_elem f) const;
   virtual unsigned int computeHashValue(const ring_elem a) const;
   virtual void text_out(buffer &o) const;

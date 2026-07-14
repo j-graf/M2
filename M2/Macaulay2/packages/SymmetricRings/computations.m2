@@ -12,7 +12,6 @@ straighten = method()
 -- Applies engine straightening rules to a symmetric function.
 straighten SymmetricRingElement := f -> (
     R0 := ring f;
-    rememberRingBasisData R0;
     userSymmetricElement(R0, rawSymmetricRingsStraighten raw f)
     )
 
@@ -48,7 +47,7 @@ jacobiTrudiInBasis = (basisKeyString, lambda, mu) -> (
     m := (B#"IndexNormalizer") mu;
     if not (B#"IndexValidator") l then error("invalid outer index for basis ", B#"BasisSymbol");
     if not (B#"IndexValidator") m then error("invalid inner index for basis ", B#"BasisSymbol");
-    userSymmetricElement(R0, rawSymmetricRingsJacobiTrudi(raw R0, B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex", l, m))
+    userSymmetricElement(R0, rawSymmetricRingsJacobiTrudi(raw R0, B#"BasisId", l, m))
     )
 
 -- Public method for Schur/skew Schur Jacobi-Trudi in the h basis.
@@ -69,17 +68,17 @@ eJacobiTrudi List := lambda -> eJacobiTrudi(lambda, {})
 -- Computes skew e-Jacobi-Trudi.
 eJacobiTrudi(List, List) := (lambda, mu) -> jacobiTrudiInBasis("Elementary", lambda, mu)
 
+-- ============================================================================
+-- Engine And Metadata-Driven Conversion Boundaries
+-- ============================================================================
+
 -- Asks the C++ engine to convert between built-in bases.
 -- This path assumes the engine understands the source atoms. Callers must route
 -- elements containing M2-level ToPowerSums hooks through elementToPowerSumsM2
 -- before asking the engine for a final target basis.
 engineToBasis = (F, B) -> (
     R0 := ring F;
-    P := basis(R0, p);
-    userSymmetricElement(R0, rawSymmetricRingsToBasis(
-        raw F,
-        P#"BasisId", P#"BasisSymbol", P#"DisplayOrder", P#"MultiplicativeIndex",
-        B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex"))
+    userSymmetricElement(R0, rawSymmetricRingsToBasis(raw F, B#"BasisId"))
     )
 
 -- Tests whether an atom needs an M2-level ToPowerSums hook.
@@ -142,6 +141,10 @@ targetBasisOnRing = (R0, target) -> (
         )
     else basis(R0, target)
     )
+
+-- ============================================================================
+-- Constant-QQ Working-Ring Transport
+-- ============================================================================
 
 -- A cached QQ shadow ring lets coefficient-independent algorithms run over QQ
 -- when all input coefficients are rational constants, then promote back.
@@ -300,13 +303,15 @@ tryConstantQQOperation = (R0, inputs, compute) -> (
     if resultQQ === null then null else returnFromConstantQQ(resultQQ, R0)
     )
 
+-- ============================================================================
+-- Conversion And Product Policy
+-- ============================================================================
+
 -- Fallback conversion route: convert the whole element through the standard
 -- basis-conversion machinery without product-aware M2 dispatch.
 toBasisFallback(SymmetricRingElement, Thing) := (f, target) -> (
     R0 := ring f;
-    rememberRingBasisData R0;
     B := targetBasisOnRing(R0, target);
-    P := basis(R0, p);
     if needsM2PowerSumConversion f then (
         FP := elementToPowerSumsM2 f;
         if B#"BasisId" == P#"BasisId" then return FP;
@@ -326,15 +331,11 @@ multiplyToBasis = method()
 multiplyToBasis(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, target) -> (
     R0 := ring f;
     if ring g =!= R0 then error "expected elements in the same symmetric ring";
-    rememberRingBasisData R0;
     B := targetBasisOnRing(R0, target);
     P := basis(R0, p);
     if needsM2PowerSumConversion f or needsM2PowerSumConversion g or B#"FromPowerSums" =!= null then return toBasisFallback(f*g, B);
     userSymmetricElement(R0, rawSymmetricRingsProductToBasisDispatch(
-        raw f,
-        raw g,
-        P#"BasisId", P#"BasisSymbol", P#"DisplayOrder", P#"MultiplicativeIndex",
-        B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex"))
+        raw f, raw g, B#"BasisId"))
     )
 
 tryConstantQQBasisConversion = (R0, f, B) -> tryConstantQQOperation(R0, {f}, (Rqq, inputsQQ) -> (
@@ -377,7 +378,6 @@ preferConstantQQForOrdinaryToPowerSums = (R0, f, B) -> (
 -- choice; other inputs remain native-first and use it only after native failure.
 toBasis(SymmetricRingElement, Thing) := (f, target) -> (
     R0 := ring f;
-    rememberRingBasisData R0;
     B := targetBasisOnRing(R0, target);
     preferConstantQQ := coefficientRing R0 =!= QQ and
         (hasPlethysmConversionProvenance f or
@@ -395,17 +395,15 @@ toBasis(SymmetricRingElement, Thing) := (f, target) -> (
     toBasisFallback(f, B)
     )
 
+-- ============================================================================
+-- Named Conversion Shortcuts
+-- ============================================================================
+
 -- Shortcut methods for conversion to the Schur basis.
 toS = method()
 
 -- Converts to Schur functions through the ordinary basis-conversion entry point.
 toS SymmetricRingElement := f -> toBasis(f, S)
-
-multiplyToS = method()
-
-multiplyToS(SymmetricRingElement, SymmetricRingElement) := (f, g) -> (
-    multiplyToBasis(f, g, S)
-    )
 
 -- Shortcut method for conversion to the h basis.
 toH = method()
@@ -630,24 +628,15 @@ plethysm = method()
 plethysm(SymmetricRingElement, SymmetricRingElement) := (f, g) -> (
     if ring f =!= ring g then error "expected elements in the same symmetric ring";
     R0 := ring f;
-    rememberRingBasisData R0;
-    P := basis(R0, p);
-    userSymmetricElement(R0, rawSymmetricRingsPlethysm(
-        raw f,
-        raw g,
-        P#"BasisId", P#"BasisSymbol", P#"DisplayOrder", P#"MultiplicativeIndex"))
+    userSymmetricElement(R0, rawSymmetricRingsPlethysm(raw f, raw g))
     )
 
 -- Computes plethysm and converts to a target basis using the combined engine
 -- path.  This keeps the hot @ path out of M2 when no M2 conversion hooks apply.
 plethysmToBasisDispatch = (f, g, B) -> (
     R0 := ring f;
-    P := basis(R0, p);
     userSymmetricElement(R0, rawSymmetricRingsPlethysmToBasis(
-        raw f,
-        raw g,
-        P#"BasisId", P#"BasisSymbol", P#"DisplayOrder", P#"MultiplicativeIndex",
-        B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex"))
+        raw f, raw g, B#"BasisId"))
     )
 
 -- Chooses the output basis for @.  Return null to leave the p-basis plethysm
@@ -657,7 +646,6 @@ plethysmToBasisDispatch = (f, g, B) -> (
 selectPlethysmOutputBasis = (f, g) -> (
     if ring f =!= ring g then error "expected elements in the same symmetric ring";
     R0 := ring f;
-    rememberRingBasisData R0;
     basisId := rawSymmetricRingsSingleBasisId raw f;
     if basisId <= 0 then null else basisWithId(R0, basisId)
     )
@@ -705,7 +693,6 @@ omegaInvolution = args -> (
     if not instance(f, SymmetricRingElement) then error "expected a symmetric function";
     opts := parseStringOptions(omegaInvolutionOptionDefaults, drop(L, 1), "omegaInvolution");
     R0 := ring f;
-    rememberRingBasisData R0;
     useSomega := opts#"useSomega";
     if class useSomega =!= Boolean then error "expected Boolean value for option \"useSomega\"";
     userSymmetricElement(R0, rawSymmetricRingsOmega(raw f, omegaMapData R0, useSomega))
@@ -851,7 +838,6 @@ basisCoefficient(SymmetricRingElement, SymmetricRingElement) := (F, target) -> (
     targetBasis := basisWithId(R0, targetBasisElement#"BasisId");
     targetIsBuiltIn := any(builtinSymmetricBases,
         B0 -> B0#"BasisId" == targetBasis#"BasisId");
-    rememberRingBasisData R0;
     if usesOnlyEngineReadableBases F and targetIsBuiltIn then
         return new A from rawSymmetricRingsBasisCoefficient(raw F, raw target);
     expanded := toBasis(F, targetBasis);
@@ -918,7 +904,6 @@ hallInnerProduct = args -> (
     G := prepared#1;
     contextName := prepared#2;
     R0 := ring F;
-    rememberRingBasisData R0;
     if usesOnlyEngineReadableBases F and usesOnlyEngineReadableBases G then (
         engineResult := engineHallInnerProduct(F, G, contextName);
         if engineResult =!= null then return engineResult;

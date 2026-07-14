@@ -8,6 +8,10 @@
 
 namespace symmetric_rings {
 
+// ============================================================================
+// Basic Partition Operations
+// ============================================================================
+
 std::string partitionKey(const Partition& p)
 {
   std::ostringstream out;
@@ -41,6 +45,23 @@ int partitionLength(const Partition& p)
   for (int part : p)
     if (part > 0) ++result;
   return result;
+}
+
+bool isPartitionIndex(const Partition& p)
+{
+  return trimTrailingZerosPartition(p) == normalizePartition(p);
+}
+
+int partitionPart(const Partition& p, size_t i)
+{
+  return i < p.size() ? p[i] : 0;
+}
+
+bool partitionContains(const Partition& outer, const Partition& inner)
+{
+  for (size_t i = 0; i < inner.size(); ++i)
+    if (partitionPart(outer, i) < inner[i]) return false;
+  return true;
 }
 
 bool lexLessPartition(const Partition& a, const Partition& b)
@@ -108,6 +129,10 @@ std::pair<int, Partition> straightenSchurIndex(const Partition& alpha)
     beta.push_back(sortedShifted[i] - static_cast<int>(ell - 1 - i));
   return {(inversions % 2 == 0) ? 1 : -1, trimTrailingZerosPartition(beta)};
 }
+
+// ============================================================================
+// Enumeration And Power-Sum Statistics
+// ============================================================================
 
 void partitionsRec(int n, int maxPart, Partition& current, std::vector<Partition>& result)
 {
@@ -187,6 +212,11 @@ long zValue(const Partition& lambda)
   return result;
 }
 
+// ============================================================================
+// Rim Hooks And Character Recursion
+// ============================================================================
+// Rim-hook removal validates connectivity and the absence of a two-by-two block.
+
 bool isPartitionAfterRemoval(const Partition& lambda, const std::vector<int>& removed)
 {
   int previous = -1;
@@ -208,15 +238,6 @@ Partition remainingPartition(const Partition& lambda, const std::vector<int>& re
       int remaining = lambda[i] - removed[i];
       if (remaining > 0) result.push_back(remaining);
     }
-  return result;
-}
-
-Partition partitionFromM2Array(M2_arrayint a)
-{
-  Partition result;
-  if (a == nullptr) return result;
-  result.reserve(a->len);
-  for (int i = 0; i < a->len; ++i) result.push_back(a->array[i]);
   return result;
 }
 

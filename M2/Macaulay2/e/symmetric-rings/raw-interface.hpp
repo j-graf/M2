@@ -7,6 +7,8 @@
 
 namespace symmetric_rings {
 
+// Ring, basis, and arithmetic interface.
+
 const Ring *rawSymmetricRing(const Ring *A);
 bool rawSymmetricRingsSetHallLittlewoodParameter(const Ring *R,
                                                  const RingElement *t);
@@ -18,9 +20,6 @@ bool rawSymmetricRingsRememberBasis(const Ring *R,
                                     bool isMultiplicative);
 const RingElement *rawSymmetricRingsBasisElement(const Ring *R,
                                                 int basisId,
-                                                M2_string displaySymbol,
-                                                int displayOrder,
-                                                bool isMultiplicative,
                                                 int innerLength,
                                                 M2_arrayint index);
 const RingElement *rawSymmetricRingsSum(const Ring *R,
@@ -33,51 +32,26 @@ const RingElement *rawSymmetricRingsProduct(const Ring *R,
                                             engine_RawRingElementArray elements);
 const RingElement *rawSymmetricRingsJacobiTrudi(const Ring *R,
                                                 int basisId,
-                                                M2_string displaySymbol,
-                                                int displayOrder,
-                                                bool isMultiplicative,
                                                 M2_arrayint outer,
                                                 M2_arrayint inner);
+// Conversion, product, and plethysm interface.
 const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
-                                            int powerSumBasisId,
-                                            M2_string powerSumDisplaySymbol,
-                                            int powerSumDisplayOrder,
-                                            bool powerSumIsMultiplicative,
-                                            int targetBasisId,
-                                            M2_string targetDisplaySymbol,
-                                            int targetDisplayOrder,
-                                            bool targetIsMultiplicative);
+                                            int targetBasisId);
 const RingElement *rawSymmetricRingsProductToBasisDispatch(
     const RingElement *f,
     const RingElement *g,
-    int powerSumBasisId,
-    M2_string powerSumDisplaySymbol,
-    int powerSumDisplayOrder,
-    bool powerSumIsMultiplicative,
-    int targetBasisId,
-    M2_string targetDisplaySymbol,
-    int targetDisplayOrder,
-    bool targetIsMultiplicative);
+    int targetBasisId);
 const RingElement *rawSymmetricRingsPlethysm(const RingElement *f,
-                                             const RingElement *g,
-                                             int powerSumBasisId,
-                                             M2_string powerSumDisplaySymbol,
-                                             int powerSumDisplayOrder,
-                                             bool powerSumIsMultiplicative);
+                                             const RingElement *g);
 const RingElement *rawSymmetricRingsPlethysmToBasis(const RingElement *f,
                                                     const RingElement *g,
-                                                    int powerSumBasisId,
-                                                    M2_string powerSumDisplaySymbol,
-                                                    int powerSumDisplayOrder,
-                                                    bool powerSumIsMultiplicative,
-                                                    int targetBasisId,
-                                                    M2_string targetDisplaySymbol,
-                                                    int targetDisplayOrder,
-                                                    bool targetIsMultiplicative);
+                                                    int targetBasisId);
+// Conversion metadata interface.
 int rawSymmetricRingsSingleBasisId(const RingElement *f);
 bool rawSymmetricRingsHasPlethysmProvenance(const RingElement *f);
 bool rawSymmetricRingsCopyConversionMetadata(const RingElement *source,
                                              const RingElement *target);
+// Omega, straightening, and pairing interface.
 const RingElement *rawSymmetricRingsOmega(const RingElement *f,
                                           M2_arrayint omegaMap,
                                           bool useSomega);
@@ -89,6 +63,7 @@ const RingElement *rawSymmetricRingsHallInnerProduct(const RingElement *f,
 const RingElement *rawSymmetricRingsBasisCoefficient(
     const RingElement *f,
     const RingElement *targetBasisElement);
+// Term and presentation introspection.
 int rawSymmetricRingsTermCount(const RingElement *f);
 const RingElement *rawSymmetricRingsTermCoefficient(const RingElement *f, int i);
 M2_arrayint rawSymmetricRingsTermMonomial(const RingElement *f, int i);
@@ -97,8 +72,6 @@ M2_arrayint rawSymmetricRingsPresentationTermIndices(const RingElement *f,
 M2_arrayint rawSymmetricRingsPresentationTermMonomial(const RingElement *f,
                                                       int i);
 M2_string rawSymmetricRingsElementToString(const RingElement *f);
-M2_string rawSymmetricRingsElementToStringLimited(const RingElement *f,
-                                                  int maxTerms);
 int rawSymmetricRingsElementWeight(const RingElement *f);
 
 } // namespace symmetric_rings

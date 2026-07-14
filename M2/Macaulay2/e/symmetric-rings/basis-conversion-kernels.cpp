@@ -189,30 +189,6 @@ CoeffMap SymmetricEngineRing::oneCoeffMap() const
     return CoeffMap{{Partition{}, coefficientRing->one()}};
   }
 
-bool SymmetricEngineRing::isPartitionIndex(const Partition& p) const
-{
-    return trimTrailingZerosPartition(p) == normalizePartition(p);
-  }
-
-int SymmetricEngineRing::partitionPart(const Partition& p, size_t i) const
-{
-    return i < p.size() ? p[i] : 0;
-  }
-
-bool SymmetricEngineRing::partitionContains(const Partition& outer, const Partition& inner) const
-{
-    for (size_t i = 0; i < inner.size(); ++i)
-      if (partitionPart(outer, i) < inner[i]) return false;
-    return true;
-  }
-
-std::string SymmetricEngineRing::littlewoodRichardsonProductCacheKey(const Partition& lambda, const Partition& mu) const
-{
-    if (lexLessPartition(mu, lambda))
-      return partitionKey(mu) + "*" + partitionKey(lambda);
-    return partitionKey(lambda) + "*" + partitionKey(mu);
-  }
-
 ring_elem SymmetricEngineRing::cachedInteger(long n) const
 {
     auto found = smallIntegerCoeffCache.find(n);
@@ -234,10 +210,7 @@ ring_elem SymmetricEngineRing::coeffMapToElement(const CoeffMap& H,
                               int targetDisplayOrder,
                               bool targetIsMultiplicative) const
 {
-    rememberBasis(targetBasisId,
-                  targetDisplay,
-                  targetDisplayOrder,
-                  targetIsMultiplicative);
+    requireBasis(targetBasisId);
     VECTOR(SymmetricTerm) terms;
     terms.reserve(H.size());
     for (const auto& item : H)
@@ -260,11 +233,7 @@ ring_elem SymmetricEngineRing::basisElementForKind(BasisKind kind,
 {
     int id = requiredBasisIdForKind(kind);
     if (error()) return zero();
-    return basisElementFromIndex(id,
-                                 displayForBasis(id),
-                                 basisOrderForId(id),
-                                 isMultiplicativeBasis(id),
-                                 index);
+    return basisElementFromIndex(id, index);
   }
 
 ring_elem SymmetricEngineRing::replaceSingleBasis(ring_elem f,
@@ -362,11 +331,7 @@ ring_elem SymmetricEngineRing::powerSumElementFromIndex(const Partition& index) 
 {
     Partition normalized = normalizePartition(index);
     if (normalized.empty()) return one();
-    return basisElementFromIndex(powerSumBasisId,
-                                 displayForBasis(powerSumBasisId),
-                                 basisOrderForId(powerSumBasisId),
-                                 true,
-                                 normalized);
+    return basisElementFromIndex(registeredPowerSumBasisId(), normalized);
   }
 
 // ============================================================================
@@ -403,12 +368,9 @@ int SymmetricEngineRing::selectedGreaterThan(size_t mask, size_t col, size_t n) 
 
 ring_elem SymmetricEngineRing::jacobiTrudi(const Partition& outer,
                         const Partition& inner,
-                        int basisId,
-                        const std::string& display,
-                        int order,
-                        bool isMultiplicative) const
+                        int basisId) const
 {
-    rememberBasis(basisId, display, order, isMultiplicative);
+    requireBasis(basisId);
     auto& cache = basisKindForId(basisId) == BasisKind::Elementary
                       ? eJacobiTrudiCache : hJacobiTrudiCache;
     std::string cacheKey = jacobiTrudiCacheKey(basisId, outer, inner);
@@ -431,11 +393,7 @@ ring_elem SymmetricEngineRing::jacobiTrudi(const Partition& outer,
           {
             int muJ = j < inner.size() ? inner[j] : 0;
             int degree = lambdaI - muJ - static_cast<int>(i) + static_cast<int>(j);
-            matrix[i][j] = basisPartElement(basisId,
-                                            display,
-                                            order,
-                                            isMultiplicative,
-                                            degree);
+            matrix[i][j] = basisPartElement(basisId, degree);
           }
       }
 
@@ -468,13 +426,10 @@ ring_elem SymmetricEngineRing::jacobiTrudi(const Partition& outer,
   }
 
 ring_elem SymmetricEngineRing::jacobiTrudiBasis(int basisId,
-                             const std::string& display,
-                             int order,
-                             bool isMultiplicative,
                              const Partition& outer,
                              const Partition& inner) const
 {
-    return jacobiTrudi(outer, inner, basisId, display, order, isMultiplicative);
+    return jacobiTrudi(outer, inner, basisId);
   }
 
 // ============================================================================
@@ -496,9 +451,9 @@ ring_elem SymmetricEngineRing::completePartToPowerSumsViaClassicalFormula(int n)
       }
     ring_elem result = coeffMapToElement(
         coefficients,
-        powerSumBasisId,
-        displayForBasis(powerSumBasisId),
-        basisOrderForId(powerSumBasisId),
+        registeredPowerSumBasisId(),
+        displayForBasis(registeredPowerSumBasisId()),
+        basisOrderForId(registeredPowerSumBasisId()),
         true);
     completeToPowerSumsCache[n] = result;
     return copyPolyValue(polyValue(result));
@@ -519,9 +474,9 @@ ring_elem SymmetricEngineRing::elementaryPartToPowerSumsViaClassicalFormula(int 
       }
     ring_elem result = coeffMapToElement(
         coefficients,
-        powerSumBasisId,
-        displayForBasis(powerSumBasisId),
-        basisOrderForId(powerSumBasisId),
+        registeredPowerSumBasisId(),
+        displayForBasis(registeredPowerSumBasisId()),
+        basisOrderForId(registeredPowerSumBasisId()),
         true);
     elementaryToPowerSumsCache[n] = result;
     return copyPolyValue(polyValue(result));
@@ -817,8 +772,8 @@ ring_elem SymmetricEngineRing::completeToSchurViaRecursiveTransition(ring_elem f
                                 const std::string& schurDisplay,
                                 int schurOrder) const
 {
-    rememberBasis(hBasisId, hDisplay, hOrder, hIsMultiplicative);
-    rememberBasis(schurId, schurDisplay, schurOrder, false);
+    requireBasis(hBasisId);
+    requireBasis(schurId);
 
     CoeffMap hCoeffs = coefficientsInBasis(f, hBasisId);
     if (error()) return zero();
@@ -886,9 +841,9 @@ ring_elem SymmetricEngineRing::schurLikeToPowerSumsViaCharacters(
           }
       }
     return coeffMapToElement(coefficients,
-                             powerSumBasisId,
-                             displayForBasis(powerSumBasisId),
-                             basisOrderForId(powerSumBasisId),
+                             registeredPowerSumBasisId(),
+                             displayForBasis(registeredPowerSumBasisId()),
+                             basisOrderForId(registeredPowerSumBasisId()),
                              true);
   }
 
@@ -909,7 +864,7 @@ ring_elem SymmetricEngineRing::powerSumIndexToSchurLikeViaCharacters(const Parti
           {
             int chi = characterValue(lambda, mu);
             if (chi == 0) continue;
-            ring_elem term = basisElementFromIndex(schurId, display, schurOrder, false, lambda);
+            ring_elem term = basisElementFromIndex(schurId, lambda);
             result = add(result, scaled(coefficientRing->from_long(sign * chi), term));
           }
       }
@@ -920,11 +875,8 @@ ring_elem SymmetricEngineRing::powerSumIndexToSchurLikeViaCharacters(const Parti
           {
             int chi = characterTableValue(table, row, col);
             if (chi == 0) continue;
-            ring_elem term = basisElementFromIndex(schurId,
-                                                   display,
-                                                   schurOrder,
-                                                   false,
-                                                   table.partitions[row]);
+            ring_elem term =
+                basisElementFromIndex(schurId, table.partitions[row]);
             result = add(result, scaled(coefficientRing->from_long(sign * chi), term));
           }
       }
@@ -1005,12 +957,7 @@ CoeffMap SymmetricEngineRing::schurGeneratorMap(const Partition& lambda,
                              int generatorId,
                              const std::string& generatorDisplay) const
 {
-    ring_elem expansion = jacobiTrudi(lambda,
-                                      Partition{},
-                                      generatorId,
-                                      generatorDisplay,
-                                      basisOrderForId(generatorId),
-                                      isMultiplicativeBasis(generatorId));
+    ring_elem expansion = jacobiTrudi(lambda, Partition{}, generatorId);
     if (error()) return CoeffMap{};
     return coefficientsInBasis(expansion, generatorId);
   }
@@ -1145,7 +1092,7 @@ CoeffMap SymmetricEngineRing::multiplyMonomialCoeffMaps(const CoeffMap& a,
                   ? baseCoeff
                   : coefficientRing->mult(cachedInteger(product.coefficient),
                                           baseCoeff);
-              addCoeff(result, product.nu, coeff);
+              addCoeff(result, product.partition, coeff);
             }
         }
     return result;
@@ -1206,9 +1153,9 @@ ring_elem SymmetricEngineRing::monomialToPowerSumsViaTransitionMatrix(const Part
             }
         ring_elem result = coeffMapToElement(
             coefficients,
-            powerSumBasisId,
-            displayForBasis(powerSumBasisId),
-            basisOrderForId(powerSumBasisId),
+            registeredPowerSumBasisId(),
+            displayForBasis(registeredPowerSumBasisId()),
+            basisOrderForId(registeredPowerSumBasisId()),
             true);
         degreeCache[cacheKey] = result;
         monomialResult = copyPolyValue(polyValue(result));
@@ -1230,11 +1177,7 @@ ring_elem SymmetricEngineRing::powerSumIndexToMonomialViaTransitionMatrix(const 
         long count = pToMonomialCoefficient(lambda, mu);
         if (count == 0) continue;
         ring_elem coeff = coefficientRing->from_long(forgotten ? sign * count : count);
-        ring_elem term = basisElementFromIndex(targetBasisId,
-                                               targetDisplay,
-                                               targetDisplayOrder,
-                                               false,
-                                               mu);
+        ring_elem term = basisElementFromIndex(targetBasisId, mu);
         result = add(result, scaled(coeff, term));
       }
     return result;
@@ -1263,9 +1206,9 @@ ring_elem SymmetricEngineRing::hallLittlewoodGeneratorPartToPowerSumsViaClassica
       }
     ring_elem result = coeffMapToElement(
         coefficients,
-        powerSumBasisId,
-        displayForBasis(powerSumBasisId),
-        basisOrderForId(powerSumBasisId),
+        registeredPowerSumBasisId(),
+        displayForBasis(registeredPowerSumBasisId()),
+        basisOrderForId(registeredPowerSumBasisId()),
         true);
     cache[n] = result;
     return copyPolyValue(polyValue(result));
@@ -1525,9 +1468,9 @@ ring_elem SymmetricEngineRing::hallLittlewoodCapitalToPowerSumsViaRaisingOperato
       item.second = coefficientRing->mult(item.second,
                                           hallLittlewoodFactor(item.first));
     return coeffMapToElement(result,
-                             powerSumBasisId,
-                             displayForBasis(powerSumBasisId),
-                             basisOrderForId(powerSumBasisId),
+                             registeredPowerSumBasisId(),
+                             displayForBasis(registeredPowerSumBasisId()),
+                             basisOrderForId(registeredPowerSumBasisId()),
                              true);
   }
 
@@ -1602,11 +1545,7 @@ ring_elem SymmetricEngineRing::skewQOrBFunction(
             lambdaTerm, test, InnerProductKind::HallLittlewood);
         if (error()) return zero();
         if (coefficientRing->is_zero(coeff)) continue;
-        ring_elem term = basisElementFromIndex(targetId,
-                                               targetDisplay,
-                                               basisOrderForId(targetId),
-                                               isMultiplicativeBasis(targetId),
-                                               nu);
+        ring_elem term = basisElementFromIndex(targetId, nu);
         result = add(result, scaled(coeff, term));
       }
     return result;
@@ -1619,23 +1558,11 @@ ring_elem SymmetricEngineRing::skewPOrPOmegaToPowerSums(
 {
     ring_elem skewCapital = skewQOrBFunction(lambda, mu, omega);
     if (error()) return zero();
-    int pId = requiredBasisIdForKind(BasisKind::PowerSum);
     const BasisKind capitalKind = omega ? BasisKind::HallLittlewoodB
                                         : BasisKind::HallLittlewoodQ;
     int capitalId = requiredBasisIdForKind(capitalKind);
     if (error()) return zero();
-    const std::string pDisplay = displayForBasis(pId);
-    const std::string capitalDisplay = displayForBasis(capitalId);
-
-    ring_elem inCapital = toBasis(skewCapital,
-                                  pId,
-                                  pDisplay,
-                                  basisOrderForId(pId),
-                                  isMultiplicativeBasis(pId),
-                                  capitalId,
-                                  capitalDisplay,
-                                  basisOrderForId(capitalId),
-                                  isMultiplicativeBasis(capitalId));
+    ring_elem inCapital = toBasis(skewCapital, capitalId);
     if (error()) return zero();
     const BasisKind normalizedKind = omega ? BasisKind::HallLittlewoodPOmega
                                            : BasisKind::HallLittlewoodP;
@@ -1980,229 +1907,9 @@ bool SymmetricEngineRing::tryExpressionToHallLittlewoodViaTriangularReduction(ri
   }
 
 // ============================================================================
-// Generic Basis-Element Conversion
+// Termwise Conversion Kernels
 // ============================================================================
-// Per-basis-element conversion feeds monomial, expression, and termwise fallback routes.
-
-SymmetricEngineRing::BasisElementToPowerSumsRoute
-SymmetricEngineRing::selectBasisElementToPowerSumsRoute(
-    const SymmetricMonomial& monomial,
-    size_t pos) const
-{
-    BasisKind kind = basisKindForId(atomBasisIdAt(monomial, pos));
-    if (atomIsSkewAt(monomial, pos))
-      {
-        switch (kind)
-          {
-            case BasisKind::Schur:
-              return BasisElementToPowerSumsRoute::ViaSkewSchurJacobiTrudiComplete;
-            case BasisKind::SchurOmega:
-              return BasisElementToPowerSumsRoute::ViaSkewSchurOmegaJacobiTrudiElementary;
-            case BasisKind::HallLittlewoodQ:
-            case BasisKind::HallLittlewoodB:
-            case BasisKind::HallLittlewoodP:
-            case BasisKind::HallLittlewoodPOmega:
-              return BasisElementToPowerSumsRoute::ViaSkewHallLittlewood;
-            case BasisKind::Custom:
-            case BasisKind::PowerSum:
-            case BasisKind::Complete:
-            case BasisKind::Elementary:
-            case BasisKind::Monomial:
-            case BasisKind::Forgotten:
-            case BasisKind::HallLittlewoodQGenerator:
-            case BasisKind::HallLittlewoodBGenerator:
-              return BasisElementToPowerSumsRoute::NoApplicableRoute;
-          }
-      }
-    switch (kind)
-      {
-        case BasisKind::PowerSum:
-          return BasisElementToPowerSumsRoute::AlreadyPowerSums;
-        case BasisKind::Complete:
-          return BasisElementToPowerSumsRoute::ViaCompleteClassicalFormula;
-        case BasisKind::Elementary:
-          return BasisElementToPowerSumsRoute::ViaElementaryClassicalFormula;
-        case BasisKind::HallLittlewoodQGenerator:
-        case BasisKind::HallLittlewoodBGenerator:
-          return BasisElementToPowerSumsRoute::ViaHallLittlewoodGeneratorClassicalFormula;
-        case BasisKind::Schur:
-          return BasisElementToPowerSumsRoute::ViaSchurCharacters;
-        case BasisKind::SchurOmega:
-          return BasisElementToPowerSumsRoute::ViaSchurOmegaCharacters;
-        case BasisKind::Monomial:
-          return BasisElementToPowerSumsRoute::ViaMonomialTransition;
-        case BasisKind::Forgotten:
-          return BasisElementToPowerSumsRoute::ViaForgottenTransition;
-        case BasisKind::HallLittlewoodQ:
-        case BasisKind::HallLittlewoodB:
-          return BasisElementToPowerSumsRoute::ViaHallLittlewoodRaisingOperators;
-        case BasisKind::HallLittlewoodP:
-        case BasisKind::HallLittlewoodPOmega:
-          return BasisElementToPowerSumsRoute::ViaHallLittlewoodCapitalNormalization;
-        case BasisKind::Custom:
-          return BasisElementToPowerSumsRoute::NoApplicableRoute;
-      }
-    return BasisElementToPowerSumsRoute::NoApplicableRoute;
-  }
-
-const char *SymmetricEngineRing::basisElementToPowerSumsRouteName(
-    BasisElementToPowerSumsRoute route) const
-{
-    switch (route)
-      {
-        case BasisElementToPowerSumsRoute::AlreadyPowerSums: return "p:identity";
-        case BasisElementToPowerSumsRoute::ViaCompleteClassicalFormula: return "h->p:classical-formula";
-        case BasisElementToPowerSumsRoute::ViaElementaryClassicalFormula: return "e->p:classical-formula";
-        case BasisElementToPowerSumsRoute::ViaHallLittlewoodGeneratorClassicalFormula: return "q/b->p:classical-formula";
-        case BasisElementToPowerSumsRoute::ViaSchurCharacters: return "S->p:characters";
-        case BasisElementToPowerSumsRoute::ViaSchurOmegaCharacters: return "Somega->p:characters";
-        case BasisElementToPowerSumsRoute::ViaMonomialTransition: return "m->p:transition";
-        case BasisElementToPowerSumsRoute::ViaForgottenTransition: return "ff->p:transition";
-        case BasisElementToPowerSumsRoute::ViaHallLittlewoodRaisingOperators: return "Q/B->p:raising-operators";
-        case BasisElementToPowerSumsRoute::ViaHallLittlewoodCapitalNormalization: return "P/Pomega->Q/B->p";
-        case BasisElementToPowerSumsRoute::ViaSkewSchurJacobiTrudiComplete: return "skew-S->h->p:Jacobi-Trudi";
-        case BasisElementToPowerSumsRoute::ViaSkewSchurOmegaJacobiTrudiElementary: return "skew-Somega->e->p:Jacobi-Trudi";
-        case BasisElementToPowerSumsRoute::ViaSkewHallLittlewood: return "skew-Hall-Littlewood->p";
-        case BasisElementToPowerSumsRoute::NoApplicableRoute: return "not-applicable";
-      }
-    return "unknown";
-  }
-
-void SymmetricEngineRing::traceBasisElementToPowerSumsSelection(
-    BasisElementToPowerSumsRoute route,
-    const std::string& sourceDisplay) const
-{
-    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
-    std::fprintf(stderr,
-                 "SymmetricRings basis-element-to-power-sums: source=%s route=%s\n",
-                 sourceDisplay.c_str(),
-                 basisElementToPowerSumsRouteName(route));
-  }
-
-ring_elem SymmetricEngineRing::executeBasisElementToPowerSumsRoute(
-    BasisElementToPowerSumsRoute route,
-    const SymmetricMonomial& monomial,
-    size_t pos) const
-{
-    std::string display = displayForBasis(atomBasisIdAt(monomial, pos));
-    if (route == BasisElementToPowerSumsRoute::ViaSkewSchurJacobiTrudiComplete ||
-        route == BasisElementToPowerSumsRoute::ViaSkewSchurOmegaJacobiTrudiElementary)
-      {
-        BasisKind generatorKind =
-            route == BasisElementToPowerSumsRoute::ViaSkewSchurJacobiTrudiComplete
-                ? BasisKind::Complete : BasisKind::Elementary;
-        int generatorId = requiredBasisIdForKind(generatorKind);
-        if (error()) return zero();
-        std::string generatorDisplay = displayForBasis(generatorId);
-        return expressionToPowerSumsViaBasisElementRoutes(
-            jacobiTrudi(basisElementOuterIndex(monomial, pos),
-                        basisElementInnerIndex(monomial, pos),
-                        generatorId,
-                        generatorDisplay,
-                        basisOrderForId(generatorId),
-                        isMultiplicativeBasis(generatorId)));
-      }
-    if (route == BasisElementToPowerSumsRoute::ViaSkewHallLittlewood)
-      return skewHallLittlewoodToPowerSums(
-                                           basisElementOuterIndex(monomial, pos),
-                                           basisElementInnerIndex(monomial, pos),
-                                           basisKindForId(
-                                               atomBasisIdAt(monomial, pos)));
-
-    Partition index = basisElementIndex(monomial, pos);
-    if (route == BasisElementToPowerSumsRoute::AlreadyPowerSums)
-      return basisElementFromIndex(powerSumBasisId,
-                                   displayForBasis(powerSumBasisId),
-                                   basisOrderForId(powerSumBasisId),
-                                   true,
-                                   index);
-    if (route == BasisElementToPowerSumsRoute::ViaCompleteClassicalFormula ||
-        route == BasisElementToPowerSumsRoute::ViaElementaryClassicalFormula)
-      {
-        ring_elem result = one();
-        for (int part : index)
-          {
-            ring_elem factor =
-                route == BasisElementToPowerSumsRoute::ViaCompleteClassicalFormula
-                    ? completePartToPowerSumsViaClassicalFormula(part)
-                    : elementaryPartToPowerSumsViaClassicalFormula(part);
-            result = mult(result, factor);
-          }
-        return result;
-      }
-    if (route == BasisElementToPowerSumsRoute::ViaHallLittlewoodGeneratorClassicalFormula)
-      {
-        ring_elem result = one();
-        for (int part : index)
-          result = mult(result,
-                        hallLittlewoodGeneratorPartToPowerSumsViaClassicalFormula(
-                            part,
-                            basisKindForId(atomBasisIdAt(monomial, pos)) ==
-                                BasisKind::HallLittlewoodBGenerator));
-        return result;
-      }
-    if (route == BasisElementToPowerSumsRoute::ViaSchurCharacters)
-      return schurLikeToPowerSumsViaCharacters(index, false);
-    if (route == BasisElementToPowerSumsRoute::ViaSchurOmegaCharacters)
-      return schurLikeToPowerSumsViaCharacters(index, true);
-    if (route == BasisElementToPowerSumsRoute::ViaMonomialTransition ||
-        route == BasisElementToPowerSumsRoute::ViaForgottenTransition)
-      return monomialToPowerSumsViaTransitionMatrix(
-          index, route == BasisElementToPowerSumsRoute::ViaForgottenTransition);
-    if (route == BasisElementToPowerSumsRoute::ViaHallLittlewoodRaisingOperators)
-      return hallLittlewoodCapitalToPowerSumsViaRaisingOperators(
-          index,
-          basisKindForId(atomBasisIdAt(monomial, pos)) ==
-              BasisKind::HallLittlewoodB);
-    if (route == BasisElementToPowerSumsRoute::ViaHallLittlewoodCapitalNormalization)
-      return hallLittlewoodNormalizedToPowerSumsViaCapitalNormalization(
-          index,
-          basisKindForId(atomBasisIdAt(monomial, pos)) ==
-              BasisKind::HallLittlewoodPOmega);
-    if (atomIsSkewAt(monomial, pos))
-      ERROR("basis conversion for skew ", display.c_str(), " basis elements is not implemented yet");
-    else
-      ERROR("basis conversion to power sums is not implemented for basis ", display.c_str());
-    return zero();
-  }
-
-ring_elem SymmetricEngineRing::basisElementToPowerSumsDispatch(
-    const SymmetricMonomial& monomial,
-    size_t pos) const
-{
-    BasisElementToPowerSumsRoute route =
-        selectBasisElementToPowerSumsRoute(monomial, pos);
-    std::string sourceDisplay = displayForBasis(atomBasisIdAt(monomial, pos));
-    traceBasisElementToPowerSumsSelection(route, sourceDisplay);
-    return executeBasisElementToPowerSumsRoute(route, monomial, pos);
-  }
-
-ring_elem SymmetricEngineRing::monomialToPowerSumsViaBasisElementRoutes(const SymmetricMonomial& monomial) const
-{
-    ring_elem result = one();
-    size_t pos = 0;
-    while (pos < monomial.data.size())
-      {
-        result = mult(result, basisElementToPowerSumsDispatch(monomial, pos));
-        if (error()) return zero();
-        pos += atomLengthAt(monomial, pos);
-      }
-    return result;
-  }
-
-ring_elem SymmetricEngineRing::expressionToPowerSumsViaBasisElementRoutes(ring_elem f) const
-{
-    const auto *poly = polyValue(f);
-    ring_elem result = zero();
-    for (const auto& term : poly->terms)
-      {
-        ring_elem converted =
-            monomialToPowerSumsViaBasisElementRoutes(term.monomial);
-        if (error()) return zero();
-        result = add(result, scaled(term.coeff, converted));
-      }
-    return result;
-  }
+// Per-index formulas used by the general conversion fallback.
 
 ring_elem SymmetricEngineRing::powerSumIndexToTargetViaTermwiseKernel(const Partition& index,
                                      const std::string& targetDisplay,
@@ -2214,11 +1921,7 @@ ring_elem SymmetricEngineRing::powerSumIndexToTargetViaTermwiseKernel(const Part
     switch (targetKind)
       {
         case BasisKind::PowerSum:
-          return basisElementFromIndex(targetBasisId,
-                                       targetDisplay,
-                                       targetDisplayOrder,
-                                       targetIsMultiplicative,
-                                       index);
+          return basisElementFromIndex(targetBasisId, index);
         case BasisKind::Complete:
           return coeffMapToElement(
               powerSumIndexToCompleteMapViaLogarithmFormula(index),
@@ -2290,216 +1993,6 @@ ring_elem SymmetricEngineRing::powerSumsToTargetViaTermwiseConversion(ring_elem 
     return result;
   }
 
-bool SymmetricEngineRing::tryBasisElementToTarget(const SymmetricMonomial& monomial,
-                          size_t pos,
-                          int targetBasisId,
-                          const std::string& targetDisplay,
-                          int targetDisplayOrder,
-                          bool targetIsMultiplicative,
-                          ring_elem& result) const
-{
-    int basisId = atomBasisIdAt(monomial, pos);
-    std::string display = displayForBasis(basisId);
-    const BasisKind sourceKind = basisKindForId(basisId);
-    const BasisKind targetKind = basisKindForId(targetBasisId);
-    Partition index = basisElementIndex(monomial, pos);
-
-    if (!atomIsSkewAt(monomial, pos) && basisId == targetBasisId)
-      {
-        result = basisElementFromIndex(targetBasisId,
-                                       targetDisplay,
-                                       targetDisplayOrder,
-                                       targetIsMultiplicative,
-                                       index);
-        return true;
-      }
-
-    if (targetKind == BasisKind::Complete && sourceKind == BasisKind::Schur)
-      {
-        Partition outer = atomIsSkewAt(monomial, pos) ? basisElementOuterIndex(monomial, pos)
-                                                      : index;
-        Partition inner = atomIsSkewAt(monomial, pos) ? basisElementInnerIndex(monomial, pos)
-                                                      : Partition{};
-        result = jacobiTrudi(outer,
-                             inner,
-                             targetBasisId,
-                             targetDisplay,
-                             targetDisplayOrder,
-                             targetIsMultiplicative);
-        return true;
-      }
-
-    if (targetKind == BasisKind::Elementary &&
-        sourceKind == BasisKind::SchurOmega)
-      {
-        Partition outer = atomIsSkewAt(monomial, pos) ? basisElementOuterIndex(monomial, pos)
-                                                      : index;
-        Partition inner = atomIsSkewAt(monomial, pos) ? basisElementInnerIndex(monomial, pos)
-                                                      : Partition{};
-        result = jacobiTrudi(outer,
-                             inner,
-                             targetBasisId,
-                             targetDisplay,
-                             targetDisplayOrder,
-                             targetIsMultiplicative);
-        return true;
-      }
-
-    if (atomIsSkewAt(monomial, pos)) return false;
-    if (sourceKind == BasisKind::Custom) return false;
-    ring_elem inPowerSums = basisElementToPowerSumsDispatch(monomial, pos);
-    if (error()) return false;
-    int pBasisId = requiredBasisIdForKind(BasisKind::PowerSum);
-    if (error()) return false;
-    ConversionInput input{
-        inPowerSums,
-        inferConversionGuarantees(inPowerSums, targetBasisId),
-        0};
-    input.guarantees.pureBasis = pBasisId;
-    input.guarantees.expandedBasis = pBasisId;
-    input.guarantees = strengthenConversionGuarantees(
-        std::move(input.guarantees), targetBasisId);
-    result = powerSumsToTargetDispatch(input,
-                                       pBasisId,
-                                       targetBasisId,
-                                       targetDisplay,
-                                       targetDisplayOrder,
-                                       targetIsMultiplicative);
-    return !error();
-  }
-
-bool SymmetricEngineRing::tryMonomialToTarget(const SymmetricMonomial& monomial,
-                              int targetBasisId,
-                              const std::string& targetDisplay,
-                              int targetDisplayOrder,
-                              bool targetIsMultiplicative,
-                              ring_elem& result) const
-{
-    result = one();
-    size_t pos = 0;
-    while (pos < monomial.data.size())
-      {
-        ring_elem factor;
-        if (!tryBasisElementToTarget(monomial,
-                                pos,
-                                targetBasisId,
-                                targetDisplay,
-                                targetDisplayOrder,
-                                targetIsMultiplicative,
-                                factor))
-          return false;
-        result = mult(result, factor);
-        pos += atomLengthAt(monomial, pos);
-      }
-    return true;
-  }
-
-SymmetricEngineRing::ExpressionToTargetRoute
-SymmetricEngineRing::selectExpressionToTargetRoute(
-    int targetBasisId,
-    bool targetIsMultiplicative) const
-{
-    switch (basisKindForId(targetBasisId))
-      {
-      case BasisKind::Schur:
-      case BasisKind::SchurOmega:
-        return ExpressionToTargetRoute::ViaSchurTriangularReduction;
-      case BasisKind::HallLittlewoodQ:
-      case BasisKind::HallLittlewoodP:
-      case BasisKind::HallLittlewoodB:
-      case BasisKind::HallLittlewoodPOmega:
-        return ExpressionToTargetRoute::ViaHallLittlewoodTriangularReduction;
-      case BasisKind::Complete:
-      case BasisKind::Elementary:
-        return ExpressionToTargetRoute::ViaFactorwiseConversion;
-      default:
-        return targetIsMultiplicative
-            ? ExpressionToTargetRoute::ViaFactorwiseConversion
-            : ExpressionToTargetRoute::NoApplicableRoute;
-      }
-  }
-
-const char *SymmetricEngineRing::expressionToTargetRouteName(
-    ExpressionToTargetRoute route) const
-{
-    switch (route)
-      {
-        case ExpressionToTargetRoute::ViaSchurTriangularReduction:
-          return "Schur-triangular-reduction";
-        case ExpressionToTargetRoute::ViaHallLittlewoodTriangularReduction:
-          return "Hall-Littlewood-triangular-reduction";
-        case ExpressionToTargetRoute::ViaFactorwiseConversion:
-          return "factorwise-conversion";
-        case ExpressionToTargetRoute::NoApplicableRoute:
-          return "not-applicable";
-      }
-    return "unknown";
-  }
-
-void SymmetricEngineRing::traceExpressionToTargetSelection(
-    ExpressionToTargetRoute route,
-    const std::string& targetDisplay) const
-{
-    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
-    std::fprintf(stderr,
-                 "SymmetricRings expression-target: target=%s route=%s\n",
-                 targetDisplay.c_str(),
-                 expressionToTargetRouteName(route));
-  }
-
-bool SymmetricEngineRing::executeExpressionToTargetRoute(
-    ExpressionToTargetRoute route,
-    ring_elem f,
-    int targetBasisId,
-    const std::string& targetDisplay,
-    int targetDisplayOrder,
-    bool targetIsMultiplicative,
-    ring_elem& result) const
-{
-    if (route == ExpressionToTargetRoute::ViaSchurTriangularReduction)
-      return tryExpressionToSchurViaTriangularReduction(
-          f, targetBasisId, targetDisplay, targetDisplayOrder, result);
-    if (route == ExpressionToTargetRoute::ViaHallLittlewoodTriangularReduction)
-      return tryExpressionToHallLittlewoodViaTriangularReduction(
-          f, targetBasisId, targetDisplay, targetDisplayOrder, result);
-    if (route != ExpressionToTargetRoute::ViaFactorwiseConversion)
-      return false;
-    result = zero();
-    const auto *poly = polyValue(f);
-    for (const auto& term : poly->terms)
-      {
-        ring_elem converted;
-        if (!tryMonomialToTarget(term.monomial,
-                                    targetBasisId,
-                                    targetDisplay,
-                                    targetDisplayOrder,
-                                    targetIsMultiplicative,
-                                    converted))
-          return false;
-        result = add(result, scaled(term.coeff, converted));
-      }
-    return true;
-  }
-
-bool SymmetricEngineRing::tryExpressionToTarget(ring_elem f,
-                             int targetBasisId,
-                             const std::string& targetDisplay,
-                             int targetDisplayOrder,
-                             bool targetIsMultiplicative,
-                             ring_elem& result) const
-{
-    ExpressionToTargetRoute route = selectExpressionToTargetRoute(
-        targetBasisId, targetIsMultiplicative);
-    traceExpressionToTargetSelection(route, targetDisplay);
-    return executeExpressionToTargetRoute(route,
-                                           f,
-                                           targetBasisId,
-                                           targetDisplay,
-                                           targetDisplayOrder,
-                                           targetIsMultiplicative,
-                                           result);
-  }
-
 // ============================================================================
 // Straightening
 // ============================================================================
@@ -2521,11 +2014,7 @@ ring_elem SymmetricEngineRing::straightenSchurBasisElement(const Partition& alph
 {
     auto straightened = straightenSchurIndex(alpha);
     if (straightened.first == 0) return zero();
-    ring_elem term = basisElementFromIndex(basisId,
-                                           displayForBasis(basisId),
-                                           basisOrderForId(basisId),
-                                           isMultiplicativeBasis(basisId),
-                                           straightened.second);
+    ring_elem term = basisElementFromIndex(basisId, straightened.second);
     if (straightened.first < 0) term = negate(term);
     return term;
   }
@@ -2543,11 +2032,7 @@ ring_elem SymmetricEngineRing::straightenHallCapitalBasisElement(const Partition
           break;
         }
     if (bad == trimmed.size())
-      return basisElementFromIndex(basisId,
-                                   displayForBasis(basisId),
-                                   basisOrderForId(basisId),
-                                   isMultiplicativeBasis(basisId),
-                                   trimmed);
+      return basisElementFromIndex(basisId, trimmed);
 
     int s = trimmed[bad];
     int r = trimmed[bad + 1];
@@ -2601,11 +2086,7 @@ ring_elem SymmetricEngineRing::straightenBasisElement(const SymmetricMonomial& m
       case BasisKind::HallLittlewoodPOmega:
         {
         if (isPartitionIndex(index))
-          return basisElementFromIndex(basisId,
-                                       display,
-                                       atomOrderAt(monomial, pos),
-                                       false,
-                                       index);
+          return basisElementFromIndex(basisId, index);
         const BasisKind capitalKind = basisKind == BasisKind::HallLittlewoodP
                                           ? BasisKind::HallLittlewoodQ
                                           : BasisKind::HallLittlewoodB;
@@ -2629,11 +2110,7 @@ ring_elem SymmetricEngineRing::straightenBasisElement(const SymmetricMonomial& m
       default:
         break;
       }
-    return basisElementFromIndex(basisId,
-                                 display,
-                                 atomOrderAt(monomial, pos),
-                                 isMultiplicativeBasis(basisId),
-                                 index);
+    return basisElementFromIndex(basisId, index);
   }
 
 ring_elem SymmetricEngineRing::straightenMonomial(const SymmetricMonomial& monomial) const

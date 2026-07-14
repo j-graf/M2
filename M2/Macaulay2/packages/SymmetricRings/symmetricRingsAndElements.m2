@@ -19,7 +19,7 @@ newSymmetricEngineRing = Rraw -> (
 -- Use the ring-attached basis symbol here, not the global default symbol.
 -- Optimized conversion paths may temporarily switch back to default symbols,
 -- but ordinary construction should preserve user-chosen BasisSymbols.
-rememberBasisInEngine = (R0, B0) -> (
+registerBasisDescriptorInEngine = (R0, B0) -> (
     B := basisOnRing(B0, R0);
     rawSymmetricRingsRememberBasis(raw R0, B#"BasisId", basisKey B, B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex");
     )
@@ -41,15 +41,15 @@ ringAvailableBases = R0 -> select(availableSymmetricBases, B0 -> basisAvailableF
 ringHasBasis = (R0, B0) -> any(R0#"Bases", C -> C#"BasisId" == B0#"BasisId")
 
 -- Sends all bases on a ring to the C++ engine.
-rememberRingBasisData = R0 -> scan(R0#"Bases", B0 -> rememberBasisInEngine(R0, B0))
+registerRingBasisDescriptors = R0 ->
+    scan(R0#"Bases", B0 -> registerBasisDescriptorInEngine(R0, B0))
 
 -- Builds the compact omega map consumed by the C++ engine.
--- Each entry is source id, target id, target display order, and target
--- multiplicativity. The engine only sees ids and display metadata, so missing
--- or unavailable omega partners must be filtered out before this map is built.
+-- Each entry is a source id and target id. Missing or unavailable omega
+-- partners must be filtered out before this map is built.
 omegaMapData = R0 -> flatten apply(select(R0#"Bases", B0 -> omegaPartnerKey B0 =!= null), B0 -> (
         target := basis(R0, omegaPartnerKey B0);
-        {B0#"BasisId", target#"BasisId", target#"DisplayOrder", if target#"MultiplicativeIndex" then 1 else 0}
+        {B0#"BasisId", target#"BasisId"}
         ))
 
 -- Encodes an inner-product rule kind for the C++ engine.
@@ -125,6 +125,8 @@ registerBasisSymbolOnRing = (R0, B0) -> (
     symbolString := if symbolOptions#?key then toString symbolOptions#key else registeredBasisSymbol B0;
     if not R0#?"BasisKeyToSymbol" then R0#"BasisKeyToSymbol" = new MutableHashTable;
     if not R0#?"BasisSymbolToKey" then R0#"BasisSymbolToKey" = new MutableHashTable;
+    if BasisAliasIndex#?symbolString and BasisAliasIndex#symbolString =!= key then
+        error("basis symbol ", symbolString, " is registered as an alias for another basis");
     if (R0#"BasisSymbolToKey")#?symbolString and (R0#"BasisSymbolToKey")#symbolString =!= key then
         error("basis symbol ", symbolString, " is already used in this symmetric ring");
     (R0#"BasisKeyToSymbol")#key = symbolString;
@@ -178,7 +180,7 @@ symmetricRing = args -> (
     R0.cache = new MutableHashTable;
     commonEngineRingInitializations R0;
     CurrentSymmetricRing = R0;
-    rememberRingBasisData R0;
+    registerRingBasisDescriptors R0;
     installBasisAliases R0;
     if opts#"CreateConstantQQShadow" and A =!= QQ then (
         symbolOptionsForQQ := if R0#?"BasisKeyToSymbol" then hashTable pairs R0#"BasisKeyToSymbol" else hashTable {};
@@ -255,9 +257,21 @@ basis SymmetricBasis := SymmetricBasis => opts -> B -> (
 -- aliases whenever CurrentSymmetricRing changes so S_2, h_1, etc. point at the
 -- active ring rather than a stale one.
 installBasisAlias = (R0, B0) -> (
-    symbolString := if B0#?"BasisAliasOf" then B0#"BasisSymbol" else basisSymbolForRing(R0, B0);
+    symbolString := basisSymbolForRing(R0, B0);
     X := getSymbol symbolString;
-    B1 := if B0#?"BasisAliasOf" then basis(R0, B0#"BasisAliasOf") else basisOnRing(B0, R0);
+    B1 := basisOnRing(B0, R0);
+    t := new SymmetricRingIndexedVariableTable from X;
+    t.SymmetricRing = R0;
+    t.SymmetricBasis = B1;
+    t#symbol _ = a -> B1 _ a;
+    globalAssign(X, t);
+    t
+    )
+
+-- Installs an alternate input symbol that constructs the canonical basis.
+installRegisteredBasisAlias = (R0, aliasSymbol, targetKey) -> (
+    X := getSymbol aliasSymbol;
+    B1 := basis(R0, targetKey);
     t := new SymmetricRingIndexedVariableTable from X;
     t.SymmetricRing = R0;
     t.SymmetricBasis = B1;
@@ -270,12 +284,23 @@ installBasisAlias = (R0, B0) -> (
 -- Unavailable bases still get a global table so users receive a ring-specific
 -- error from Q_2 instead of accidentally using a table left by an older ring.
 installUnavailableBasisAlias = (R0, B0) -> (
-    symbolString := if B0#?"BasisAliasOf" then B0#"BasisSymbol" else basisSymbolForRing(R0, B0);
+    symbolString := basisSymbolForRing(R0, B0);
     X := getSymbol symbolString;
     t := new SymmetricRingIndexedVariableTable from X;
     t.SymmetricRing = R0;
     t.SymmetricBasis = null;
     t#symbol _ = a -> error("basis ", symbolString, " is not available for this symmetric ring");
+    globalAssign(X, t);
+    t
+    )
+
+-- Installs a registered alias whose canonical basis is unavailable on this ring.
+installUnavailableRegisteredBasisAlias = (R0, aliasSymbol) -> (
+    X := getSymbol aliasSymbol;
+    t := new SymmetricRingIndexedVariableTable from X;
+    t.SymmetricRing = R0;
+    t.SymmetricBasis = null;
+    t#symbol _ = a -> error("basis alias ", aliasSymbol, " is not available for this symmetric ring");
     globalAssign(X, t);
     t
     )
@@ -287,7 +312,12 @@ installBasisAliases = R0 -> (
             publicSymbol := basisSymbolForRing(R0, B0);
             aliases#publicSymbol = if ringHasBasis(R0, B0) then installBasisAlias(R0, B0) else installUnavailableBasisAlias(R0, B0)
             ));
-    scan(registeredBasisAliases(), B0 -> aliases#(B0#"BasisSymbol") = if ringHasBasis(R0, BasisIndex#(B0#"BasisAliasOf")) then installBasisAlias(R0, B0) else installUnavailableBasisAlias(R0, B0));
+    scan(registeredBasisAliases(), aliasSymbol -> (
+            targetKey := BasisAliasIndex#aliasSymbol;
+            aliases#aliasSymbol = if ringHasBasis(R0, BasisIndex#targetKey)
+                then installRegisteredBasisAlias(R0, aliasSymbol, targetKey)
+                else installUnavailableRegisteredBasisAlias(R0, aliasSymbol)
+            ));
     R0.cache#"Aliases" = aliases;
     aliases
     )
@@ -402,9 +432,9 @@ bases(SymmetricRing, Boolean) := (R0, verbose) -> (
 basisData = method()
 
 -- Returns basis data enriched with the centralized registry view.
--- Stored built-in basis records intentionally have some legacy metadata fields
--- stripped. This recombines the basis record with the central omega, pairing,
--- specialization, and transformed-basis registries for public inspection.
+-- Installed basis records contain only intrinsic basis metadata. This adds the
+-- central omega, pairing, specialization, and transformed-basis registry view
+-- for public inspection without duplicating those relationships internally.
 enrichedBasisData = B -> (
     H := new MutableHashTable from pairs B;
     omegaKey := omegaPartnerKey B;
@@ -421,7 +451,7 @@ enrichedBasisData = B -> (
     if data =!= null then (
         H#"TransformedBasisData" = hashTable {
             "SourceBasis" => data#"SourceBasis",
-            "Alphabet" => data#"Alphabet",
+            "Alphabet" => transformedAlphabetDescription data,
             "SumOver" => (data#"SumOver")#"Kind",
             "OutputBasis" => data#"OutputBasis",
             "UsesMixedBases" => data#"UsesMixedBases",
@@ -443,15 +473,14 @@ basisData SymmetricBasis := B -> enrichedBasisData B
 -- Returns basis data by basis symbol.
 basisData String := basisSymbol -> (
     symbolString := toString basisSymbol;
-    if BasisAliasIndex#?symbolString then enrichedBasisData(BasisIndex#symbolString)
-    else basisData(basis basisSymbol)
+    basisData(basis symbolString)
     )
 
 -- Returns basis data by symbol.
 basisData Symbol := basisSymbol -> basisData(toString basisSymbol)
 
 -- ============================================================================
--- Element Construction And Arithmetic
+-- Element Construction And Normalization
 -- ============================================================================
 
 -- Promotes a coefficient to the coefficient ring of a symmetric ring.
@@ -483,7 +512,7 @@ rawSymmetricElementSequence = L -> toSequence apply(L, f -> raw f)
 -- Builds one basis element directly from basis id and index payloads.
 rawBasisAtomElement = (R0, B, outer, inner) -> (
     payload := outer | inner;
-    new R0 from rawSymmetricRingsBasisElement(raw R0, B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex", #inner, payload)
+    new R0 from rawSymmetricRingsBasisElement(raw R0, B#"BasisId", #inner, payload)
     )
 
 -- Rewrites a Schur Omega (Somega) basis element as its Schur image.
@@ -588,7 +617,7 @@ SymmetricBasis _ List := (B, L) -> (
     if B#"ZeroOnNegative" and #idx == 1 and idx#0 < 0 then return zeroSymmetricElement R0;
     if B#"ZeroIndexIsOne" and #idx == 1 and idx#0 == 0 then return oneSymmetricElement R0;
     if B#"MultiplicativeIndex" and #idx > 1 then return product(idx, i -> B_i);
-    userSymmetricElement(R0, rawSymmetricRingsBasisElement(raw R0, B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex", 0, idx))
+    userSymmetricElement(R0, rawSymmetricRingsBasisElement(raw R0, B#"BasisId", 0, idx))
     )
 
 -- Validates and normalizes an outer/inner skew shape pair.
@@ -619,7 +648,7 @@ makeSkewElement = (B, lambda, mu) -> (
     if shape#0 == shape#1 then return oneSymmetricElement R0;
     if #shape#1 == 0 then return B_(shape#0);
     payload := skewPayload(shape#0, shape#1);
-    userSymmetricElement(R0, rawSymmetricRingsBasisElement(raw R0, B#"BasisId", B#"BasisSymbol", B#"DisplayOrder", B#"MultiplicativeIndex", #shape#1, payload))
+    userSymmetricElement(R0, rawSymmetricRingsBasisElement(raw R0, B#"BasisId", #shape#1, payload))
     )
 
 -- ============================================================================
@@ -631,6 +660,10 @@ displayTermLimit = 100
 
 -- Converts a symmetric function to a full string.
 toString SymmetricRingElement := f -> rawSymmetricRingsElementToString raw f
+
+-- ============================================================================
+-- Expression Reconstruction
+-- ============================================================================
 
 -- Formats a partition index for use as an expression subscript.
 partitionSubscriptExpression = lambda -> (
@@ -779,6 +812,10 @@ joinSignedTermNets = parts -> (
     result
     )
 
+-- ============================================================================
+-- Net And HTML Formatting
+-- ============================================================================
+
 -- Formats a symmetric function as a net, optionally limiting the number of
 -- terms shown.
 symmetricElementNet = (f, maxTerms) -> (
@@ -801,6 +838,10 @@ html SymmetricRingElement := f -> html net f
 
 -- External string form agrees with the ordinary string form.
 toExternalString SymmetricRingElement := toString
+
+-- ============================================================================
+-- Raw Terms, Presentation Terms, And Weight
+-- ============================================================================
 
 -- Decodes one flattened engine monomial into atom hash tables.
 -- The flattened format is [displayOrder, basisId, outerLength, innerLength,

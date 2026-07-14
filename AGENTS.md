@@ -87,11 +87,14 @@ Entry point: `M2/Macaulay2/packages/SymmetricRings.m2`.
 
 Loaded implementation files:
 
-- `registeringBases.m2`: types, basis registries, transformed/specialized basis
-  registration, omega/specialization/inner-product metadata, and built-in basis
-  metadata for `p,h,e,m,ff,S,Somega,q,b,Q,B,P,Pomega`.
+- `registeringBases.m2`: core types, basis registries, cross-basis metadata,
+  and low-level basis installation.
 - `operators.m2`: raising operators, `R_{i,j}` parsing, rational expansion, and
   `applyOperator`/function-call/juxtaposition syntax.
+- `transformedBases.m2`: transformed/specialized basis conversion, companions,
+  generated specializations, and transactional installation.
+- `builtInBases.m2`: pairing/specialization helpers and built-in metadata for
+  `p,h,e,m,ff,S,Somega,q,b,Q,B,P,Pomega`.
 - `symmetricRingsAndElements.m2`: rings and elements, basis availability and
   aliases, indexing/skewing, display, terms, sum/product, weight, and partitions.
 - `computations.m2`: straightening, equality, Jacobi–Trudi, conversions,
@@ -114,14 +117,17 @@ Use Schur Omega/`SchurOmega` for `Somega` and Hall-Littlewood P Omega/
 The engine subsystem is `M2/Macaulay2/e/symmetric-rings/`:
 
 - `partitions.*`: partition operations, ordering, straightening, characters.
-- `storage.*`: term/atom-block storage, ordering, display and flattened atoms.
+- `storage.*`: term/atom-block storage, ordering, and flattened atoms.
+- `presentation.cpp`: stable user-facing ordering and display formatting.
 - `symmetric-engine-ring.*`: engine ring class and shared state.
 - `arithmetic.*`: arithmetic, comparison, hashing, terms, weights, constructors.
-- `schur-conversion.*`: Jacobi–Trudi, LR products, characters, Schur helpers.
-- `hall-classical-conversion.*`: classical and Hall-Littlewood conversions.
+- `expression-inspection.cpp`: shared basis-expansion and coefficient-map probes.
 - `basis-conversion-dispatch.*`: guarantees, selectors, pipelines, entry points.
-- `basis-conversion-kernels.*`: formulas, straightening, direct conversions.
-- `basis-conversion-products.*`: multiplication and product-aware conversion.
+- `basis-conversion-kernels.*`: basis-family formulas, Jacobi–Trudi,
+  characters, Hall--Littlewood transitions, straightening, and direct
+  conversions.
+- `basis-conversion-products.*`: LR, Pieri, border-strip, multiplication, and
+  product-aware conversion.
 - `inner-product*.*`: Hall inner-product profiles, selection, and kernels.
 - `plethysm.*`: plethysm and combined plethysm-to-basis paths.
 - `omega.*`: omega involution logic.

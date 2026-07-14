@@ -1,5 +1,5 @@
 -- ============================================================================
--- Symmetric Function Operators
+-- Operator Objects And Application
 -- ============================================================================
 
 -- Operators are lightweight hash-table objects with an "Apply" callback. This
@@ -60,6 +60,10 @@ installMethod(symbol SPACE, SymmetricFunctionOperator, SymmetricRingElement, (g,
 -- Returns the stored operator metadata.
 operatorData = method()
 operatorData SymmetricFunctionOperator := g -> hashTable pairs g
+
+-- ============================================================================
+-- Raising-Operator Indices And Configuration
+-- ============================================================================
 
 raisingOperatorOptionDefaults = hashTable {
     "ExpansionLimit" => 1000,
@@ -199,6 +203,10 @@ raisingAddPolynomialTerms = (H, initialCoefficient, lambda, operatorPairs, f) ->
     anyContributing
     )
 
+-- ============================================================================
+-- Raising-Operator Parsing
+-- ============================================================================
+
 -- Parses a raising-operator expression into either a polynomial or rational
 -- expression over hidden operator variables. The only public binding exposed
 -- during parsing is R_{i,j}; hidden variables keep the user's namespace clean.
@@ -249,6 +257,10 @@ raisingParseExpression = (R0, lambda, expressionString, opts) -> (
         "Denominator" => denominatorPolynomial
         }
     )
+
+-- ============================================================================
+-- Raising-Operator Expansion And Evaluation
+-- ============================================================================
 
 -- Expands a parsed raising operator on one coefficient/index pair. Polynomial
 -- operators are finite; rational operators use a geometric recurrence capped by
@@ -344,6 +356,10 @@ applyRaisingOperator = (g, F) -> (
             ));
     result
     )
+
+-- ============================================================================
+-- Public Raising-Operator Constructor
+-- ============================================================================
 
 -- Constructor for a raising operator.
 -- The expression string is intentionally not parsed here. Rank depends on the

@@ -4,7 +4,6 @@ set -eu
 SYSTEM_FILE=$1
 COMPARISON_FILE=$2
 CONDITIONS_FILE=${3:-}
-BASELINES_FILE=${4:-}
 REPORT_DIR=$(dirname -- "$0")
 
 printf '# SymmetricRings benchmark report\n\n'
@@ -22,38 +21,28 @@ else
     run_health='not assessed'
 fi
 
-if [ -n "$BASELINES_FILE" ] && [ -s "$BASELINES_FILE" ]; then
-    baseline_system=$(
-        "$REPORT_DIR/compare-baseline-system.awk" \
-            "$SYSTEM_FILE" "$BASELINES_FILE" "$COMPARISON_FILE")
-    baseline_system_status=$(printf '%s\n' "$baseline_system" |
-        awk -F '\t' '$1 == "overall" {print $4; exit}')
-    [ -n "$baseline_system_status" ] || baseline_system_status=unknown
-else
-    baseline_system=''
-    baseline_system_status=unknown
-fi
-
 printf '## Overall summary\n\n'
-awk -F '\t' -v run_health="$run_health" \
-    -v baseline_system_status="$baseline_system_status" '
-NR == 1 { next }
+awk -F '\t' -v run_health="$run_health" '
+NR == 1 {
+    for (i = 1; i <= NF; ++i) column[$i] = i
+    next
+}
 {
     cases++
     if (!seen_family[$2]++) families++
-    classification = $NF
-    counts[classification]++
-    recordStatus = $(NF - 1)
+    recordClassification = $(column["record_classification"])
+    recordCounts[recordClassification]++
+    recordStatus = $(column["record_status"])
     if (recordStatus == "new-record" || recordStatus == "first-record")
         recordsSet++
 }
 END {
-    printf "| Run health | Baseline system | Families | Cases | Baseline improvements | Baseline regressions | Baseline stable | New | Records set |\n"
-    printf "|---|---|---:|---:|---:|---:|---:|---:|---:|\n"
-    printf "| **%s** | **%s** | %d | %d | %d | %d | %d | %d | %d |\n\n", \
-        run_health, baseline_system_status, families + 0, cases + 0, \
-        counts["improvement"] + 0, counts["regression"] + 0, \
-        counts["stable"] + 0, counts["new"] + 0, recordsSet + 0
+    printf "| Run health | Families | Cases | Record improvements | Record regressions | Record stable | Record new | Records set |\n"
+    printf "|---|---:|---:|---:|---:|---:|---:|---:|\n"
+    printf "| **%s** | %d | %d | %d | %d | %d | %d | %d |\n\n", \
+        run_health, families + 0, cases + 0, \
+        recordCounts["improvement"] + 0, recordCounts["regression"] + 0, \
+        recordCounts["stable"] + 0, recordCounts["new"] + 0, recordsSet + 0
 }' "$COMPARISON_FILE"
 
 printf '## Performance comparison\n\n'
@@ -71,26 +60,29 @@ else
     }
     NR == 1 {
         field_count = NF
-        for (i = 1; i <= NF; i++) header[i] = $i
+        for (i = 1; i <= NF; i++) {
+            header[i] = $i
+            column[$i] = i
+        }
         next
     }
     $2 == selected_family {
         row_count++
         for (i = 1; i <= NF; i++) rows[row_count, i] = $i
-        classification = $NF
-        counts[classification]++
-        recordStatus = $(NF - 1)
+        recordClassification = $(column["record_classification"])
+        recordCounts[recordClassification]++
+        recordStatus = $(column["record_status"])
         if (recordStatus == "new-record" || recordStatus == "first-record")
             recordsSet++
     }
     END {
         printf "### %s\n\n", selected_family
-        printf "| Cases | Baseline improvements | Baseline regressions | Baseline stable | New | Records set |\n"
+        printf "| Cases | Record improvements | Record regressions | Record stable | Record new | Records set |\n"
         printf "|---:|---:|---:|---:|---:|---:|\n"
         printf "| %d | %d | %d | %d | %d | %d |\n\n", \
-            row_count, counts["improvement"] + 0, \
-            counts["regression"] + 0, counts["stable"] + 0, \
-            counts["new"] + 0, recordsSet + 0
+            row_count, recordCounts["improvement"] + 0, \
+            recordCounts["regression"] + 0, recordCounts["stable"] + 0, \
+            recordCounts["new"] + 0, recordsSet + 0
 
         printf "|"
         for (i = 1; i <= field_count; i++)
@@ -110,36 +102,6 @@ else
   done
 fi
 
-printf '## Baseline system comparison\n\n'
-case "$baseline_system_status" in
-    same)
-        printf 'The major system configuration matches the most recent accepted baseline configuration for the selected cases.\n\n'
-        ;;
-    different)
-        printf 'At least one major system field differs from the most recent accepted baseline configuration for the selected cases. Timing changes may therefore include machine effects.\n\n'
-        ;;
-    mixed)
-        printf 'The selected cases have most recent accepted baselines from more than one major system configuration.\n\n'
-        ;;
-    *)
-        printf 'The major system configuration could not be compared completely, usually because no selected baseline or structured baseline system metadata was available.\n\n'
-        ;;
-esac
-printf '| Field | Current run | Accepted baseline | Comparison |\n'
-printf '|---|---|---|---|\n'
-if [ -n "$baseline_system" ]; then
-    printf '%s\n' "$baseline_system" | awk -F '\t' 'NR > 1 && $1 != "overall" {
-        for (i = 1; i <= 4; ++i) gsub(/\|/, "\\|", $i)
-        printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4
-    }'
-else
-    printf '| CPU | unknown | unknown | unknown |\n'
-    printf '| RAM | unknown | unknown | unknown |\n'
-    printf '| Operating system | unknown | unknown | unknown |\n'
-fi
-
-printf '\n'
-
 printf '## System\n\n'
 printf '| Field | Value |\n|---|---|\n'
 awk -F '\t' 'NR > 1 {
@@ -154,7 +116,7 @@ else
     printf '\n## Run conditions\n\n'
     printf 'Overall health: **not assessed** (this run predates condition collection).\n\n'
     printf '%s\n' \
-      '- **Clean:** conditions were stable and no acceptance concern was detected.' \
-      '- **Warning:** moderate drift or resource pressure was detected; review before accepting baselines.' \
-      '- **Compromised:** severe drift, thermal pressure, or a performance-limiting mode makes the run unsuitable as a baseline.'
+      '- **Clean:** conditions were stable and no comparison concern was detected.' \
+      '- **Warning:** moderate drift or resource pressure was detected; review performance conclusions.' \
+      '- **Compromised:** severe drift, thermal pressure, or a performance-limiting mode makes the run unsuitable for performance conclusions.'
 fi

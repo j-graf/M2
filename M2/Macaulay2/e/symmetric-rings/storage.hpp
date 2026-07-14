@@ -5,6 +5,7 @@
 
 #include "symmetric-rings/partitions.hpp"
 
+#include "engine-includes.hpp"
 #include "newdelete.hpp"
 #include "rings/ring.hpp"
 #include "rings/ringelem.hpp"
@@ -37,6 +38,10 @@ struct SymmetricTerm
   ring_elem coeff;
   SymmetricMonomial monomial;
 };
+
+// ============================================================================
+// Semantic Tags And Conversion Metadata
+// ============================================================================
 
 enum class CombinatorialTag : uint32_t
 {
@@ -87,6 +92,10 @@ class SymmetricRingPoly : public our_new_delete
   std::optional<SymmetricConversionMetadata> conversionMetadata;
 };
 
+// ============================================================================
+// Shared Keys And Coefficient Containers
+// ============================================================================
+
 struct BasisIndexKey
 {
   int basisId;
@@ -106,36 +115,9 @@ using CoeffMap = GCMap<Partition, ring_elem>;
 using RingElemVector = VECTOR(ring_elem);
 using RingElemMatrix = VECTOR(RingElemVector);
 
-struct SchurConversionRecipeEntry
-{
-  Partition lambda;
-  std::vector<std::pair<size_t, int>> contributions;
-};
-
-struct LRProductTerm
-{
-  Partition nu;
-  long coefficient;
-};
-
-struct OmegaTarget
-{
-  int basisId;
-  int order;
-  bool isMultiplicative;
-};
-
-enum class InnerProductPairingKind
-{
-  Dual = 1,
-  PowerSum = 2
-};
-
-struct InnerProductTarget
-{
-  int dualBasisId;
-  InnerProductPairingKind kind;
-};
+// ============================================================================
+// Storage Access And Atom Encoding
+// ============================================================================
 
 std::string fromM2String(M2_string s);
 M2_string toM2String(const std::string& s);

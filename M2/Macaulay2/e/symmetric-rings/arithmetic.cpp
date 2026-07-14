@@ -18,6 +18,11 @@
 
 namespace symmetric_rings {
 
+// ============================================================================
+// Canonical Terms And Accumulation
+// ============================================================================
+// Arithmetic constructs canonical monomials and collects equal terms here.
+
 SymmetricMonomial SymmetricEngineRing::canonicalMonomial(const SymmetricMonomial& monomial) const
 {
     std::vector<std::vector<int>> blocks;
@@ -62,7 +67,7 @@ bool SymmetricEngineRing::isSinglePowerSumBlock(const SymmetricMonomial& monomia
 {
     if (monomial.data.empty()) return false;
     if (atomIsSkewAt(monomial, 0)) return false;
-    if (atomBasisIdAt(monomial, 0) != powerSumBasisId) return false;
+    if (atomBasisIdAt(monomial, 0) != registeredPowerSumBasisId()) return false;
     return atomLengthAt(monomial, 0) == monomial.data.size();
   }
 
@@ -79,7 +84,8 @@ SymmetricMonomial SymmetricEngineRing::multiplyPowerSumMonomials(const Symmetric
     std::sort(index.begin(), index.end(), std::greater<int>());
 
     SymmetricMonomial result;
-    appendAtomBlock(result, makeAtomBlock(order, powerSumBasisId, 0, index));
+    appendAtomBlock(
+        result, makeAtomBlock(order, registeredPowerSumBasisId(), 0, index));
     return result;
   }
 
@@ -88,7 +94,7 @@ SymmetricMonomial SymmetricEngineRing::multiplyMonomials(const SymmetricMonomial
 {
     if (a.data.empty()) return b;
     if (b.data.empty()) return a;
-    if (isPowerSumBasis(powerSumBasisId) &&
+    if (registeredPowerSumBasisId() >= 0 &&
         isSinglePowerSumBlock(a) &&
         isSinglePowerSumBlock(b))
       return multiplyPowerSumMonomials(a, b);
@@ -196,6 +202,10 @@ bool SymmetricEngineRing::promoteInputElement(const RingElement *input, ring_ele
     return promote(inputRing, input->get_value(), result);
   }
 
+// ============================================================================
+// Element Construction And Scalar Recognition
+// ============================================================================
+
 ring_elem SymmetricEngineRing::fromCoeff(ring_elem coeff) const
 {
     auto result = new SymmetricRingPoly;
@@ -204,9 +214,6 @@ ring_elem SymmetricEngineRing::fromCoeff(ring_elem coeff) const
   }
 
 ring_elem SymmetricEngineRing::basisElement(int basisId,
-                         const std::string& display,
-                         int order,
-                         bool isMultiplicative,
                          int innerLength,
                          M2_arrayint index) const
 {
@@ -216,10 +223,12 @@ ring_elem SymmetricEngineRing::basisElement(int basisId,
         ERROR("invalid skew inner shape length");
         return zero();
       }
-    rememberBasis(basisId, display, order, isMultiplicative);
+    const auto& basis = requireBasis(basisId);
     auto result = new SymmetricRingPoly;
     SymmetricMonomial monomial;
-    appendAtomBlock(monomial, makeAtomBlock(order, basisId, innerLength, index));
+    appendAtomBlock(
+        monomial,
+        makeAtomBlock(basis.displayOrder, basisId, innerLength, index));
     result->terms.push_back({coefficientRing->one(), canonicalMonomial(monomial)});
     return makePolyValue(result);
   }
@@ -237,283 +246,9 @@ bool SymmetricEngineRing::getScalar(const SymmetricRingPoly *f, ring_elem &resul
     return true;
   }
 
-bool SymmetricEngineRing::hasPowerSumConversionHook(const SymmetricMonomial& monomial, size_t pos) const
-{
-    auto key = basisIndexKey(monomial, pos);
-    return isPowerSumBasis(key.basisId);
-  }
-
-std::string SymmetricEngineRing::displayIndex(const SymmetricMonomial& monomial, size_t pos) const
-{
-    int n = atomIndexLengthAt(monomial, pos);
-    if (n <= 0) return "{}";
-    if (atomIsSkewAt(monomial, pos))
-      {
-        int outerLength = atomOuterLengthAt(monomial, pos);
-        int innerLength = atomInnerLengthAt(monomial, pos);
-        if (outerLength + innerLength != n) return "{}/{}";
-        std::vector<std::string> lambdaParts;
-        std::vector<std::string> muParts;
-        lambdaParts.reserve(outerLength);
-        muParts.reserve(innerLength);
-        for (int i = 0; i < outerLength; ++i)
-          lambdaParts.push_back(std::to_string(monomial.data[pos + atomHeaderSize + i]));
-        for (int i = outerLength; i < n; ++i)
-          muParts.push_back(std::to_string(monomial.data[pos + atomHeaderSize + i]));
-        return "{{" + join(lambdaParts, ",") + "}/{" + join(muParts, ",") + "}}";
-      }
-    if (n == 1) return std::to_string(monomial.data[pos + atomHeaderSize]);
-    std::vector<std::string> parts;
-    parts.reserve(n);
-    for (int i = 0; i < n; ++i)
-      parts.push_back(std::to_string(monomial.data[pos + atomHeaderSize + i]));
-    return "{" + join(parts, ",") + "}";
-  }
-
-std::string SymmetricEngineRing::displayBasisElement(
-    const SymmetricMonomial& monomial,
-    size_t pos) const
-{
-    return displayForBasis(atomBasisIdAt(monomial, pos)) + "_" +
-           displayIndex(monomial, pos);
-  }
-
-std::string SymmetricEngineRing::displayMonomial(const SymmetricMonomial& monomial) const
-{
-    if (monomial.data.empty()) return "1";
-    std::vector<std::string> factors;
-    for (size_t pos : presentationAtomPositions(monomial))
-        factors.push_back(displayBasisElement(monomial, pos));
-    return join(factors, "*");
-  }
-
-namespace {
-
-int compareIndexSegmentsDescending(const SymmetricMonomial& a,
-                                   size_t aStart,
-                                   int aLength,
-                                   const SymmetricMonomial& b,
-                                   size_t bStart,
-                                   int bLength)
-{
-    int common = std::min(aLength, bLength);
-    for (int i = 0; i < common; ++i)
-      {
-        int av = a.data[aStart + static_cast<size_t>(i)];
-        int bv = b.data[bStart + static_cast<size_t>(i)];
-        if (av != bv) return av > bv ? LT : GT;
-      }
-    if (aLength != bLength) return aLength > bLength ? LT : GT;
-    return EQ;
-}
-
-struct PresentationTermKey
-{
-  size_t storageIndex;
-  int weight;
-  std::vector<size_t> atomPositions;
-  std::vector<int> basisSignature;
-};
-
-} // namespace
-
-int SymmetricEngineRing::compareBasisIdsForPresentation(int aBasis,
-                                                        int bBasis) const
-{
-    int aOrder = basisOrderForId(aBasis);
-    int bOrder = basisOrderForId(bBasis);
-    if (aOrder != bOrder) return aOrder > bOrder ? LT : GT;
-    std::string aKey = basisKeyForId(aBasis);
-    std::string bKey = basisKeyForId(bBasis);
-    if (aKey != bKey) return aKey < bKey ? LT : GT;
-    if (aBasis != bBasis) return aBasis < bBasis ? LT : GT;
-    return EQ;
-  }
-
-std::vector<size_t> SymmetricEngineRing::presentationAtomPositions(
-    const SymmetricMonomial& monomial) const
-{
-    std::vector<size_t> positions;
-    size_t pos = 0;
-    while (pos < monomial.data.size())
-      {
-        positions.push_back(pos);
-        pos += atomLengthAt(monomial, pos);
-      }
-
-    auto compareAtoms = [&](size_t aPos, size_t bPos) {
-      int aBasis = atomBasisIdAt(monomial, aPos);
-      int bBasis = atomBasisIdAt(monomial, bPos);
-      int basisCmp = compareBasisIdsForPresentation(aBasis, bBasis);
-      if (basisCmp != EQ) return basisCmp == LT;
-
-      int outerCmp = compareIndexSegmentsDescending(
-          monomial,
-          aPos + atomHeaderSize,
-          atomOuterLengthAt(monomial, aPos),
-          monomial,
-          bPos + atomHeaderSize,
-          atomOuterLengthAt(monomial, bPos));
-      if (outerCmp != EQ) return outerCmp == LT;
-      int innerCmp = compareIndexSegmentsDescending(
-          monomial,
-          aPos + atomHeaderSize + atomOuterLengthAt(monomial, aPos),
-          atomInnerLengthAt(monomial, aPos),
-          monomial,
-          bPos + atomHeaderSize + atomOuterLengthAt(monomial, bPos),
-          atomInnerLengthAt(monomial, bPos));
-      return innerCmp == LT;
-    };
-    std::sort(positions.begin(), positions.end(), compareAtoms);
-    return positions;
-  }
-
-std::vector<int> SymmetricEngineRing::presentationMonomialData(
-    const SymmetricMonomial& monomial) const
-{
-    std::vector<int> result;
-    result.reserve(monomial.data.size());
-    for (size_t pos : presentationAtomPositions(monomial))
-      {
-        size_t length = atomLengthAt(monomial, pos);
-        result.insert(result.end(),
-                      monomial.data.begin() + pos,
-                      monomial.data.begin() + pos + length);
-      }
-    return result;
-  }
-
-std::vector<size_t> SymmetricEngineRing::presentationTermOrder(ring_elem f) const
-{
-    const auto *poly = polyValue(f);
-    std::vector<PresentationTermKey> keys;
-    keys.reserve(poly->terms.size());
-    const bool homogeneous = poly->conversionMetadata &&
-                             poly->conversionMetadata->homogeneousWeight;
-    const int homogeneousWeight = homogeneous
-        ? *poly->conversionMetadata->homogeneousWeight
-        : 0;
-
-    for (size_t i = 0; i < poly->terms.size(); ++i)
-      {
-        const auto& monomial = poly->terms[i].monomial;
-        PresentationTermKey key;
-        key.storageIndex = i;
-        key.weight = homogeneous ? homogeneousWeight : monomialWeight(monomial);
-        key.atomPositions = presentationAtomPositions(monomial);
-        for (size_t atomPos : key.atomPositions)
-          {
-            int basisId = atomBasisIdAt(monomial, atomPos);
-            if (std::find(key.basisSignature.begin(), key.basisSignature.end(), basisId) ==
-                key.basisSignature.end())
-              key.basisSignature.push_back(basisId);
-          }
-        std::sort(key.basisSignature.begin(), key.basisSignature.end(),
-                  [&](int aBasis, int bBasis) {
-                    return compareBasisIdsForPresentation(aBasis, bBasis) == LT;
-                  });
-        keys.push_back(std::move(key));
-      }
-
-    auto compareAtoms = [&](const SymmetricMonomial& a,
-                            size_t aPos,
-                            const SymmetricMonomial& b,
-                            size_t bPos) {
-      int basisCmp = compareBasisIdsForPresentation(
-          atomBasisIdAt(a, aPos), atomBasisIdAt(b, bPos));
-      if (basisCmp != EQ) return basisCmp;
-      int outerCmp = compareIndexSegmentsDescending(
-          a, aPos + atomHeaderSize, atomOuterLengthAt(a, aPos),
-          b, bPos + atomHeaderSize, atomOuterLengthAt(b, bPos));
-      if (outerCmp != EQ) return outerCmp;
-      return compareIndexSegmentsDescending(
-          a,
-          aPos + atomHeaderSize + atomOuterLengthAt(a, aPos),
-          atomInnerLengthAt(a, aPos),
-          b,
-          bPos + atomHeaderSize + atomOuterLengthAt(b, bPos),
-          atomInnerLengthAt(b, bPos));
-    };
-
-    auto presentationLess = [&](const PresentationTermKey& a,
-                                const PresentationTermKey& b) {
-      if (a.weight != b.weight) return a.weight > b.weight;
-      bool aScalar = a.atomPositions.empty();
-      bool bScalar = b.atomPositions.empty();
-      if (aScalar != bScalar) return !aScalar;
-      if (!aScalar)
-        {
-          int leadingBasisCmp = compareBasisIdsForPresentation(
-              a.basisSignature.front(), b.basisSignature.front());
-          if (leadingBasisCmp != EQ) return leadingBasisCmp == LT;
-        }
-      if (a.basisSignature.size() != b.basisSignature.size())
-        return a.basisSignature.size() < b.basisSignature.size();
-      for (size_t i = 0; i < a.basisSignature.size(); ++i)
-        {
-          int cmp = compareBasisIdsForPresentation(
-              a.basisSignature[i], b.basisSignature[i]);
-          if (cmp != EQ) return cmp == LT;
-        }
-
-      const auto& aMonomial = poly->terms[a.storageIndex].monomial;
-      const auto& bMonomial = poly->terms[b.storageIndex].monomial;
-      size_t common = std::min(a.atomPositions.size(), b.atomPositions.size());
-      for (size_t i = 0; i < common; ++i)
-        {
-          int cmp = compareAtoms(aMonomial, a.atomPositions[i],
-                                 bMonomial, b.atomPositions[i]);
-          if (cmp != EQ) return cmp == LT;
-        }
-      if (a.atomPositions.size() != b.atomPositions.size())
-        return a.atomPositions.size() < b.atomPositions.size();
-      int storageCmp = compareMonomials(aMonomial, bMonomial);
-      if (storageCmp != EQ) return storageCmp == LT;
-      return a.storageIndex < b.storageIndex;
-    };
-    std::sort(keys.begin(), keys.end(), presentationLess);
-
-    std::vector<size_t> result;
-    result.reserve(keys.size());
-    for (const auto& key : keys) result.push_back(key.storageIndex);
-    return result;
-  }
-
-std::string SymmetricEngineRing::elementString(ring_elem f, int maxTerms) const
-{
-    const auto *poly = polyValue(f);
-    if (poly->terms.empty()) return "0";
-    std::vector<size_t> order = presentationTermOrder(f);
-    size_t displayCount = order.size();
-    if (maxTerms >= 0)
-      displayCount = std::min(displayCount, static_cast<size_t>(maxTerms));
-    std::vector<std::string> pieces;
-    pieces.reserve(displayCount + 1);
-    for (size_t i = 0; i < displayCount; ++i)
-      {
-        const auto& term = poly->terms[order[i]];
-        if (term.monomial.data.empty())
-          {
-            pieces.push_back(coeffToString(coefficientRing, term.coeff));
-          }
-        else if (coefficientRing->is_equal(term.coeff, coefficientRing->one()))
-          {
-            pieces.push_back(displayMonomial(term.monomial));
-          }
-        else if (coefficientRing->is_equal(term.coeff, coefficientRing->minus_one()))
-          {
-            pieces.push_back("-" + displayMonomial(term.monomial));
-          }
-        else
-          {
-            pieces.push_back("(" + coeffToString(coefficientRing, term.coeff) +
-                             ")*" + displayMonomial(term.monomial));
-          }
-      }
-    if (displayCount < poly->terms.size())
-      pieces.push_back(std::to_string(poly->terms.size() - displayCount) + " terms");
-    return join(pieces, " + ");
-  }
+// ============================================================================
+// Weight, Hashing, And Engine Text Output
+// ============================================================================
 
 int SymmetricEngineRing::elementWeight(ring_elem f) const
 {
@@ -566,6 +301,10 @@ void SymmetricEngineRing::elem_text_out(buffer &o,
     o << elementString(f);
     if (parens) o << ')';
   }
+
+// ============================================================================
+// Coefficient-Ring Construction And Transport
+// ============================================================================
 
 ring_elem SymmetricEngineRing::from_long(long n) const
 {
@@ -652,6 +391,10 @@ bool SymmetricEngineRing::lift(const Ring *Rg, const ring_elem f, ring_elem &res
       }
     return false;
   }
+
+// ============================================================================
+// Comparison And Additive Arithmetic
+// ============================================================================
 
 bool SymmetricEngineRing::is_unit(const ring_elem f) const
 {
@@ -804,6 +547,10 @@ ring_elem SymmetricEngineRing::subtract(const ring_elem f, const ring_elem g) co
     return add(f, negate(g));
   }
 
+// ============================================================================
+// Multiplication And Combinatorial Tagging
+// ============================================================================
+
 SymmetricRingPoly *SymmetricEngineRing::multByCoefficient(ring_elem coeff,
                                        const SymmetricRingPoly *poly) const
 {
@@ -818,6 +565,103 @@ SymmetricRingPoly *SymmetricEngineRing::multByCoefficient(ring_elem coeff,
         if (!coefficientRing->is_zero(c)) result->terms.push_back({c, term.monomial});
       }
     return result;
+  }
+
+CombinatorialTags SymmetricEngineRing::selectMultiplicationTags(
+        ring_elem f,
+        ring_elem g) const
+{
+    const auto *left = polyValue(f);
+    const auto *right = polyValue(g);
+    if (left->terms.empty() || right->terms.empty()) return 0;
+
+    auto isScalar = [](const SymmetricRingPoly *poly) {
+      return poly->terms.size() == 1 &&
+             poly->terms.front().monomial.data.empty();
+    };
+    if (isScalar(left)) return right->combinatorialTags;
+    if (isScalar(right)) return left->combinatorialTags;
+
+    auto singleSpecialFactor = [&](const SymmetricRingPoly *poly)
+        -> std::optional<std::pair<BasisKind, int>> {
+      if (poly->terms.size() != 1) return std::nullopt;
+      const auto& monomial = poly->terms.front().monomial;
+      if (monomial.data.empty() ||
+          atomLengthAt(monomial, 0) != monomial.data.size() ||
+          atomIsSkewAt(monomial, 0))
+        return std::nullopt;
+      BasisKind kind = basisKindForId(atomBasisIdAt(monomial, 0));
+      if (kind != BasisKind::Complete && kind != BasisKind::Elementary &&
+          kind != BasisKind::PowerSum)
+        return std::nullopt;
+      const Partition& index = basisElementIndex(monomial, 0);
+      if (index.size() != 1 || index.front() <= 0) return std::nullopt;
+      return std::pair<BasisKind, int>{kind, index.front()};
+    };
+
+    auto isSchurExpansion = [&](const SymmetricRingPoly *poly) {
+      bool foundSchurTerm = false;
+      for (const auto& term : poly->terms)
+        {
+          const auto& monomial = term.monomial;
+          if (monomial.data.empty()) continue;
+          if (atomLengthAt(monomial, 0) != monomial.data.size() ||
+              atomIsSkewAt(monomial, 0) ||
+              basisKindForId(atomBasisIdAt(monomial, 0)) != BasisKind::Schur)
+            return false;
+          foundSchurTerm = true;
+        }
+      return foundSchurTerm;
+    };
+
+    auto leftSpecial = singleSpecialFactor(left);
+    auto rightSpecial = singleSpecialFactor(right);
+    auto hasHigherSpecial = [&](BasisKind kind) {
+      return (leftSpecial && leftSpecial->first == kind &&
+              leftSpecial->second > 1) ||
+             (rightSpecial && rightSpecial->first == kind &&
+              rightSpecial->second > 1);
+    };
+
+    if (hasHigherSpecial(BasisKind::Complete))
+      return combinatorialTagMask(CombinatorialTag::HorizontalPieri);
+    if (hasHigherSpecial(BasisKind::Elementary))
+      return combinatorialTagMask(CombinatorialTag::VerticalPieri);
+    if (hasHigherSpecial(BasisKind::PowerSum))
+      return combinatorialTagMask(CombinatorialTag::BorderStrips);
+
+    // h_1 = e_1 = S_1. A p_1 factor is also Schur-like when the other
+    // operand retains Schur/plethysm structure, but ordinary multiplicative
+    // p-index construction must remain BorderStrips.
+    bool hasDegreeOneCompleteOrElementary =
+        (leftSpecial && leftSpecial->second == 1 &&
+         (leftSpecial->first == BasisKind::Complete ||
+          leftSpecial->first == BasisKind::Elementary)) ||
+        (rightSpecial && rightSpecial->second == 1 &&
+         (rightSpecial->first == BasisKind::Complete ||
+          rightSpecial->first == BasisKind::Elementary));
+    if (hasDegreeOneCompleteOrElementary)
+      return combinatorialTagMask(CombinatorialTag::LittlewoodRichardson);
+
+    bool leftIsPowerSumOne = leftSpecial && leftSpecial->second == 1 &&
+                             leftSpecial->first == BasisKind::PowerSum;
+    bool rightIsPowerSumOne = rightSpecial && rightSpecial->second == 1 &&
+                              rightSpecial->first == BasisKind::PowerSum;
+    if (leftIsPowerSumOne || rightIsPowerSumOne)
+      {
+        const auto *other = leftIsPowerSumOne ? right : left;
+        bool otherHasSchurStructure = isSchurExpansion(other) ||
+            hasCombinatorialTag(other->combinatorialTags,
+                                CombinatorialTag::Plethysm) ||
+            hasCombinatorialTag(other->combinatorialTags,
+                                CombinatorialTag::LittlewoodRichardson);
+        return combinatorialTagMask(otherHasSchurStructure
+            ? CombinatorialTag::LittlewoodRichardson
+            : CombinatorialTag::BorderStrips);
+      }
+    if (isSchurExpansion(left) || isSchurExpansion(right))
+      return combinatorialTagMask(CombinatorialTag::LittlewoodRichardson);
+    return 0;
   }
 
 ring_elem SymmetricEngineRing::mult(const ring_elem f, const ring_elem g) const
@@ -895,6 +739,10 @@ ring_elem SymmetricEngineRing::mult(const ring_elem f, const ring_elem g) const
         }
     return preserveProductMetadata(fromTermVector(products, false));
   }
+
+// ============================================================================
+// Collected Expansion Transport
+// ============================================================================
 
 bool SymmetricEngineRing::promoteCollectedExpansion(
     const RingElement *input,
@@ -984,6 +832,10 @@ bool SymmetricEngineRing::liftCollectedExpansion(
     return true;
   }
 
+// ============================================================================
+// Batch Arithmetic
+// ============================================================================
+
 ring_elem SymmetricEngineRing::batchSum(engine_RawRingElementArray elements) const
 {
     if (elements == nullptr || elements->len == 0) return zero();
@@ -1036,6 +888,10 @@ ring_elem SymmetricEngineRing::batchProduct(engine_RawRingElementArray elements)
       }
     return result;
   }
+
+// ============================================================================
+// Unsupported Generic Ring Operations
+// ============================================================================
 
 ring_elem SymmetricEngineRing::invert(const ring_elem f) const
 {

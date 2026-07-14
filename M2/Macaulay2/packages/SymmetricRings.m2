@@ -82,7 +82,6 @@ importFrom(Core, {
     "rawSymmetricRingsPresentationTermIndices",
     "rawSymmetricRingsPresentationTermMonomial",
     "rawSymmetricRingsElementToString",
-    "rawSymmetricRingsElementToStringLimited",
     "rawSymmetricRingsElementWeight",
     "raw",
     "RawRing",
@@ -91,6 +90,8 @@ importFrom(Core, {
 
 load "SymmetricRings/registeringBases.m2"
 load "SymmetricRings/operators.m2"
+load "SymmetricRings/transformedBases.m2"
+load "SymmetricRings/builtInBases.m2"
 load "SymmetricRings/symmetricRingsAndElements.m2"
 load "SymmetricRings/computations.m2"
 

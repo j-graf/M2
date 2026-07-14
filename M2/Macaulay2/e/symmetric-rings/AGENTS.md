@@ -53,7 +53,7 @@ to read when `powerSumsToTargetDispatch` chooses each of:
 
 - `powerSumsToSchurViaBorderStrips`
 - `powerSumsToSchurViaAbacusRimHooks`
-- `powerSumsToSchurViaDegreeBlocks`
+- `ViaSchurDegreeBlocks`, executed by `runPowerSumsToSchurDegreeBlockPipeline`
 - `powerSumsToSchurViaComplete`
 - `powerSumsToSchurViaCharacters`
 - `powerSumSingleCycleTermsToHallLittlewoodViaGreenPolynomials`
@@ -100,6 +100,8 @@ raw dispatch entry points.
 - `basis-conversion-kernels.*`: conversion formulas and straightening.
 - `basis-conversion-products.*`: multiplication, skew expansion, LR, Pieri,
   and border-strip algorithms.
+- `presentation.cpp`: presentation ordering and string rendering.
+- `expression-inspection.cpp`: shared expression-shape and coefficient-map probes.
 - `plethysm.*` and `omega.*`: their respective major operations.
 - `inner-product-dispatch.*`: inner-product requests, profiles, selectors,
   tracing, pipeline orchestration, and public entry points.

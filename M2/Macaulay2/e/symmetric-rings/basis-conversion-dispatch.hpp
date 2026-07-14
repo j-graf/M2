@@ -5,6 +5,32 @@
 
 // Declaration fragment included inside SymmetricEngineRing.
 
+  enum class ExpressionToTargetRoute
+  {
+    ViaSchurTriangularReduction,
+    ViaHallLittlewoodTriangularReduction,
+    ViaFactorwiseConversion,
+    NoApplicableRoute
+  };
+
+  enum class BasisElementToPowerSumsRoute
+  {
+    AlreadyPowerSums,
+    ViaCompleteClassicalFormula,
+    ViaElementaryClassicalFormula,
+    ViaHallLittlewoodGeneratorClassicalFormula,
+    ViaSchurCharacters,
+    ViaSchurOmegaCharacters,
+    ViaMonomialTransition,
+    ViaForgottenTransition,
+    ViaHallLittlewoodRaisingOperators,
+    ViaHallLittlewoodCapitalNormalization,
+    ViaSkewSchurJacobiTrudiComplete,
+    ViaSkewSchurOmegaJacobiTrudiElementary,
+    ViaSkewHallLittlewood,
+    NoApplicableRoute
+  };
+
   enum class KnownState { Unknown, True, False };
   enum class ConversionPipeline
   {
@@ -12,6 +38,7 @@
     GroupedMultiplicativeTarget,
     GroupedHallLittlewood,
     PowerSums,
+    // Retained internal stage; ordinary expression selection never returns it.
     PostPlethysmPowerSums,
     FallbackTerm,
     FactorizedProduct,
@@ -183,7 +210,6 @@
           ring_elem f,
           const ConversionGuarantees& guarantees,
           CombinatorialTags combinatorialTags = 0) const;
-  CombinatorialTags selectMultiplicationTags(ring_elem f, ring_elem g) const;
 
 // ============================================================================
 // Top-Level Conversion Pipeline
@@ -256,6 +282,9 @@
 // ============================================================================
 // All p-to-target route choices are visible together in this dispatcher family.
 
+  PowerSumsToTargetRoute selectPowerSumsToSchurRoute(
+          const ConversionInput& input,
+          bool omega) const;
   PowerSumsToTargetRoute selectPowerSumsToTargetRoute(
           const ConversionInput& input,
           int pBasisId,
@@ -281,7 +310,7 @@
           const std::string& targetDisplay,
           int targetDisplayOrder,
           bool targetIsMultiplicative) const;
-  ring_elem powerSumsToSchurViaDegreeBlocks(
+  ring_elem runPowerSumsToSchurDegreeBlockPipeline(
           const ConversionInput& input,
           int pBasisId,
           int targetBasisId,
@@ -299,16 +328,6 @@
           const std::string& targetDisplay,
           int targetOrder) const;
   ring_elem runPowerSumsPipeline(
-          const ConversionInput& input,
-          int pBasisId,
-          const std::string& pDisplay,
-          int pOrder,
-          bool pIsMultiplicative,
-          int targetBasisId,
-          const std::string& targetDisplay,
-          int targetOrder,
-          bool targetIsMultiplicative) const;
-  ring_elem runPostPlethysmPowerSumsPipeline(
           const ConversionInput& input,
           int pBasisId,
           const std::string& pDisplay,
@@ -384,6 +403,65 @@
           bool targetIsMultiplicative) const;
 
 // ============================================================================
+// Generic Basis-Element And Expression Dispatch
+// ============================================================================
+// Route selection and expression workflows used by the general fallback.
+
+  BasisElementToPowerSumsRoute selectBasisElementToPowerSumsRoute(
+        const SymmetricMonomial& monomial,
+        size_t pos) const;
+  const char *basisElementToPowerSumsRouteName(
+        BasisElementToPowerSumsRoute route) const;
+  void traceBasisElementToPowerSumsSelection(
+        BasisElementToPowerSumsRoute route,
+        const std::string& sourceDisplay) const;
+  ring_elem executeBasisElementToPowerSumsRoute(
+        BasisElementToPowerSumsRoute route,
+        const SymmetricMonomial& monomial,
+        size_t pos) const;
+  ring_elem basisElementToPowerSumsDispatch(
+        const SymmetricMonomial& monomial,
+        size_t pos) const;
+  ring_elem monomialToPowerSumsViaBasisElementRoutes(
+        const SymmetricMonomial& monomial) const;
+  ring_elem expressionToPowerSumsViaBasisElementRoutes(ring_elem f) const;
+  bool tryBasisElementToTarget(const SymmetricMonomial& monomial,
+                              size_t pos,
+                              int targetBasisId,
+                              const std::string& targetDisplay,
+                              int targetDisplayOrder,
+                              bool targetIsMultiplicative,
+                              ring_elem& result) const;
+  bool tryMonomialToTarget(const SymmetricMonomial& monomial,
+                          int targetBasisId,
+                          const std::string& targetDisplay,
+                          int targetDisplayOrder,
+                          bool targetIsMultiplicative,
+                          ring_elem& result) const;
+  ExpressionToTargetRoute selectExpressionToTargetRoute(
+          int targetBasisId,
+          bool targetIsMultiplicative) const;
+  const char *expressionToTargetRouteName(
+          ExpressionToTargetRoute route) const;
+  void traceExpressionToTargetSelection(
+          ExpressionToTargetRoute route,
+          const std::string& targetDisplay) const;
+  bool executeExpressionToTargetRoute(
+          ExpressionToTargetRoute route,
+          ring_elem f,
+          int targetBasisId,
+          const std::string& targetDisplay,
+          int targetDisplayOrder,
+          bool targetIsMultiplicative,
+          ring_elem& result) const;
+  bool tryExpressionToTarget(ring_elem f,
+          int targetBasisId,
+          const std::string& targetDisplay,
+          int targetDisplayOrder,
+          bool targetIsMultiplicative,
+          ring_elem& result) const;
+
+// ============================================================================
 // Fallback Term Pipeline
 // ============================================================================
 // The correctness baseline normalizes, classifies, expands products, and converts terms.
@@ -442,6 +520,16 @@
           const ConversionInput& requestInput,
           ring_elem f,
           ring_elem g,
+          int pBasisId,
+          const std::string& pDisplay,
+          int pOrder,
+          bool pIsMultiplicative,
+          int targetBasisId,
+          const std::string& targetDisplay,
+          int targetOrder,
+          bool targetIsMultiplicative) const;
+  ring_elem runPostPlethysmPowerSumsPipeline(
+          const ConversionInput& input,
           int pBasisId,
           const std::string& pDisplay,
           int pOrder,
@@ -510,25 +598,10 @@
           int targetOrder,
           bool targetIsMultiplicative) const;
  public:
-  ring_elem toBasis(ring_elem f,
-                        int pBasisId,
-                        const std::string& pDisplay,
-                        int pOrder,
-                        bool pIsMultiplicative,
-                        int targetBasisId,
-                        const std::string& targetDisplay,
-                        int targetOrder,
-                        bool targetIsMultiplicative) const;
+  ring_elem toBasis(ring_elem f, int targetBasisId) const;
   ring_elem productToBasisDispatch(ring_elem f,
                                      ring_elem g,
-                                     int pBasisId,
-                                     const std::string& pDisplay,
-                                     int pOrder,
-                                     bool pIsMultiplicative,
-                                     int targetBasisId,
-                                     const std::string& targetDisplay,
-                                     int targetOrder,
-                                     bool targetIsMultiplicative) const;
+                                     int targetBasisId) const;
 
  private:
 
