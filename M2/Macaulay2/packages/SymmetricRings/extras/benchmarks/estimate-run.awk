@@ -1,23 +1,5 @@
 #!/usr/bin/awk -f
 
-function medianRecent(key,    n, i, j, value, result) {
-    n = recentCount[key]
-    for (i = 1; i <= n; i++) work[i] = recentValue[key, i]
-    for (i = 2; i <= n; i++) {
-        value = work[i]
-        j = i - 1
-        while (j >= 1 && work[j] > value) {
-            work[j + 1] = work[j]
-            j--
-        }
-        work[j + 1] = value
-    }
-    result = n % 2 ? work[(n + 1) / 2] : \
-        (work[n / 2] + work[n / 2 + 1]) / 2
-    for (i = 1; i <= n; i++) delete work[i]
-    return result
-}
-
 function duration(seconds) {
     if (seconds < 1) return sprintf("%.3f s", seconds)
     if (seconds < 60) return sprintf("%.1f s", seconds)
@@ -33,12 +15,12 @@ FILENAME == recordFile {
     next
 }
 
-FILENAME == recentFile {
+FILENAME == latestFile {
     if (FNR == 1) next
     split($0, field, "\t")
-    if (length(field) < 8) next
-    key = field[1] SUBSEP field[5]
-    recentValue[key, ++recentCount[key]] = field[8] + 0
+    if (length(field) < 6) next
+    key = field[1] SUBSEP field[4]
+    latestValue[key] = field[3] + 0
     next
 }
 
@@ -56,9 +38,9 @@ END {
         key = caseId[i] SUBSEP caseRing[i]
         family = caseFamily[i]
         familyCases[family]++
-        if (recentCount[key] > 0) {
-            estimate = medianRecent(key)
-            recentSources++
+        if (key in latestValue) {
+            estimate = latestValue[key]
+            latestSources++
         } else if (key in recordValue) {
             estimate = recordValue[key]
             recordSources++
@@ -71,11 +53,12 @@ END {
     }
 
     printf "Benchmark time estimate (no tests run)\n\n"
+    printf "Device profile: %s.\n", deviceProfile
     caseWord = caseCount == 1 ? "case" : "cases"
     familyWord = familyCount == 1 ? "family" : "families"
     printf "Selection: %d %s across %d %s, %d repetitions.\n", \
         caseCount, caseWord, familyCount, familyWord, repetitions
-    printf "Most recent result run: %s.\n\n", recentLabel
+    printf "Latest per-case history: %s.\n\n", latestLabel
     printf "| Family | Cases | Timed work | Process overhead | Calibration | Estimated wall | Unknown |\n"
     printf "|---|---:|---:|---:|---:|---:|---:|\n"
     for (i = 1; i <= familyCount; i++) {
@@ -93,10 +76,10 @@ END {
     }
     total = totalWork + totalOverhead + totalCalibration
     printf "\nEstimated total wall time: **%s**.\n\n", duration(total)
-    printf "Timing sources: %d latest-run medians, %d fastest records, %d unknown.\n\n", \
-        recentSources, recordSources, unknownSources
+    printf "Timing sources: %d latest per-case medians, %d fastest records, %d unknown.\n\n", \
+        latestSources, recordSources, unknownSources
     printf "Model assumptions: %.2f s fresh-process overhead per worker and %.2f s per calibration computation. ", \
         processOverhead, calibrationSeconds
-    printf "Latest-run wall medians are preferred; record CPU medians approximate wall time. "
+    printf "Latest per-case CPU medians are preferred, with fastest records as fallback. "
     printf "Override the model with SYMRINGS_BENCH_PROCESS_OVERHEAD_SECONDS or SYMRINGS_BENCH_CALIBRATION_SECONDS.\n"
 }

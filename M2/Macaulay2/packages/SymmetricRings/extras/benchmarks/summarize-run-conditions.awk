@@ -133,10 +133,12 @@ END {
     if (family_count == 0)
         warn("No calibration probes were recorded.")
 
-    for (i = 1; i <= 5; i++) {
+    for (i = 1; i <= 8; i++) {
         key = i == 1 ? "varied_mode" : (i == 2 ? "varied_level" : \
             (i == 3 ? "random_seed" : (i == 4 ? "new_only" : \
-            "new_reference_run")))
+            (i == 5 ? "new_reference_history" : \
+            (i == 6 ? "device_profile" : \
+            (i == 7 ? "records_history" : "latest_history"))))))
         if (configuration[key] == "") configuration[key] = "unknown"
     }
 
@@ -158,10 +160,15 @@ END {
         printf "Pageout activity: %s.\n\n", pageout_summary
 
     printf "### Benchmark selection\n\n"
-    printf "| Mode | Level | Random seed | New only | Reference run |\n|---|---|---:|---|---|\n"
-    printf "| %s | %s | %s | %s | %s |\n\n", configuration["varied_mode"], \
+    printf "| Device | Mode | Level | Random seed | New only | New-case history |\n"
+    printf "|---|---|---|---:|---|---|\n"
+    printf "| %s | %s | %s | %s | %s | %s |\n\n", \
+        configuration["device_profile"], configuration["varied_mode"], \
         configuration["varied_level"], configuration["random_seed"], \
-        configuration["new_only"], configuration["new_reference_run"]
+        configuration["new_only"], configuration["new_reference_history"]
+
+    printf "History sources: fastest records `%s`; latest per-case results `%s`.\n\n", \
+        configuration["records_history"], configuration["latest_history"]
 
     printf "### Condition snapshots\n\n"
     printf "| Metric | Before | After |\n|---|---|---|\n"

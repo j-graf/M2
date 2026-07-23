@@ -34,6 +34,7 @@ The suite is in `extras/benchmarks/`. Validate before cataloged runs:
 ```sh
 BUILD/build/M2 --script \
   Macaulay2/packages/SymmetricRings/extras/benchmarks/validate.m2
+Macaulay2/packages/SymmetricRings/extras/benchmarks/test-history.sh
 ```
 
 Inspect and run selections with `run-benchmarks.sh`:
@@ -41,10 +42,16 @@ Inspect and run selections with `run-benchmarks.sh`:
 ```sh
 Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh --list
 Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --case pleth-three-row2-combined
+  --device m4-laptop --case pleth-three-row2-combined
 Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --family SchurPlethysm --tier Medium --repetitions 3
+  --device m4-laptop --family SchurPlethysm --tier Medium --repetitions 3
 ```
+
+Every history-aware command requires a user-chosen device profile, supplied by
+`--device` or `SYMRINGS_BENCH_DEVICE`. Use a stable, non-sensitive slug; never
+derive it from a hostname, serial number, or another unique machine identifier.
+Each device owns `history/PROFILE/records.tsv`,
+`history/PROFILE/latest.tsv`, and `results/PROFILE/`.
 
 Supported timing tiers are `Small`, `Medium`, `Large`, and `Stress`.
 Filters compose; use `--list` before a potentially long run.
@@ -53,21 +60,21 @@ Cross-family breadth profiles have fixed and random modes:
 
 ```sh
 Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --varied-fixed light
+  --device m4-laptop --varied-fixed light
 Macaulay2/packages/SymmetricRings/extras/benchmarks/run-benchmarks.sh \
-  --varied-random standard --seed 42
+  --device m4-laptop --varied-random standard --seed 42
 ```
 
 Levels are `light`, `standard`, and `thorough`; they describe breadth, not
 timing. Fixed profiles are nested and reproducible. Random profiles select at
 most 1, 2, or 4 cases per eligible family; record or supply the seed.
 
-Use `--new` for cases absent from both `records.tsv` and the single most
-recently modified result run. Older result runs are ignored.
+Use `--new` for cases absent from both of the selected device's history tables.
 
 Use `--estimate` for a non-running wall-time estimate with any selection. It
-prefers the most recent run, falls back to fastest records, models fresh M2
-processes and family calibration, and creates no result directory.
+prefers the selected device's latest per-case median, falls back to its fastest
+records, models fresh M2 processes and family calibration, and creates no
+result directory.
 
 Optional breadth cases belong in descriptive `Family-extra` families.
 
@@ -76,9 +83,9 @@ Optional breadth cases belong in descriptive `Family-extra` families.
 Every timed repetition uses a fresh M2 process, a temporary `HOME`, and
 sequential execution. Never parallelize cold timing processes.
 
-Every result directory begins with `YYYYMMDD-HHMMSS`. `--output LABEL` appends
-a single-component descriptive label to that timestamp; never reuse an
-existing run directory. A run contains:
+Every result directory is under `results/PROFILE/` and begins with
+`YYYYMMDD-HHMMSS`. `--output LABEL` appends a single-component descriptive
+label to that timestamp; never reuse an existing run directory. A run contains:
 
 ```text
 raw.tsv  summary.tsv  comparison.tsv
@@ -104,11 +111,17 @@ informational; use the magnitude, rate, and memory thresholds in README.
 
 ## Fastest records
 
-`benchmarks/records.tsv` is the active comparison source. It stores the fastest
-median CPU time for each case and ring among runs of at least three repetitions.
-The suite compares against pre-run records, writes the report, then updates
-records automatically. An individual repetition is never a record. Use five
-runs for changes below about 10%.
+`benchmarks/history/PROFILE/records.tsv` is the active comparison source for
+one device. It stores the fastest median CPU time for each case and ring among
+runs of at least three repetitions. The suite compares against pre-run records,
+writes the report, then updates records automatically. An individual
+repetition is never a record. Use five runs for changes below about 10%.
+
+`benchmarks/history/PROFILE/latest.tsv` stores the most recent verified,
+completed median for every case and ring run on that device. Every selected
+case replaces its row after a successful run, regardless of repetition count;
+unselected rows remain. Diagnostic `--no-verify` runs update neither history
+file.
 
 When testing a code or selector update, inspect the record comparison. It says
 how the update compares with the fastest qualifying result seen so far.

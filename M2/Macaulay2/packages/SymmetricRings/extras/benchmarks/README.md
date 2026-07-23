@@ -21,19 +21,23 @@ authoritative source for the exact command-line spelling:
 A normal selected run has the form:
 
 ```sh
-./run-benchmarks.sh --family SchurPlethysm
+./run-benchmarks.sh --device m4-laptop --family SchurPlethysm
 ```
 
-Each run creates one timestamped directory under `results/`.  Its final
-`report.md` contains the comparison intended for people to read.  When sharing
-a run in chat, share **only `report.md`**, not all of the auxiliary files.
+Choose one stable, non-sensitive profile slug for each computer. Supply it with
+`--device` or set `SYMRINGS_BENCH_DEVICE` in that computer's shell environment.
+Do not use a hostname, serial number, or another unique machine identifier.
+
+Each run creates one timestamped directory under `results/PROFILE/`. Its final
+`report.md` contains the comparison intended for people to read. When sharing a
+run in chat, share **only `report.md`**, not all of the auxiliary files.
 
 Before a long run, use estimate mode with the same selection options. It reads
 the latest available timings and fastest records but does not execute tests
 or create a results directory:
 
 ```sh
-./run-benchmarks.sh --family SchurPlethysm --estimate
+./run-benchmarks.sh --device m4-laptop --family SchurPlethysm --estimate
 ```
 
 ## How cases are organized
@@ -58,9 +62,9 @@ used to focus a run.  Representative cross-family checks are available at
 three coverage levels:
 
 ```sh
-./run-benchmarks.sh --varied-fixed light
-./run-benchmarks.sh --varied-fixed standard
-./run-benchmarks.sh --varied-fixed thorough
+./run-benchmarks.sh --device m4-laptop --varied-fixed light
+./run-benchmarks.sh --device m4-laptop --varied-fixed standard
+./run-benchmarks.sh --device m4-laptop --varied-fixed thorough
 ```
 
 The fixed form always selects the same representative cases, making it useful
@@ -69,22 +73,24 @@ for repeated checks during development.
 The random form samples within the selected families:
 
 ```sh
-./run-benchmarks.sh --varied-random standard --seed 12345
+./run-benchmarks.sh --device m4-laptop --varied-random standard --seed 12345
 ```
 
 Record the seed when sharing a random run.  The coverage levels select
 increasing numbers of cases per family; they describe breadth, not a promise
 about execution speed.
 
-To execute only cases that have no fastest record and no result in the single
-most recently modified run, use:
+To execute only cases that have never completed a verified run on the selected
+device, use:
 
 ```sh
-./run-benchmarks.sh --new
+./run-benchmarks.sh --device m4-laptop --new
 ```
 
-“New” deliberately checks only `records.tsv` and that one latest run. It does
-not scan all historical result directories.
+“New” checks both history tables for the selected device. Normally `latest.tsv`
+contains one most recent entry for every case and coefficient ring previously
+run on that device; consulting records too preserves knowledge imported from
+older record-only history.
 
 ## What happens during a run
 
@@ -102,16 +108,20 @@ The suite records:
 - a run-condition classification;
 - a Markdown report.
 
-After writing the report, the suite automatically updates `records.tsv` with
-any lower median based on at least three repetitions.
+After writing the report, the suite automatically updates the selected
+device's `records.tsv` with any lower median based on at least three
+repetitions. It also replaces the selected cases in that device's `latest.tsv`
+with the current verified medians, regardless of repetition count. Unselected
+latest rows remain unchanged.
 
 No performance monitor runs during a timed test.  Calibration occurs only
 before and after families, so the probes do not compete with benchmark work.
 All system and memory information is collected without elevated privileges.
 
-The time estimate uses the most recent run median when one is available,
-otherwise the fastest record, plus the suite's startup and calibration
-model.  It is an estimate rather than a scheduling guarantee.
+The time estimate uses each case's most recent median on the selected device
+when one is available, otherwise that device's fastest record, plus the suite's
+startup and calibration model. It is an estimate rather than a scheduling
+guarantee.
 
 ## Results directories
 
@@ -119,13 +129,14 @@ A completed run creates a directory like:
 
 ```text
 results/
-  YYYYMMDD-HHMMSS/
-    raw...
-    summary...
-    comparison...
-    system...
-    conditions...
-    report.md
+  m4-laptop/
+    YYYYMMDD-HHMMSS/
+      raw...
+      summary...
+      comparison...
+      system...
+      conditions...
+      report.md
 ```
 
 When `--output LABEL` is supplied, the directory is named
@@ -198,15 +209,16 @@ For cleaner measurements:
 
 ## Fastest records
 
-`records.tsv` contains one fastest qualifying median per case and coefficient
-ring. A qualifying value is the median CPU time of at least three repetitions;
-an unusually fast individual repetition never becomes a record.
+`history/PROFILE/records.tsv` contains one fastest qualifying median per case
+and coefficient ring for that device. A qualifying value is the median CPU
+time of at least three repetitions; an unusually fast individual repetition
+never becomes a record.
 
 For each run, `comparison.tsv` and `report.md` use the record table as it stood
 before that run. This preserves a meaningful comparison when the current run
 sets a new record. After the report is complete, the runner automatically
-updates `records.tsv`, recording the median, repetition count, capture time,
-and source run directory.
+updates that device's `records.tsv`, recording the median, repetition count,
+capture time, source run directory, and device profile.
 
 Records are the active development comparison. They measure distance from the
 fastest qualifying run observed for the same case and coefficient ring.
@@ -216,6 +228,25 @@ The record classification uses the configured percentage threshold.
 ties, or misses the record. Thus a small record-setting change may correctly
 have `record_status = new-record` while its thresholded record classification
 is `stable`.
+
+## Latest per-case results
+
+`history/PROFILE/latest.tsv` has the same columns and case/ring key as the
+record table, but serves a different purpose. After every completed verified
+run, each selected case replaces its latest row even when it is slower than a
+previous result or has fewer than three repetitions. Cases not selected in the
+run retain their existing rows.
+
+The latest table supports estimates and the `--new` selector. It is an index
+into the timestamped run history, not a fastest-record comparison and not a
+replacement for the complete result directories. Diagnostic `--no-verify`
+runs update neither records nor latest results.
+
+The former shared record table was migrated to the `legacy` device profile.
+Its `latest.tsv` begins empty because fastest records cannot establish which
+run was most recent. Use `--device legacy` only for the computer that produced
+those records, or deliberately rename that profile and its `device_profile`
+column before collecting new results. Never use `legacy` for both computers.
 
 ## Adding a benchmark case
 
@@ -268,11 +299,18 @@ The suite is divided into small components for maintainability:
 - the runner and shell wrapper select and execute cases;
 - validation checks the tables before expensive work;
 - summarization and comparison compute medians and record differences;
-- `update-records.awk` updates fastest qualifying medians after reporting;
-- estimation predicts duration without running cases;
+- `update-records.awk` updates per-device fastest qualifying medians after
+  reporting;
+- `update-latest.awk` updates per-device most recent verified medians;
+- `test-history.sh` checks record retention and latest-result replacement;
+- estimation prefers latest per-case medians and predicts duration without
+  running cases;
 - system, condition, and calibration code describe the environment;
 - report code renders the final Markdown document;
-- `records.tsv` stores automatically maintained fastest qualifying medians.
+- `history/PROFILE/records.tsv` stores automatically maintained fastest
+  qualifying medians;
+- `history/PROFILE/latest.tsv` stores automatically maintained most recent
+  verified medians.
 
 When changing one component, preserve the distinction between raw measurement,
 statistical summary, comparison policy, and presentation.  In particular, do
@@ -296,9 +334,9 @@ If timings unexpectedly regress:
 7. inspect whether input construction, shadow-QQ conversion, or the target
    operation is actually responsible.
 
-If a new case is not classified as new, remember that `--new` consults both
-`records.tsv` and the single most recent raw run. A result in either is enough
-to make the case non-new.
+If a new case is not selected by `--new`, inspect the selected device's
+`latest.tsv` and `records.tsv`. An entry in either means that case has already
+run on the device.
 
 ## Reporting a benchmark result
 

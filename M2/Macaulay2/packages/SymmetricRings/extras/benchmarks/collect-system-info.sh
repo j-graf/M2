@@ -3,6 +3,7 @@ set -eu
 
 M2_BIN=${1:-M2}
 SOURCE_ROOT=${2:-.}
+DEVICE_PROFILE=${3:-unknown}
 
 clean_value() {
     printf '%s' "$1" | tr '\t\r\n' '   '
@@ -96,6 +97,7 @@ fi
 
 printf 'field\tvalue\n'
 emit captured_at "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+emit device_profile "$DEVICE_PROFILE"
 emit computer_model "$computer_model"
 emit model_identifier "$model_identifier"
 emit cpu_model "$cpu_model"
@@ -114,4 +116,3 @@ emit git_commit "$git_commit"
 emit git_branch "$git_branch"
 emit git_dirty "$git_dirty"
 emit cmake_build_type "$build_type"
-

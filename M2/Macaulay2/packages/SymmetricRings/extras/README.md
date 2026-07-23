@@ -121,10 +121,12 @@ valuable independent checks.
 
 ## Interpreting timing changes
 
-Compare with the fastest qualifying median in `benchmarks/records.tsv`, not
-only the immediately preceding run, and inspect whether the mathematical route,
-coefficient ring, or machine conditions changed. This is especially important
-after changing an implementation or selector.
+Compare with the fastest qualifying median in the selected device's
+`benchmarks/history/PROFILE/records.tsv`, not only the immediately preceding
+run, and inspect whether the mathematical route, coefficient ring, or machine
+conditions changed. The parallel `latest.tsv` is the most recent verified
+median for each case on that device. This is especially important after
+changing an implementation or selector.
 
 An unchanged total time can conceal opposing changes in conversion and input
 construction.  A regression may come from:
