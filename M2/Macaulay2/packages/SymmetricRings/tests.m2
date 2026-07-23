@@ -630,7 +630,7 @@ TEST ///
 ///
 
 TEST ///
-    Rsource = symmetricRing QQ
+    R0 = symmetricRing QQ
     f = h_1
     R1 = symmetricRing ZZ
     assert(try (plethysm(h_2, h_1); false) else true)
