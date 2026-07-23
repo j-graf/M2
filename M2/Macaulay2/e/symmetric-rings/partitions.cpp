@@ -47,6 +47,17 @@ int partitionLength(const Partition& p)
   return result;
 }
 
+bool hasNegativeTailWeight(const Partition& index)
+{
+  long long tailWeight = 0;
+  for (auto part = index.rbegin(); part != index.rend(); ++part)
+    {
+      tailWeight += *part;
+      if (tailWeight < 0) return true;
+    }
+  return false;
+}
+
 bool isPartitionIndex(const Partition& p)
 {
   return trimTrailingZerosPartition(p) == normalizePartition(p);

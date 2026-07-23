@@ -27,6 +27,7 @@ std::string partitionKey(const Partition& p);
 Partition normalizePartition(const Partition& p);
 int partitionWeight(const Partition& p);
 int partitionLength(const Partition& p);
+bool hasNegativeTailWeight(const Partition& index);
 bool isPartitionIndex(const Partition& p);
 int partitionPart(const Partition& p, size_t i);
 bool partitionContains(const Partition& outer, const Partition& inner);

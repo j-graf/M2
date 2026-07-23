@@ -224,6 +224,15 @@ ring_elem SymmetricEngineRing::basisElement(int basisId,
         return zero();
       }
     const auto& basis = requireBasis(basisId);
+    if (innerLength == 0)
+      {
+        Partition userIndex;
+        userIndex.reserve(payloadLength);
+        if (index != nullptr)
+          for (int i = 0; i < payloadLength; ++i)
+            userIndex.push_back(index->array[i]);
+        if (hasNegativeTailWeight(userIndex)) return zero();
+      }
     auto result = new SymmetricRingPoly;
     SymmetricMonomial monomial;
     appendAtomBlock(

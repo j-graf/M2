@@ -1414,6 +1414,9 @@ CoeffMap SymmetricEngineRing::raisingExpansion(const Partition& lambda) const
     IntegerPolynomialMap normalized;
     for (const auto& item : current)
       {
+        if (std::any_of(item.first.begin(), item.first.end(),
+                        [](int part) { return part < 0; }))
+          continue;
         Partition index = normalizePartition(item.first);
         auto inserted = normalized.emplace(index, IntegerPolynomial{});
         addRaisingFactorProduct(inserted.first->second, item.second, 0);
@@ -2032,7 +2035,10 @@ ring_elem SymmetricEngineRing::straightenHallCapitalBasisElement(const Partition
           break;
         }
     if (bad == trimmed.size())
-      return basisElementFromIndex(basisId, trimmed);
+      {
+        if (trimmed.back() < 0) return zero();
+        return basisElementFromIndex(basisId, trimmed);
+      }
 
     int s = trimmed[bad];
     int r = trimmed[bad + 1];
