@@ -13,9 +13,12 @@
 #include "rings/ring.hpp"
 #include "rings/ringelem.hpp"
 
+#include <array>
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <tuple>
 #include <vector>
 
 namespace symmetric_rings {
@@ -24,6 +27,18 @@ class SymmetricEngineRing : public Ring
 {
 
  private:
+  struct ComputationLimits
+  {
+    size_t maxWeight = 200;
+    size_t maxEnumeratedPartitions = 250000;
+    size_t maxGeneratedTerms = 250000;
+    size_t maxRecursiveStates = 5000000;
+    size_t maxCacheEntries = 250000;
+    size_t maxCharacterCacheEntries = 2000000;
+    size_t maxDeterminantStates = 262144;
+    size_t maxEstimatedMemoryBytes = 512ULL * 1024ULL * 1024ULL;
+  };
+
   enum class BasisKind
   {
     Custom = 0,
@@ -52,6 +67,7 @@ class SymmetricEngineRing : public Ring
   };
 
   const Ring *coefficientRing;
+  mutable ComputationLimits computationLimits;
   mutable std::map<int, BasisDescriptor> basisDescriptors;
   mutable std::map<BasisKind, int> basisIdsByKind;
 
@@ -71,6 +87,8 @@ class SymmetricEngineRing : public Ring
       hallLittlewoodPowerSumToCapitalCoefficientCache;
   mutable GCMap<Partition, CoeffMap> hallLittlewoodRaisingGeneratorMapCache;
   mutable std::map<int, CharacterTable> characterTableCache;
+  mutable size_t characterCacheEntryCount = 0;
+  mutable size_t computationCacheEntryCount = 0;
   mutable GCMap<int, CoeffMap> powerSumToCompleteMapCache;
   mutable GCMap<int, CoeffMap> powerSumToElementaryMapCache;
   mutable GCMap<int, CoeffMap> powerSumToQGeneratorMapCache;
@@ -86,7 +104,7 @@ class SymmetricEngineRing : public Ring
       littlewoodRichardsonTableauProductCache;
   mutable std::map<std::pair<Partition, Partition>, std::vector<PartitionCoefficientTerm>>
       skewSchurToSchurViaLittlewoodRichardsonCache;
-  mutable std::map<std::pair<Partition, Partition>, long> kostkaNumberCache;
+  mutable std::map<std::pair<Partition, Partition>, mpz_class> kostkaNumberCache;
   mutable std::map<std::pair<Partition, int>, std::vector<PartitionCoefficientTerm>>
       schurTimesPowerSumViaBorderStripsCache;
   mutable std::map<std::pair<Partition, int>, std::vector<PartitionCoefficientTerm>>
@@ -120,8 +138,28 @@ class SymmetricEngineRing : public Ring
   std::string basisKeyForId(int basisId) const;
   int basisOrderForId(int basisId) const;
   const CharacterTable& characterTable(int degree) const;
-  int characterTableValue(const CharacterTable& table, size_t row, size_t col) const;
+  mpz_class characterTableValue(
+      const CharacterTable& table, size_t row, size_t col) const;
+  mpz_class characterValueWithinLimits(
+      const Partition& lambda, const Partition& mu) const;
+  mpz_class pToMonomialCoefficientWithinLimits(
+      const Partition& lambda, const Partition& mu) const;
+  std::vector<Partition> partitionsOfWithinLimits(
+      int degree, const char *operation) const;
+  bool estimatedMemoryWithinLimit(
+      size_t count, size_t bytesPerItem, const char *operation) const;
+  bool determinantStatesWithinLimit(size_t states, const char *operation) const;
+  bool consumeRecursiveState(size_t& states, const char *operation) const;
+  void requireCacheEntryCapacity(const char *operation) const;
+  void requirePartitionWithinWeightLimit(
+      const Partition& index, const char *operation) const;
+  void requireWeightWithinLimit(long long weight, const char *operation) const;
+  void requireMonomialWithinWeightLimit(
+      const SymmetricMonomial& monomial, const char *operation) const;
   ring_elem rationalCoefficient(long numerator, long denominator) const;
+  ring_elem rationalCoefficient(
+      const mpz_class& numerator,
+      const mpz_class& denominator) const;
   void clearHallLittlewoodCaches() const;
   ring_elem hallLittlewoodFactor(const Partition& mu) const;
   ring_elem basisElementFromIndex(int basisId,
@@ -139,7 +177,8 @@ class SymmetricEngineRing : public Ring
 
 #include "symmetric-rings/basis-conversion-kernels.hpp"
 #include "symmetric-rings/basis-conversion-products.hpp"
-#include "symmetric-rings/basis-conversion-dispatch.hpp"
+#include "symmetric-rings/basis-conversion.hpp"
+#include "symmetric-rings/basis-coefficient.hpp"
 #include "symmetric-rings/omega.hpp"
 #include "symmetric-rings/plethysm.hpp"
 #include "symmetric-rings/inner-product-dispatch.hpp"
@@ -184,6 +223,14 @@ class SymmetricEngineRing : public Ring
                                int order,
                                bool isMultiplicative) const;
   bool setHallLittlewoodParameter(const RingElement *t) const;
+  void setComputationLimits(size_t maxWeight,
+                            size_t maxEnumeratedPartitions,
+                            size_t maxGeneratedTerms,
+                            size_t maxRecursiveStates,
+                            size_t maxCacheEntries,
+                            size_t maxCharacterCacheEntries,
+                            size_t maxDeterminantStates,
+                            size_t maxEstimatedMemoryMB) const;
   ring_elem fromCoeff(ring_elem coeff) const;
   ring_elem basisElement(int basisId,
                            int innerLength,

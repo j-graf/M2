@@ -175,7 +175,9 @@ set(SRCLIST
   symmetric-rings/presentation
   symmetric-rings/symmetric-engine-ring
   symmetric-rings/expression-inspection
-  symmetric-rings/basis-conversion-dispatch
+  symmetric-rings/basis-coefficient
+  symmetric-rings/basis-conversion-policy
+  symmetric-rings/basis-conversion
   symmetric-rings/basis-conversion-kernels
   symmetric-rings/basis-conversion-products
   symmetric-rings/inner-product-dispatch

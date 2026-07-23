@@ -113,10 +113,19 @@ SymmetricEngineRing::requireBasis(int basisId) const
 
 void SymmetricEngineRing::rememberBasesFrom(const SymmetricEngineRing *R) const
 {
+    bool changed = false;
     for (const auto& item : R->basisDescriptors)
       if (basisDescriptors.find(item.first) == basisDescriptors.end())
-        basisDescriptors[item.first] = item.second;
+        {
+          basisDescriptors[item.first] = item.second;
+          changed = true;
+        }
     for (const auto& item : R->basisIdsByKind) basisIdsByKind[item.first] = item.second;
+    if (changed)
+      {
+        basisConversionPlanRegistryCache.clear();
+        multiplicationPlanRegistryCache.clear();
+      }
   }
 
 std::string SymmetricEngineRing::displayForBasis(int basisId) const
@@ -144,7 +153,12 @@ const CharacterTable& SymmetricEngineRing::characterTable(int degree) const
     if (cached != characterTableCache.end()) return cached->second;
 
     CharacterTable table;
-    table.partitions = partitionsOf(degree);
+    table.partitions = partitionsOfWithinLimits(degree, "character table");
+    if (error())
+      {
+        static const CharacterTable empty;
+        return empty;
+      }
     table.zValues.reserve(table.partitions.size());
     for (size_t i = 0; i < table.partitions.size(); ++i)
       {
@@ -152,27 +166,178 @@ const CharacterTable& SymmetricEngineRing::characterTable(int degree) const
         table.zValues.push_back(zValue(table.partitions[i]));
       }
 
-    table.values.resize(
-        table.partitions.size(),
-        std::vector<int>(table.partitions.size(), unknownCharacterValue));
-
+    requireCacheEntryCapacity("character-table cache");
     auto inserted = characterTableCache.emplace(degree, std::move(table));
     return inserted.first->second;
   }
 
-int SymmetricEngineRing::characterTableValue(const CharacterTable& table, size_t row, size_t col) const
+mpz_class SymmetricEngineRing::characterTableValue(
+    const CharacterTable& table, size_t row, size_t col) const
 {
-    int& value = table.values[row][col];
-    if (value == unknownCharacterValue)
-      value = characterValue(table.partitions[row], table.partitions[col]);
+    const auto key = std::make_pair(row, col);
+    auto cached = table.values.find(key);
+    if (cached != table.values.end()) return cached->second;
+    if (characterCacheEntryCount >= computationLimits.maxCharacterCacheEntries)
+      throw exc::engine_error(
+          "character cache entry limit exceeded; increase MaxCharacterCacheEntries in the symmetricRing ComputationLimits option");
+    bool recursiveLimitExceeded = false;
+    mpz_class value = characterValueWithLimit(
+        table.partitions[row],
+        table.partitions[col],
+        computationLimits.maxRecursiveStates,
+        recursiveLimitExceeded);
+    if (recursiveLimitExceeded)
+      throw exc::engine_error(
+          "character recursion state limit exceeded; increase MaxRecursiveStates in the symmetricRing ComputationLimits option");
+    requireCacheEntryCapacity("character-value cache");
+    table.values.emplace(key, value);
+    ++characterCacheEntryCount;
     return value;
+  }
+
+mpz_class SymmetricEngineRing::characterValueWithinLimits(
+    const Partition& lambda, const Partition& mu) const
+{
+    bool recursiveLimitExceeded = false;
+    mpz_class value = characterValueWithLimit(
+        lambda,
+        mu,
+        computationLimits.maxRecursiveStates,
+        recursiveLimitExceeded);
+    if (recursiveLimitExceeded)
+      throw exc::engine_error(
+          "character recursion state limit exceeded; increase MaxRecursiveStates in the symmetricRing ComputationLimits option");
+    return value;
+  }
+
+mpz_class SymmetricEngineRing::pToMonomialCoefficientWithinLimits(
+    const Partition& lambda, const Partition& mu) const
+{
+    bool recursiveLimitExceeded = false;
+    mpz_class value = pToMonomialCoefficientWithLimit(
+        lambda,
+        mu,
+        computationLimits.maxRecursiveStates,
+        recursiveLimitExceeded);
+    if (recursiveLimitExceeded)
+      throw exc::engine_error(
+          "power-sum-to-monomial recursion state limit exceeded; increase MaxRecursiveStates in the symmetricRing ComputationLimits option");
+    return value;
+  }
+
+bool SymmetricEngineRing::estimatedMemoryWithinLimit(
+    size_t count, size_t bytesPerItem, const char *operation) const
+{
+    if (bytesPerItem != 0 &&
+        count > computationLimits.maxEstimatedMemoryBytes / bytesPerItem)
+      throw exc::engine_error(
+          std::string(operation) +
+          " exceeds the estimated memory limit; increase MaxEstimatedMemoryMB in the symmetricRing ComputationLimits option");
+    return true;
+  }
+
+std::vector<Partition> SymmetricEngineRing::partitionsOfWithinLimits(
+    int degree, const char *operation) const
+{
+    const size_t count =
+        partitionCountUpToLimit(degree, computationLimits.maxEnumeratedPartitions);
+    if (count > computationLimits.maxEnumeratedPartitions)
+      throw exc::engine_error(
+          std::string(operation) +
+          " exceeds the partition-enumeration limit; increase MaxEnumeratedPartitions in the symmetricRing ComputationLimits option");
+    // Vector nodes, integer payloads, and allocator overhead vary by platform.
+    // Sixty-four bytes per partition is a deliberately conservative preflight.
+    if (!estimatedMemoryWithinLimit(count, 64, operation)) return {};
+    return partitionsOf(degree);
+  }
+
+bool SymmetricEngineRing::determinantStatesWithinLimit(
+    size_t states, const char *operation) const
+{
+    if (states > computationLimits.maxDeterminantStates)
+      throw exc::engine_error(
+          std::string(operation) +
+          " exceeds the determinant-state limit; increase MaxDeterminantStates in the symmetricRing ComputationLimits option");
+    return estimatedMemoryWithinLimit(states, 2 * sizeof(ring_elem), operation);
+  }
+
+bool SymmetricEngineRing::consumeRecursiveState(
+    size_t& states, const char *operation) const
+{
+    if (states >= computationLimits.maxRecursiveStates)
+      throw exc::engine_error(
+          std::string(operation) +
+          " exceeds the recursion-state limit; increase MaxRecursiveStates in the symmetricRing ComputationLimits option");
+    ++states;
+    return true;
+  }
+
+void SymmetricEngineRing::requireCacheEntryCapacity(
+    const char *operation) const
+{
+    if (computationCacheEntryCount >= computationLimits.maxCacheEntries)
+      throw exc::engine_error(
+          std::string(operation) +
+          " exceeds MaxCacheEntries in the symmetricRing ComputationLimits option");
+    ++computationCacheEntryCount;
+  }
+
+void SymmetricEngineRing::requireWeightWithinLimit(
+    long long weight, const char *operation) const
+{
+    const unsigned long long magnitude =
+        weight < 0
+            ? static_cast<unsigned long long>(-(weight + 1)) + 1
+            : static_cast<unsigned long long>(weight);
+    if (magnitude > computationLimits.maxWeight)
+      throw exc::engine_error(
+          std::string(operation) +
+          " exceeds MaxWeight in the symmetricRing ComputationLimits option");
+  }
+
+void SymmetricEngineRing::requirePartitionWithinWeightLimit(
+    const Partition& index, const char *operation) const
+{
+    if (index.size() > computationLimits.maxWeight)
+      throw exc::engine_error(
+          std::string(operation) +
+          " exceeds MaxWeight in the symmetricRing ComputationLimits option");
+    unsigned long long complexity = 0;
+    for (int part : index)
+      {
+        const long long widePart = part;
+        const unsigned long long magnitude =
+            widePart < 0
+                ? static_cast<unsigned long long>(-(widePart + 1)) + 1
+                : static_cast<unsigned long long>(widePart);
+        if (magnitude > computationLimits.maxWeight - complexity)
+          throw exc::engine_error(
+              std::string(operation) +
+              " exceeds MaxWeight in the symmetricRing ComputationLimits option");
+        complexity += magnitude;
+      }
+  }
+
+void SymmetricEngineRing::requireMonomialWithinWeightLimit(
+    const SymmetricMonomial& monomial, const char *operation) const
+{
+    requireWeightWithinLimit(monomialWeight(monomial), operation);
   }
 
 ring_elem SymmetricEngineRing::rationalCoefficient(long numerator, long denominator) const
 {
+    return rationalCoefficient(
+        mpz_class(numerator), mpz_class(denominator));
+  }
+
+ring_elem SymmetricEngineRing::rationalCoefficient(
+    const mpz_class& numerator,
+    const mpz_class& denominator) const
+{
     mpq_t q;
     mpq_init(q);
-    mpq_set_si(q, numerator, denominator);
+    mpz_set(mpq_numref(q), numerator.get_mpz_t());
+    mpz_set(mpq_denref(q), denominator.get_mpz_t());
     mpq_canonicalize(q);
     ring_elem result;
     if (!coefficientRing->from_rational(q, result))
@@ -212,6 +377,7 @@ ring_elem SymmetricEngineRing::hallLittlewoodFactor(const Partition& mu) const
             ring_elem tPower = coefficientRing->power(hallLittlewoodParameter, part);
             ring_elem oneMinus = coefficientRing->subtract(
                 coefficientRing->one(), tPower);
+            requireCacheEntryCapacity("Hall-Littlewood factor cache");
             cached = hallLittlewoodPartFactorCache.emplace(part, oneMinus).first;
           }
         result = coefficientRing->mult(result, cached->second);
@@ -227,6 +393,7 @@ ring_elem SymmetricEngineRing::basisElementFromIndex(
     int basisId,
     const Partition& index) const
 {
+    requirePartitionWithinWeightLimit(index, "basis element");
     const auto& basis = requireBasis(basisId);
     auto result = new SymmetricRingPoly;
     SymmetricMonomial monomial;
@@ -241,6 +408,12 @@ ring_elem SymmetricEngineRing::basisElementFromSkewIndex(
     const Partition& outer,
     const Partition& inner) const
 {
+    requirePartitionWithinWeightLimit(outer, "skew outer index");
+    requirePartitionWithinWeightLimit(inner, "skew inner index");
+    requireWeightWithinLimit(
+        static_cast<long long>(partitionWeight(outer)) -
+            static_cast<long long>(partitionWeight(inner)),
+        "skew basis element");
     const auto& basis = requireBasis(basisId);
     Partition payload = outer;
     payload.insert(payload.end(), inner.begin(), inner.end());
@@ -308,7 +481,11 @@ void SymmetricEngineRing::rememberBasisMetadata(int basisId,
           }
       }
     else
-      basisDescriptors.emplace(basisId, std::move(descriptor));
+      {
+        basisDescriptors.emplace(basisId, std::move(descriptor));
+        basisConversionPlanRegistryCache.clear();
+        multiplicationPlanRegistryCache.clear();
+      }
     if (kind != BasisKind::Custom) basisIdsByKind[kind] = basisId;
   }
 
@@ -322,6 +499,32 @@ bool SymmetricEngineRing::setHallLittlewoodParameter(const RingElement *t) const
     hallLittlewoodParameter = promoted;
     clearHallLittlewoodCaches();
     return true;
+  }
+
+void SymmetricEngineRing::setComputationLimits(
+    size_t maxWeight,
+    size_t maxEnumeratedPartitions,
+    size_t maxGeneratedTerms,
+    size_t maxRecursiveStates,
+    size_t maxCacheEntries,
+    size_t maxCharacterCacheEntries,
+    size_t maxDeterminantStates,
+    size_t maxEstimatedMemoryMB) const
+{
+    computationLimits.maxWeight = maxWeight;
+    computationLimits.maxEnumeratedPartitions = maxEnumeratedPartitions;
+    computationLimits.maxGeneratedTerms = maxGeneratedTerms;
+    computationLimits.maxRecursiveStates = maxRecursiveStates;
+    computationLimits.maxCacheEntries = maxCacheEntries;
+    computationLimits.maxCharacterCacheEntries = maxCharacterCacheEntries;
+    computationLimits.maxDeterminantStates = maxDeterminantStates;
+    if (maxEstimatedMemoryMB >
+        std::numeric_limits<size_t>::max() / (1024ULL * 1024ULL))
+      computationLimits.maxEstimatedMemoryBytes =
+          std::numeric_limits<size_t>::max();
+    else
+      computationLimits.maxEstimatedMemoryBytes =
+          maxEstimatedMemoryMB * 1024ULL * 1024ULL;
   }
 
 int SymmetricEngineRing::uniformBasisId(ring_elem f) const

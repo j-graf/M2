@@ -165,14 +165,8 @@ M2_SYMMETRIC_RINGS_TRACE_CONVERSION=1
 M2_SYMMETRIC_RINGS_TRACE_INNER_PRODUCT=1
 ```
 
-Forced `p -> S` routes are:
-
-```sh
-M2_SYMMETRIC_RINGS_FORCE_P_TO_S_ROUTE=abacus-rim-hooks
-M2_SYMMETRIC_RINGS_FORCE_P_TO_S_ROUTE=border-strips
-M2_SYMMETRIC_RINGS_FORCE_P_TO_S_ROUTE=via-complete
-M2_SYMMETRIC_RINGS_FORCE_P_TO_S_ROUTE=grouped-characters
-```
+Conversion registry plans use the
+`M2_SYMMETRIC_RINGS_FORCE_CONVERSION_*` controls documented in README.
 
 Run each forced route in a separate cold process. Avoid grouped characters on
 medium or large inputs without a timeout. Forced routes never become records.

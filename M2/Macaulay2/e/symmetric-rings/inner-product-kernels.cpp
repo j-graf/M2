@@ -82,12 +82,14 @@ ring_elem SymmetricEngineRing::powerSumPairing(
 // ============================================================================
 // Ordinary Schur and Schur Omega pairings use Kostka and conjugate Kostka numbers.
 
-long SymmetricEngineRing::kostkaNumberViaSemistandardTableaux(
+mpz_class SymmetricEngineRing::kostkaNumberViaSemistandardTableaux(
     const Partition& shape,
     const Partition& content) const
 {
     Partition lambda = normalizePartition(shape);
     Partition mu = normalizePartition(content);
+    requirePartitionWithinWeightLimit(lambda, "Kostka shape");
+    requirePartitionWithinWeightLimit(mu, "Kostka content");
     if (partitionWeight(lambda) != partitionWeight(mu)) return 0;
     int lambdaSum = 0;
     int muSum = 0;
@@ -103,7 +105,14 @@ long SymmetricEngineRing::kostkaNumberViaSemistandardTableaux(
     auto cached = kostkaNumberCache.find(cacheKey);
     if (cached != kostkaNumberCache.end()) return cached->second;
 
+    const size_t cellCount = static_cast<size_t>(partitionWeight(lambda));
+    if (!estimatedMemoryWithinLimit(
+            cellCount,
+            sizeof(std::pair<size_t, int>) + sizeof(int),
+            "Kostka tableau"))
+      return 0;
     std::vector<std::pair<size_t, int>> cells;
+    cells.reserve(cellCount);
     for (size_t row = 0; row < lambda.size(); ++row)
       for (int col = 0; col < lambda[row]; ++col)
         cells.push_back({row, col});
@@ -111,8 +120,11 @@ long SymmetricEngineRing::kostkaNumberViaSemistandardTableaux(
     for (size_t row = 0; row < lambda.size(); ++row)
       tableau[row].assign(lambda[row], 0);
     std::vector<int> remaining(mu.begin(), mu.end());
-    long result = 0;
+    mpz_class result = 0;
+    size_t states = 0;
     std::function<void(size_t)> fill = [&](size_t cell) {
+      if (!consumeRecursiveState(states, "Kostka tableau enumeration"))
+        return;
       if (cell == cells.size())
         {
           ++result;
@@ -136,6 +148,7 @@ long SymmetricEngineRing::kostkaNumberViaSemistandardTableaux(
         }
     };
     fill(0);
+    requireCacheEntryCapacity("Kostka cache");
     kostkaNumberCache[cacheKey] = result;
     return result;
   }
@@ -166,9 +179,10 @@ ring_elem SymmetricEngineRing::kostkaInnerProductForBasisElements(
         return coefficientRing->zero();
       }
     if (conjugateShape) shape = conjugatePartition(shape);
-    long kostka = kostkaNumberViaSemistandardTableaux(shape, content);
+    mpz_class kostka =
+        kostkaNumberViaSemistandardTableaux(shape, content);
     return coefficientRing->mult(
-        coefficientRing->from_long(kostka),
+        coefficientRing->from_int(kostka.get_mpz_t()),
         coefficientRing->mult(schurCoefficient,
                               multiplicativeCoefficient));
   }
@@ -257,7 +271,8 @@ SymmetricEngineRing::powerSumsSchurInnerProductViaWeightedCharacters(
                 ERROR("weighted-character route requires partition-indexed Schur elements");
                 return coefficientRing->zero();
               }
-            int chi = characterValue(schurTerm.first, mu);
+            mpz_class chi =
+                characterValueWithinLimits(schurTerm.first, mu);
             if (chi == 0) continue;
             ring_elem diagonal = powerSumDiagonalFactor(mu, context);
             if (error()) return coefficientRing->zero();
@@ -269,7 +284,7 @@ SymmetricEngineRing::powerSumsSchurInnerProductViaWeightedCharacters(
             if (error()) return coefficientRing->zero();
             if (chi != 1)
               contribution = coefficientRing->mult(
-                  coefficientRing->from_long(chi), contribution);
+                  coefficientRing->from_int(chi.get_mpz_t()), contribution);
             result = coefficientRing->add(result, contribution);
           }
       }

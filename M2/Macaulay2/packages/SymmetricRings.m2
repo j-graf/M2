@@ -58,6 +58,7 @@ export {
 importFrom(Core, {
     "rawSymmetricRing",
     "rawSymmetricRingsSetHallLittlewoodParameter",
+    "rawSymmetricRingsSetComputationLimits",
     "rawSymmetricRingsRememberBasis",
     "rawSymmetricRingsBasisElement",
     "rawSymmetricRingsSum",
@@ -66,7 +67,7 @@ importFrom(Core, {
     "rawSymmetricRingsProduct",
     "rawSymmetricRingsJacobiTrudi",
     "rawSymmetricRingsToBasis",
-    "rawSymmetricRingsProductToBasisDispatch",
+    "rawSymmetricRingsMultiplyToBasis",
     "rawSymmetricRingsPlethysm",
     "rawSymmetricRingsPlethysmToBasis",
     "rawSymmetricRingsSingleBasisId",

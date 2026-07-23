@@ -111,7 +111,13 @@ ring_elem SymmetricEngineRing::omegaBasisElementDirect(
         return makePolyValue(poly);
       }
 
-    ring_elem inPowerSums = basisElementToPowerSumsDispatch(monomial, pos);
+    // Metadata mappings above are exact omega formulas. When no such formula
+    // exists, make the basis element explicit and let the shared conversion
+    // registry own the route to power sums.
+    ring_elem basisElement = expressionFromAtom(monomial, pos);
+    int powerSumBasisId = requiredBasisIdForKind(BasisKind::PowerSum);
+    if (error()) return zero();
+    ring_elem inPowerSums = toBasis(basisElement, powerSumBasisId);
     if (error()) return zero();
     return omegaPowerSums(inPowerSums);
   }

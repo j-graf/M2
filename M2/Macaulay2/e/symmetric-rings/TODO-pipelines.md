@@ -4,75 +4,97 @@ This checklist records the design principles for replacing the current C++
 pipeline systems with simpler, mostly linear workflows.  It intentionally
 specifies architectural outcomes before choosing implementation details.
 
-## Central invariant
+## Conversion/multiplication status
 
-- [ ] Enforce the central workflow invariant:
+The conversion and multiplication portions of this design are implemented by
+`toBasis`, `multiplyTermToBasis`, and `multiplyToBasis`. They use one
+exact canonical-core facts contract with lazy selector profiles, an
+independent cached direct-kernel registry, arbitrary
+intermediate-basis composition, ordered plan forcing, policy-free executors,
+and explicit multiplication stages. Differential and forced-plan tests cover
+every registered conversion and multiplication plan family, M2-owned custom
+and transformed bases, coefficient rings and QQ-shadow promotion, metadata
+invalidation, skew and multifactor inputs, and configured resource boundaries.
+
+The shared-plan workflow owns the public entry points. Unchecked whole-project
+criteria below remain open where they concern the separate inner-product and
+plethysm redesigns.
+
+The completed boxes through the conversion and multiplication sections apply
+only to those workflows. The later inner-product, plethysm, optional-metadata,
+and storage experiments retain their own independent status.
+
+## Conversion/multiplication central invariant
+
+- [x] Enforce the central workflow invariant:
   > Each public calculation has one owning, mostly linear workflow.  Every
   > request follows that workflow.  A stage may be bypassed only when known
   > facts guarantee its postcondition.  The old specialized pipelines become
   > bypasses, internal plans, or explicit helper operations rather than
   > competing top-level workflows.
 
-## Design principles
+## Conversion/multiplication design principles
 
-- [ ] Use consistent terminology: workflow, stage, bypass, plan, registry,
-      helper, and kernel; use pipeline only for the legacy structures.
-- [ ] Give each public calculation one complete owning workflow.
-- [ ] Make each workflow mostly linear, using loops only when intrinsic to the
+- [x] Use consistent terminology: workflow, stage, bypass, plan, registry,
+      helper, kernel, and operation-specific pipeline.
+- [x] Give each public calculation one complete owning workflow.
+- [x] Make each workflow mostly linear, using loops only when intrinsic to the
       calculation.
-- [ ] Replace every legacy specialized pipeline with a documented bypass, plan,
+- [x] Replace every former specialized pipeline with a documented bypass, plan,
       helper operation, or ordinary workflow stage.
-- [ ] Permit a bypass only when known facts guarantee the skipped stage's
+- [x] Permit a bypass only when known facts guarantee the skipped stage's
       postcondition.
-- [ ] Use provenance and performance hints for plan selection, never as
+- [x] Use provenance and performance hints for plan selection, never as
       correctness guarantees.
-- [ ] Give every stage, helper, and plan explicit input and output contracts and
+- [x] Give every stage, helper, and plan explicit input and output contracts and
       make it total over its accepted domain.
-- [ ] Keep helper dependencies explicit and acyclic; prefer the direction
+- [x] Keep helper dependencies explicit and acyclic; prefer the direction
       `toBasis -> multiplyTermToBasis -> multiplyToBasis`, with no reverse calls.
-- [ ] Use one shared `X -> Y` plan registry from `toBasis`,
+- [x] Use one shared `X -> Y` plan registry from `toBasis`,
       `multiplyTermToBasis`, `multiplyToBasis`, and any other calculation needing
       basis conversion.
-- [ ] Select the complete basis composition and every direct plan before plan
-      execution; do not begin one plan, decline, and select another.
-- [ ] Keep kernels small, reusable, policy-free, and unable to call public
+- [x] Select the complete basis composition before execution and select each
+      direct plan before executing that edge. A support-dependent later edge
+      may be selected only at an explicit stage boundary from exact realized
+      facts; do not begin one plan, decline, and select another.
+- [x] Keep kernels small, reusable, policy-free, and unable to call public
       workflow entry points.
-- [ ] Use one shared facts representation, compute each fact at most once when
+- [x] Use one shared facts representation, compute each fact at most once when
       possible, and compute expensive facts lazily.
-- [ ] Optimize locally by adding a bypass guarantee, improving a stage or helper,
+- [x] Optimize locally by adding a bypass guarantee, improving a stage or helper,
       registering a better plan, or improving a kernel.
-- [ ] Preserve useful intermediate representations and cached facts across
+- [x] Preserve useful intermediate representations and cached facts across
       stages and helper calls.
-- [ ] Separate plan non-applicability from mathematical or engine execution
+- [x] Separate plan non-applicability from mathematical or engine execution
       errors.
-- [ ] Trace executed and bypassed stages, helper calls, registry selections, and
+- [x] Trace executed and bypassed stages, helper calls, registry selections, and
       the facts that justified them.
-- [ ] Test every bypass and optimized plan against the ordinary broad
+- [x] Test every bypass and optimized plan against the ordinary broad
       calculation at its selection boundaries.
-- [ ] Make adding a kernel or plan a local registry change with explicit
+- [x] Make adding a kernel or plan a local registry change with explicit
       preconditions, differential tests, and benchmark evidence when needed.
 
-## Completion criteria
+## Conversion/multiplication completion criteria
 
-- [ ] Confirm that each public calculation has one mostly linear workflow.
-- [ ] Confirm that `toBasis` uses the same workflow for pure and mixed inputs.
-- [ ] Confirm that every legacy specialized pipeline has become a documented
+- [x] Confirm that each public calculation has one mostly linear workflow.
+- [x] Confirm that `toBasis` uses the same workflow for pure and mixed inputs.
+- [x] Confirm that every former specialized pipeline has become a documented
       bypass, plan, helper operation, or workflow stage.
-- [ ] Confirm that every bypass is justified by a fact that guarantees the
+- [x] Confirm that every bypass is justified by a fact that guarantees the
       skipped stage's postcondition.
-- [ ] Confirm that helper-operation dependencies are explicit and acyclic.
-- [ ] Confirm that no plan or helper recursively calls its owning public entry
+- [x] Confirm that helper-operation dependencies are explicit and acyclic.
+- [x] Confirm that no plan or helper recursively calls its owning public entry
       point.
-- [ ] Confirm that every stage, helper, and selected plan is total for its
+- [x] Confirm that every stage, helper, and selected plan is total for its
       declared domain.
-- [ ] Confirm that shared kernels contain no workflow- or plan-selection policy.
-- [ ] Confirm that broad stage calculations remain independent correctness
+- [x] Confirm that shared kernels contain no workflow- or plan-selection policy.
+- [x] Confirm that broad stage calculations remain independent correctness
       references for optimized plans and bypasses.
-- [ ] Confirm that `toBasis`, `multiplyTermToBasis`, and `multiplyToBasis` use the
+- [x] Confirm that `toBasis`, `multiplyTermToBasis`, and `multiplyToBasis` use the
       same independent `X -> Y` plan registry.
-- [ ] Demonstrate adding at least one new conversion kernel using the intended
+- [x] Demonstrate adding at least one new conversion kernel using the intended
       contributor workflow.
-- [ ] Update `README-pipelines.md` so its decision trees reflect the completed
+- [x] Update `README-pipelines.md` so its decision trees reflect the completed
       architecture.
 
 ## Expression metadata
@@ -90,70 +112,70 @@ contains useful extension points that should not block that redesign.
 
 **Canonical form**
 
-- [ ] Record whether indices are normalized.
-- [ ] Record whether the expression is skew-free.
-- [ ] Record whether the expression is collected and sorted.
-- [ ] Record whether the expression is product-free.
-- [ ] Record the number of terms containing unresolved products.
-- [ ] Record the maximum number of factors in one term.
+- [x] Record whether indices are normalized.
+- [x] Record whether the expression is skew-free.
+- [x] Record whether the expression is collected and sorted.
+- [x] Record whether the expression is product-free.
+- [x] Record the number of terms containing unresolved products.
+- [x] Record the maximum number of factors in one term.
 
 **Basis composition**
 
-- [ ] Record every basis appearing among the expression's factors.
-- [ ] Record the pure basis when every factor uses one basis.
-- [ ] Record the expanded basis when every nonscalar term is one canonical
+- [x] Record every basis appearing among the expression's factors.
+- [x] Record the pure basis when every factor uses one basis.
+- [x] Record the expanded basis when every nonscalar term is one canonical
       basis element.
-- [ ] Record whether the expression is mixed-basis.
-- [ ] Record whether the expression is one canonical basis element.
-- [ ] For one canonical basis element, record its basis identifier and index.
+- [x] Record whether the expression is mixed-basis.
+- [x] Record whether the expression is one canonical basis element.
+- [x] For one canonical basis element, record its basis identifier and index.
 
 **Term structure**
 
-- [ ] Record the total term count.
-- [ ] Record scalar-term, single-factor-term, and product-term counts.
-- [ ] Derive zero, scalar, single-term, and single-basis-element facts from the
+- [x] Record the total term count.
+- [x] Record scalar-term, single-factor-term, and product-term counts.
+- [x] Derive zero, scalar, single-term, and single-basis-element facts from the
       term counts and canonical-form facts.
 
 **Weights**
 
-- [ ] Record each known weight and its term count.
-- [ ] Derive homogeneity and the homogeneous weight from the weight profile.
-- [ ] Record the maximum partition length.
-- [ ] Derive support density separately for each weight.
+- [x] Record each known weight and its term count.
+- [x] Derive homogeneity and the homogeneous weight from the weight profile.
+- [x] Record the maximum partition length.
+- [x] Derive support density separately for each weight.
 
 **Factor structure**
 
-- [ ] Record the basis kind of every factor and factor counts by basis kind.
-- [ ] Record the presence of Schur, complete, elementary, and power-sum
+- [x] Record the basis kind of every factor and factor counts by basis kind.
+- [x] Record the presence of Schur, complete, elementary, and power-sum
       factors.
-- [ ] Record the presence and number of skew factors.
-- [ ] Record whether all factors are Schur-compatible.
-- [ ] Record whether all factors are Hall--Littlewood generators.
+- [x] Record the presence and number of skew factors.
+- [x] Record whether all factors are Schur-compatible.
+- [x] Record whether all factors are Hall--Littlewood generators.
 
 **Power-sum support**
 
-- [ ] Record whether the expression is one power-sum basis element.
-- [ ] Record whether every term is a single cycle and the number of
+- [x] Record whether the expression is one power-sum basis element.
+- [x] Record whether every term is a single cycle and the number of
       single-cycle terms.
-- [ ] Record the parts common to every power-sum index and whether `p_1` is
+- [x] Record the parts common to every power-sum index and whether `p_1` is
       common.
-- [ ] Record the short-cycle weight in each index.
-- [ ] Record the number of currently complete-friendly terms.
-- [ ] Record the minimum and maximum cycle sizes and numbers of cycles.
+- [x] Record the short-cycle weight in each index.
+- [x] Record the number of currently complete-friendly terms.
+- [x] Record the minimum and maximum cycle sizes and numbers of cycles.
 
 **Special single-element shape**
 
-- [ ] Record whether the coefficient of a single element is one.
-- [ ] Record its partition length and largest part.
-- [ ] Record whether its index is one row or one column.
-- [ ] For a skew element, record its outer and inner indices.
+- [x] Record whether the coefficient of a single element is one.
+- [x] Record its partition length and largest part.
+- [x] Record whether its index is one row or one column.
+- [x] For a skew element, record its outer and inner indices.
 
 **Provenance**
 
-- [ ] Record plethysm, Littlewood--Richardson, horizontal-Pieri,
+- [x] Record plethysm, Littlewood--Richardson, horizontal-Pieri,
       vertical-Pieri, and border-strip provenance.
-- [ ] Represent mixed or unknown provenance explicitly.
-- [ ] Use provenance only as a performance hint, never as a correctness
+- [x] Represent mixed or unknown provenance explicitly.
+- [x] Use provenance only as a performance hint, never as a correctness
       guarantee for a bypass.
 
 ### Potentially useful future metadata
@@ -312,77 +334,77 @@ The picker determines whether every selected plan satisfies its requirements,
 in addition to deciding which composition and plans are expected to be fastest.
 After selection, the executor does not repeat those applicability decisions.
 
-- [ ] Create one independent registry for direct basis-conversion plans.
-- [ ] Allow any `(X, Y)` pair to register multiple competing plans under stable
+- [x] Create one independent registry for direct basis-conversion plans.
+- [x] Allow any `(X, Y)` pair to register multiple competing plans under stable
       identifiers.
-- [ ] Define a direct plan solely as the connection from parts of one canonical
+- [x] Define a direct plan solely as the connection from parts of one canonical
       source-basis expression to one or more kernels that collectively return a
       canonical target-basis expression.
-- [ ] Support hybrid plans that send different parts of one expression to
+- [x] Support hybrid plans that send different parts of one expression to
       different kernels.
-- [ ] Do not let registered plans choose intermediate bases, compose other
+- [x] Do not let registered plans choose intermediate bases, compose other
       plans, or call the picker.
-- [ ] Keep mathematical plan definitions and applicability requirements in the
+- [x] Keep mathematical plan definitions and applicability requirements in the
       registry, but keep performance-selection policy out of it.
-- [ ] Make the picker select the expected best basis composition from source
+- [x] Make the picker select the expected best basis composition from source
       `X` through zero or more intermediate bases to target `Y`.
-- [ ] Make the picker request the expected best applicable direct plan from the
+- [x] Make the picker request the expected best applicable direct plan from the
       registry for every adjacent pair in the selected composition.
-- [ ] Let callers prescribe the basis composition, stable direct-plan
+- [x] Let callers prescribe the basis composition, stable direct-plan
       identifiers, or both as a benchmarking bypass.
-- [ ] Validate every automatic or requested plan against its adjacent basis
+- [x] Validate every automatic or requested plan against its adjacent basis
       pair and mathematical preconditions, returning an explicit error rather
       than silently falling back.
-- [ ] Return the selected basis composition and ordered direct plans to one
+- [x] Return the selected basis composition and ordered direct plans to one
       generic executor without executing them in the picker.
-- [ ] Make the executor compose the selected plans in order without making
+- [x] Make the executor compose the selected plans in order without making
       performance decisions.
-- [ ] Enforce the exact normalized, product-free, single-source-basis input
+- [x] Enforce the exact normalized, product-free, single-source-basis input
       contract at every registry call site.
-- [ ] Key plan selection by source basis `X`, target basis `Y`, and the relevant
+- [x] Key plan selection by source basis `X`, target basis `Y`, and the relevant
       expression facts.
-- [ ] Require every selected direct or hybrid plan to be complete for the facts
+- [x] Require every selected direct or hybrid plan to be complete for the facts
       used to select it.
-- [ ] Keep registry selection side-effect-free and separate from plan execution.
-- [ ] Make `toBasis` use the registry for every source-basis group.
-- [ ] Make `multiplyTermToBasis` use the same registry directly for one-factor
+- [x] Keep registry selection side-effect-free and separate from plan execution.
+- [x] Make `toBasis` use the registry for every source-basis group.
+- [x] Make `multiplyTermToBasis` use the same registry directly for one-factor
       conversion and indirectly through `multiplyToBasis` for each pairwise
       product required by a nonmultiplicative target.
-- [ ] Make `multiplyToBasis` use the same registry for conversions required by
+- [x] Make `multiplyToBasis` use the same registry for conversions required by
       its binary product plans.
-- [ ] Allow other calculations to use the registry without depending on
+- [x] Allow other calculations to use the registry without depending on
       `toBasis`.
-- [ ] Do not duplicate `X -> Y` selection logic inside multiplication code.
-- [ ] Do not let registry plans call `toBasis`, `multiplyTermToBasis`, or
+- [x] Do not duplicate `X -> Y` selection logic inside multiplication code.
+- [x] Do not let registry plans call `toBasis`, `multiplyTermToBasis`, or
       `multiplyToBasis`.
-- [ ] Register a new conversion plan or competing kernel in one obvious
+- [x] Register a new conversion plan or competing kernel in one obvious
       location.
 
 ## Proposed `toBasis` design
 
 `toBasis` should have one owning workflow for both pure and mixed expressions.
 The broad workflow is normalization, multiplication, grouping, plan selection,
-execution, and combination.  A legacy specialized pipeline should become
+execution, and combination. A former specialized pipeline should become
 either a bypass whose guarantee proves that one or more stages are unnecessary,
 or a complete source-to-target plan selected after preparation.
 
-- [ ] Replace the separate pure-basis and general conversion pipelines with one
+- [x] Replace the separate pure-basis and general conversion pipelines with one
       `toBasis` workflow.
-- [ ] Treat a known canonical, product-free expansion in one basis as a fast
+- [x] Treat a known canonical, product-free expansion in one basis as a fast
       bypass to source-to-target composition and plan selection.
-- [ ] Treat known power-sum input as the same bypass with source basis `p`.
-- [ ] Treat known homogeneous weight and cached weight blocks as bypasses inside
+- [x] Treat known power-sum input as the same bypass with source basis `p`.
+- [x] Treat known homogeneous weight and cached weight blocks as bypasses inside
       plan construction.
-- [ ] Represent whole-expression and grouped conversions as complete plan
+- [x] Represent whole-expression and grouped conversions as complete plan
       choices rather than top-level pipelines.
-- [ ] Send every unresolved product term to `multiplyTermToBasis`, which returns
+- [x] Send every unresolved product term to `multiplyTermToBasis`, which returns
       a canonical expansion in the requested target basis.
-- [ ] After multiplication, require every term to contain exactly one canonical
+- [x] After multiplication, require every term to contain exactly one canonical
       basis element, while allowing different terms to use different bases.
-- [ ] Group remaining terms by source basis, pass target-basis terms through,
+- [x] Group remaining terms by source basis, pass target-basis terms through,
       and select one complete basis composition and its direct plans for each
       other group.
-- [ ] Execute every group's ordered plans under the ownership of the original
+- [x] Execute every group's ordered plans under the ownership of the original
       `toBasis` request and combine the results in the target basis.
 
 ```mermaid
@@ -444,34 +466,34 @@ normalization, `X = Y` may bypass conversion.
 `multiplyToBasis` returns the same canonical pure-`Y` format as
 `multiplyTermToBasis`.
 
-- [ ] Remove scalar and identity factors, preserve the scalar coefficient, and
+- [x] Remove scalar and identity factors, preserve the scalar coefficient, and
       apply it once in the common final stage.
-- [ ] Represent a zero coefficient as the zero expansion and an empty factor
+- [x] Represent a zero coefficient as the zero expansion and an empty factor
       list as the unit expansion before entering the common final stage.
-- [ ] For one remaining factor in basis `X`, request the same `X -> Y`
+- [x] For one remaining factor in basis `X`, request the same `X -> Y`
       composition and ordered direct plans used by `toBasis` from the shared
       picker and registry.
-- [ ] For multiple factors and a multiplicative target `Y`, use one helper that
+- [x] For multiple factors and a multiplicative target `Y`, use one helper that
       converts the factors to `Y`, combines them multiplicatively, and collects
       the result without calling `multiplyToBasis`.
-- [ ] For multiple factors and a nonmultiplicative target `Y`, repeatedly call
+- [x] For multiple factors and a nonmultiplicative target `Y`, repeatedly call
       `multiplyToBasis` for the next pair and combine and collect each returned
       `Y` expansion until no multiplication remains.
-- [ ] Require `multiplyToBasis` to select and complete one binary
+- [x] Require `multiplyToBasis` to select and complete one binary
       product-to-`Y` plan.
-- [ ] Require every product kernel to declare the source basis `X` of its
+- [x] Require every product kernel to declare the source basis `X` of its
       output without assuming that the output is already canonical.
-- [ ] Require binary product plans to normalize kernel output, including
+- [x] Require binary product plans to normalize kernel output, including
       straightening indices and expanding skew elements, before requesting a
       conversion composition and its direct plans from the shared picker and
       registry.
-- [ ] Bypass kernel-output normalization or `X -> Y` conversion only when known
+- [x] Bypass kernel-output normalization or `X -> Y` conversion only when known
       facts guarantee the corresponding postcondition.
-- [ ] Collect like terms and canonicalize target indices after every pairwise
+- [x] Collect like terms and canonicalize target indices after every pairwise
       step to control intermediate growth.
-- [ ] Never respond to a failed pair-product calculation by selecting another
+- [x] Never respond to a failed pair-product calculation by selecting another
       plan or calling `toBasis`.
-- [ ] Return a canonical, collected linear combination with one `Y`-basis
+- [x] Return a canonical, collected linear combination with one `Y`-basis
       element per nonscalar term.
 
 ```mermaid
@@ -649,21 +671,21 @@ normalization and grouping and proceed directly to the `p -> Y` plan picker.
 Thus the main work is to clarify ownership and remove unnecessary forwarding
 pipeline machinery, not to redesign the mathematical plethysm kernels.
 
-- [ ] Give `plethysm(f, g)` the explicit contract of returning a canonical,
+- [x] Give `plethysm(f, g)` the explicit contract of returning a canonical,
       collected power-sum expression with accurate canonical-form, weight, and
       plethysm-provenance metadata.
-- [ ] Keep all ordinary target-basis conversion out of `plethysm(f, g)`.
-- [ ] Make `plethysmToBasis` choose a complete fused calculation, when one is
+- [x] Keep all ordinary target-basis conversion out of `plethysm(f, g)`.
+- [x] Make `plethysmToBasis` choose a complete fused calculation, when one is
       justified, before any calculation begins.
-- [ ] Make the ordinary `plethysmToBasis` path call `plethysm(f, g)` and then
+- [x] Make the ordinary `plethysmToBasis` path call `plethysm(f, g)` and then
       call the shared `toBasis` workflow with target basis `Y`.
-- [ ] Use the returned metadata to enter the canonical pure-power-sum bypass in
+- [x] Use the returned metadata to enter the canonical pure-power-sum bypass in
       `toBasis` and proceed directly to the `p -> Y` plan picker.
-- [ ] Remove or collapse forwarding-only post-plethysm pipeline stages that do
+- [x] Remove or collapse forwarding-only post-plethysm pipeline stages that do
       not perform an independent mathematical calculation.
-- [ ] Retain a fused calculation only while benchmarks demonstrate a useful
+- [x] Retain a fused calculation only while benchmarks demonstrate a useful
       advantage over `plethysm(f, g)` followed by `toBasis`.
-- [ ] Test the ordinary and fused paths against each other throughout the
+- [x] Test the ordinary and fused paths against each other throughout the
       fused path's declared domain.
 
 ```mermaid

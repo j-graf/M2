@@ -18,6 +18,12 @@ benchmarkKnownOperations = {
     "OrdinaryExpansionInnerProduct", "TargetedHallLittlewoodInnerProduct"
     }
 
+-- Keep case IDs mathematical while routing every catalog case through the
+-- public conversion and multiplication workflows.
+benchmarkToBasis = (F, B) -> toBasis(F, B)
+
+benchmarkMultiplyToBasis = (F, G, B) -> multiplyToBasis(F, G, B)
+
 benchmarkMakeRing = ringKey -> (
     if ringKey == "QQ" then symmetricRing(QQ)
     else if ringKey == "FracQQt" then symmetricRing(frac(QQ[t]))
@@ -54,54 +60,67 @@ benchmarkExecute = case -> (
     lambda := if case#?"Lambda" then benchmarkInputPartition(case, "Lambda") else {};
     mu := if case#?"Mu" then benchmarkInputPartition(case, "Mu") else {};
     if op == "BasisToPowerSums" then
-        toBasis(benchmarkBasisElement(case#"SourceBasis", lambda), p)
+        benchmarkToBasis(benchmarkBasisElement(case#"SourceBasis", lambda), p)
     else if op == "PowerSumsToBasis" then
-        toBasis(p_lambda, benchmarkBasis(case#"TargetBasis"))
+        benchmarkToBasis(p_lambda, benchmarkBasis(case#"TargetBasis"))
     else if op == "BasisRoundTrip" then (
         sourceElement := benchmarkBasisElement(case#"SourceBasis", lambda);
-        toBasis(toBasis(sourceElement, p), benchmarkBasis(case#"SourceBasis"))
+        benchmarkToBasis(
+            benchmarkToBasis(sourceElement, p),
+            benchmarkBasis(case#"SourceBasis"))
         )
     else if op == "SchurProduct" then S_lambda*S_mu
-    else if op == "SchurProductToPowerSums" then toBasis(S_lambda*S_mu, p)
-    else if op == "SchurProductRoundTrip" then toS toBasis(S_lambda*S_mu, p)
-    else if op == "HorizontalPieri" then toS(S_lambda*h_(case#"Degree"))
-    else if op == "VerticalPieri" then toS(S_lambda*e_(case#"Degree"))
-    else if op == "BorderStripProduct" then toS(S_lambda*p_(case#"Degree"))
+    else if op == "SchurProductToPowerSums" then
+        benchmarkToBasis(S_lambda*S_mu, p)
+    else if op == "SchurProductRoundTrip" then
+        benchmarkToBasis(benchmarkToBasis(S_lambda*S_mu, p), S)
+    else if op == "HorizontalPieri" then
+        benchmarkToBasis(S_lambda*h_(case#"Degree"), S)
+    else if op == "VerticalPieri" then
+        benchmarkToBasis(S_lambda*e_(case#"Degree"), S)
+    else if op == "BorderStripProduct" then
+        benchmarkToBasis(S_lambda*p_(case#"Degree"), S)
     else if op == "SchurPlethysm" then S_lambda@S_mu
     else if op == "SchurPlethysmToPowerSums" then plethysm(S_lambda, S_mu)
-    else if op == "SchurPlethysmSplit" then toS plethysm(S_lambda, S_mu)
+    else if op == "SchurPlethysmSplit" then
+        benchmarkToBasis(plethysm(S_lambda, S_mu), S)
     else if op == "HallLittlewoodProduct" then
-        toBasis(Q_lambda*Q_mu, Q)
+        benchmarkToBasis(Q_lambda*Q_mu, Q)
     else if op == "HallLittlewoodProductRetained" then
-        multiplyToBasis(Q_lambda, Q_mu, Q)
+        benchmarkMultiplyToBasis(Q_lambda, Q_mu, Q)
     else if op == "HallLittlewoodPlethysmInnerProduct" then
         hallInnerProduct(plethysm(Q_lambda, Q_mu), P_(case#"Probe"))
     else if op == "PowerSumsSchurInnerProduct" then
         hallInnerProduct(p_lambda, S_mu)
     else if op == "DirectBasisConversion" then
-        toBasis(benchmarkBasisElement(case#"SourceBasis", lambda),
-                benchmarkBasis(case#"TargetBasis"))
+        benchmarkToBasis(
+            benchmarkBasisElement(case#"SourceBasis", lambda),
+            benchmarkBasis(case#"TargetBasis"))
     else if op == "PowerSumCombinationToSchur" then
-        toS(p_lambda + 2*p_mu + p_(case#"Probe"))
+        benchmarkToBasis(p_lambda + 2*p_mu + p_(case#"Probe"), S)
     else if op == "ParameterPowerSumCombinationToSchur" then
-        toS(p_lambda + t*p_mu + (t+1)*p_(case#"Probe"))
+        benchmarkToBasis(
+            p_lambda + t*p_mu + (t+1)*p_(case#"Probe"), S)
     else if op == "SchurCombinationToPowerSums" then
-        toBasis(S_lambda + 2*S_mu + S_(case#"Probe"), p)
+        benchmarkToBasis(S_lambda + 2*S_mu + S_(case#"Probe"), p)
     else if op == "SchurProductExpanded" then
-        toS(S_lambda*S_mu)
+        benchmarkToBasis(S_lambda*S_mu, S)
     else if op == "SchurProductMultiplyToBasis" then
-        multiplyToBasis(S_lambda, S_mu, S)
+        benchmarkMultiplyToBasis(S_lambda, S_mu, S)
     else if op == "PlethysmSchurProductToSchur" then
-        toS(plethysm(S_lambda, S_mu)*S_(case#"Probe"))
+        benchmarkToBasis(
+            plethysm(S_lambda, S_mu)*S_(case#"Probe"), S)
     else if op == "HallLittlewoodBasisProduct" then (
         Bsource := benchmarkBasis(case#"SourceBasis");
-        toBasis(benchmarkBasisElement(case#"SourceBasis", lambda) *
-                benchmarkBasisElement(case#"SourceBasis", mu), Bsource)
+        benchmarkToBasis(
+            benchmarkBasisElement(case#"SourceBasis", lambda) *
+            benchmarkBasisElement(case#"SourceBasis", mu), Bsource)
         )
     else if op == "HallLittlewoodBasisProductRetained" then (
         Bretained := benchmarkBasis(case#"SourceBasis");
-        multiplyToBasis(benchmarkBasisElement(case#"SourceBasis", lambda),
-                        benchmarkBasisElement(case#"SourceBasis", mu), Bretained)
+        benchmarkMultiplyToBasis(
+            benchmarkBasisElement(case#"SourceBasis", lambda),
+            benchmarkBasisElement(case#"SourceBasis", mu), Bretained)
         )
     else if op == "SchurClassicalInnerProduct" then
         hallInnerProduct(benchmarkBasisElement(case#"LeftBasis", lambda),
@@ -123,7 +142,7 @@ benchmarkExecute = case -> (
         hallInnerProduct(S_lambda + S_mu, h_lambda + 2*h_mu,
                          "InnerProduct" => "Ordinary")
     else if op == "TargetedHallLittlewoodInnerProduct" then
-        hallInnerProduct(toBasis(
+        hallInnerProduct(benchmarkToBasis(
                 benchmarkBasisElement(case#"SourceBasis", lambda) +
                 benchmarkBasisElement(case#"SourceBasis", mu), p),
             benchmarkBasisElement(case#"ProbeBasis", case#"Probe"))

@@ -9,6 +9,10 @@
   // Inner-Product Requests And Profiles
   // ============================================================================
 
+  // Profile facts may be unavailable until a route requests the corresponding
+  // inspection, so inner-product selection uses an explicit three-state value.
+  enum class KnownState { Unknown, True, False };
+
   struct InnerProductProfile
   {
     std::optional<int> pureBasis;

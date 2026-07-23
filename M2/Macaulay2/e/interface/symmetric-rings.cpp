@@ -4,6 +4,10 @@
 
 #include "symmetric-rings/raw-interface.hpp"
 
+// ============================================================================
+// Ring, Basis, And Arithmetic Interface
+// ============================================================================
+
 const Ring *rawSymmetricRing(const Ring *A)
 {
   return symmetric_rings::rawSymmetricRing(A);
@@ -13,6 +17,29 @@ bool rawSymmetricRingsSetHallLittlewoodParameter(const Ring *R,
                                                  const RingElement *t)
 {
   return symmetric_rings::rawSymmetricRingsSetHallLittlewoodParameter(R, t);
+}
+
+bool rawSymmetricRingsSetComputationLimits(
+    const Ring *R,
+    int maxWeight,
+    int maxEnumeratedPartitions,
+    int maxGeneratedTerms,
+    int maxRecursiveStates,
+    int maxCacheEntries,
+    int maxCharacterCacheEntries,
+    int maxDeterminantStates,
+    int maxEstimatedMemoryMB)
+{
+  return symmetric_rings::rawSymmetricRingsSetComputationLimits(
+      R,
+      maxWeight,
+      maxEnumeratedPartitions,
+      maxGeneratedTerms,
+      maxRecursiveStates,
+      maxCacheEntries,
+      maxCharacterCacheEntries,
+      maxDeterminantStates,
+      maxEstimatedMemoryMB);
 }
 
 bool rawSymmetricRingsRememberBasis(const Ring *R,
@@ -76,18 +103,22 @@ const RingElement *rawSymmetricRingsJacobiTrudi(const Ring *R,
                                                        inner);
 }
 
+// ============================================================================
+// Conversion, Product, And Plethysm Interface
+// ============================================================================
+
 const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
                                             int targetBasisId)
 {
   return symmetric_rings::rawSymmetricRingsToBasis(f, targetBasisId);
 }
 
-const RingElement *rawSymmetricRingsProductToBasisDispatch(
+const RingElement *rawSymmetricRingsMultiplyToBasis(
     const RingElement *f,
     const RingElement *g,
     int targetBasisId)
 {
-  return symmetric_rings::rawSymmetricRingsProductToBasisDispatch(
+  return symmetric_rings::rawSymmetricRingsMultiplyToBasis(
       f,
       g,
       targetBasisId);
@@ -107,6 +138,10 @@ const RingElement *rawSymmetricRingsPlethysmToBasis(const RingElement *f,
       f, g, targetBasisId);
 }
 
+// ============================================================================
+// Conversion Metadata Interface
+// ============================================================================
+
 int rawSymmetricRingsSingleBasisId(const RingElement *f)
 {
   return symmetric_rings::rawSymmetricRingsSingleBasisId(f);
@@ -120,8 +155,13 @@ bool rawSymmetricRingsHasPlethysmProvenance(const RingElement *f)
 bool rawSymmetricRingsCopyConversionMetadata(const RingElement *source,
                                              const RingElement *target)
 {
-  return symmetric_rings::rawSymmetricRingsCopyConversionMetadata(source, target);
+  return symmetric_rings::rawSymmetricRingsCopyConversionMetadata(
+      source, target);
 }
+
+// ============================================================================
+// Omega, Straightening, And Pairing Interface
+// ============================================================================
 
 const RingElement *rawSymmetricRingsOmega(const RingElement *f,
                                           M2_arrayint omegaMap,
@@ -153,6 +193,10 @@ const RingElement *rawSymmetricRingsBasisCoefficient(
   return symmetric_rings::rawSymmetricRingsBasisCoefficient(
       f, targetBasisElement);
 }
+
+// ============================================================================
+// Term And Presentation Introspection
+// ============================================================================
 
 int rawSymmetricRingsTermCount(const RingElement *f)
 {

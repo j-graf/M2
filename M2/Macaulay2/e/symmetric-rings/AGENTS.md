@@ -26,30 +26,28 @@ both the mathematical operation and the programmatic role clear.
 
 Use these forms consistently:
 
-- `<operation>Dispatch` selects and executes a route for one mathematical
-  operation. Example: `powerSumsToTargetDispatch`.
-- `select<Operation>Route` examines guarantees or input shape and returns one
-  complete basis-conversion route without performing algebra. Example:
-  `selectPowerSumsToTargetRoute`.
-- `trace<Operation>Selection` reports the selected route without performing
-  algebra. Example: `tracePowerSumsToTargetSelection`.
-- `execute<Operation>Route` executes a previously selected route without
-  making another hidden route choice. Example: `executePowerSumsToTargetRoute`.
+- `build<Operation>Plans` constructs the policy-free catalog of mathematical
+  plans for one operation.
+- `select<Operation>Plan` or `pick<Operation>Plans` examines exact facts and
+  returns a complete plan or composition without performing algebra.
+- `trace<Operation>Selection` reports a selection without performing algebra.
+- `execute<Operation>Plan` executes a previously selected plan without making
+  another hidden choice.
 - `select<Operation>Method` is reserved for lower-level multiplication or
-  combinatorial choices that are not basis-conversion routes. Example:
+  combinatorial choices that are not basis-conversion plans. Example:
   `selectProductExpansionMethod`.
-- `run<Name>Pipeline` executes a multi-stage expression workflow. Examples:
-  `runPowerSumsPipeline` and `runFallbackTermPipeline`.
+- `run<Name>Pipeline` executes an operation-specific multi-stage workflow,
+  such as an inner-product pipeline.
 - `try<Operation>` checks whether a route applies and, on success, produces its
-  result. Add `Via<Algorithm>` when the probe is specific to one algorithm. Example:
-  `trySchurPlethysmToSchurViaAdamsJacobiTrudi`.
+  result. Add `Via<Algorithm>` when the probe is specific to one algorithm.
+  Example: `tryProductToSchurViaCompatibleFactors`.
 - `<source>To<target>Via<Algorithm>` executes one named conversion algorithm or
   composed intermediate-basis route. It must not make a hidden method choice.
 
-Selectors and dispatchers for important source-target pairs should live in an
-obvious place. A general source-to-target dispatcher should use one route enum,
-not nested target-specific route enums. Its conditions should make it possible
-to read when `powerSumsToTargetDispatch` chooses each of:
+Registries and pickers for important source-target pairs should live in an
+obvious place. A general conversion picker should use one plan contract rather
+than nested target-specific route enums. Its conditions should make it possible
+to read when the power-sum-to-target picker chooses each of:
 
 - `powerSumsToSchurViaBorderStrips`
 - `powerSumsToSchurViaAbacusRimHooks`
@@ -59,17 +57,18 @@ to read when `powerSumsToTargetDispatch` chooses each of:
 - `powerSumSingleCycleTermsToHallLittlewoodViaGreenPolynomials`
 - `powerSumIndexToHallLittlewoodViaGreenPolynomialsAndDuality`
 
-Route and method enum values should use `Via`, such as `ViaSchurBorderStrips`
-and `ViaLittlewoodRichardson`.
+Kernel identifiers should name their source, target, and algorithm. Lower-level
+method enum values should use `Via`, such as `ViaLittlewoodRichardson`.
 
-Every substantial conversion dispatcher should therefore have the same visible
+Every substantial conversion family should therefore have the same visible
 structure:
 
 ```text
-select<Operation>Route
-trace<Operation>Selection
-execute<Operation>Route
-<operation>Dispatch
+build<Operation>Plans
+<operation>PlanApplicable
+<operation>PlanCost
+select<Operation>Plan
+execute<Operation>Plan
 ```
 
 ## Products And Other Operations
@@ -95,8 +94,11 @@ raw dispatch entry points.
 
 ## File Organization
 
-- `basis-conversion-dispatch.*`: selectors, dispatchers, guarantees, and
-  pipelines.
+- `basis-conversion-policy.*`: reusable performance-only selector facts.
+- `basis-conversion.*`: expression facts, plan registries, selectors, executors,
+  and conversion/multiplication workflows.
+- `basis-coefficient.*`: targeted coefficient routes and their default
+  full-conversion fallback.
 - `basis-conversion-kernels.*`: conversion formulas and straightening.
 - `basis-conversion-products.*`: multiplication, skew expansion, LR, Pieri,
   and border-strip algorithms.
@@ -109,13 +111,13 @@ raw dispatch entry points.
   kernels.
 
 Within each conversion file, keep the `.cpp` and `.hpp` sections in the same
-order. Group dispatch code by decision flow, keeping each selector, route name,
-trace function, executor, and dispatcher together. Group kernels by basis
-family, with conversions to and from that family adjacent. Group product code
-by combinatorial rule, such as Littlewood-Richardson, Pieri, border strips, or
+order. Group plan code by decision flow, keeping the registry, applicability,
+cost, picker, and executor in that order. Group kernels by basis family, with
+conversions to and from that family adjacent. Group product code by
+combinatorial rule, such as Littlewood-Richardson, Pieri, border strips, or
 Hall-Littlewood multiplication. Use descriptive comment-block headers to make
 these groups visible when scanning either file.
 
 Do not place stray basis-conversion decisions in plethysm, inner-product, or
-other unrelated files. Those operations should call the lower-level conversion
-kernels or the ordinary conversion dispatcher as appropriate.
+other unrelated files. Those operations should use the shared conversion
+registry and executor or a named policy-free kernel as appropriate.

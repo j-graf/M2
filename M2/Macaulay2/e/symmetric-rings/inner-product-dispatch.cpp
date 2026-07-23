@@ -431,9 +431,6 @@ ring_elem SymmetricEngineRing::executeInnerProductRoute(
             ring_elem coefficient = basisCoefficientDispatch(
                 expansion,
                 basisId,
-                displayForBasis(basisId),
-                basisOrderForId(basisId),
-                isMultiplicativeBasis(basisId),
                 index);
             if (error()) return coefficientRing->zero();
             return coefficientRing->mult(probeCoefficient, coefficient);

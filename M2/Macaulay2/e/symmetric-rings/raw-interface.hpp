@@ -7,11 +7,23 @@
 
 namespace symmetric_rings {
 
-// Ring, basis, and arithmetic interface.
+// ============================================================================
+// Ring, Basis, And Arithmetic Interface
+// ============================================================================
 
 const Ring *rawSymmetricRing(const Ring *A);
 bool rawSymmetricRingsSetHallLittlewoodParameter(const Ring *R,
                                                  const RingElement *t);
+bool rawSymmetricRingsSetComputationLimits(
+    const Ring *R,
+    int maxWeight,
+    int maxEnumeratedPartitions,
+    int maxGeneratedTerms,
+    int maxRecursiveStates,
+    int maxCacheEntries,
+    int maxCharacterCacheEntries,
+    int maxDeterminantStates,
+    int maxEstimatedMemoryMB);
 bool rawSymmetricRingsRememberBasis(const Ring *R,
                                     int basisId,
                                     M2_string canonicalBasisKey,
@@ -34,10 +46,14 @@ const RingElement *rawSymmetricRingsJacobiTrudi(const Ring *R,
                                                 int basisId,
                                                 M2_arrayint outer,
                                                 M2_arrayint inner);
-// Conversion, product, and plethysm interface.
+
+// ============================================================================
+// Conversion, Product, And Plethysm Interface
+// ============================================================================
+
 const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
                                             int targetBasisId);
-const RingElement *rawSymmetricRingsProductToBasisDispatch(
+const RingElement *rawSymmetricRingsMultiplyToBasis(
     const RingElement *f,
     const RingElement *g,
     int targetBasisId);
@@ -46,12 +62,20 @@ const RingElement *rawSymmetricRingsPlethysm(const RingElement *f,
 const RingElement *rawSymmetricRingsPlethysmToBasis(const RingElement *f,
                                                     const RingElement *g,
                                                     int targetBasisId);
-// Conversion metadata interface.
+
+// ============================================================================
+// Conversion Metadata Interface
+// ============================================================================
+
 int rawSymmetricRingsSingleBasisId(const RingElement *f);
 bool rawSymmetricRingsHasPlethysmProvenance(const RingElement *f);
 bool rawSymmetricRingsCopyConversionMetadata(const RingElement *source,
                                              const RingElement *target);
-// Omega, straightening, and pairing interface.
+
+// ============================================================================
+// Omega, Straightening, And Pairing Interface
+// ============================================================================
+
 const RingElement *rawSymmetricRingsOmega(const RingElement *f,
                                           M2_arrayint omegaMap,
                                           bool useSomega);
@@ -63,7 +87,11 @@ const RingElement *rawSymmetricRingsHallInnerProduct(const RingElement *f,
 const RingElement *rawSymmetricRingsBasisCoefficient(
     const RingElement *f,
     const RingElement *targetBasisElement);
-// Term and presentation introspection.
+
+// ============================================================================
+// Term And Presentation Introspection
+// ============================================================================
+
 int rawSymmetricRingsTermCount(const RingElement *f);
 const RingElement *rawSymmetricRingsTermCoefficient(const RingElement *f, int i);
 M2_arrayint rawSymmetricRingsTermMonomial(const RingElement *f, int i);

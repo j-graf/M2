@@ -3,8 +3,11 @@
 #include "symmetric-rings/storage.hpp"
 
 #include "buffer.hpp"
+#include "error.h"
+#include "exceptions.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <sstream>
 
 namespace symmetric_rings {
@@ -177,7 +180,7 @@ SymmetricMonomial monomialFromKey(const std::vector<int>& key)
 
 int monomialWeight(const SymmetricMonomial& monomial)
 {
-  int result = 0;
+  long long result = 0;
   size_t pos = 0;
   while (pos < monomial.data.size())
     {
@@ -196,11 +199,16 @@ int monomialWeight(const SymmetricMonomial& monomial)
         }
       else
         {
-          for (int i = 0; i < n; ++i) result += monomial.data[pos + atomHeaderSize + i];
+          for (int i = 0; i < n; ++i)
+            result += monomial.data[pos + atomHeaderSize + i];
         }
+      if (result < std::numeric_limits<int>::min() ||
+          result > std::numeric_limits<int>::max())
+        throw exc::engine_error(
+            "symmetric-function weight exceeds the supported integer range");
       pos += atomHeaderSize + n;
     }
-  return result;
+  return static_cast<int>(result);
 }
 
 BasisIndexKey basisIndexKey(const SymmetricMonomial& monomial, size_t pos)

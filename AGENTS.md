@@ -122,7 +122,10 @@ The engine subsystem is `M2/Macaulay2/e/symmetric-rings/`:
 - `symmetric-engine-ring.*`: engine ring class and shared state.
 - `arithmetic.*`: arithmetic, comparison, hashing, terms, weights, constructors.
 - `expression-inspection.cpp`: shared basis-expansion and coefficient-map probes.
-- `basis-conversion-dispatch.*`: guarantees, selectors, pipelines, entry points.
+- `basis-conversion-policy.*`: reusable performance-only selector facts.
+- `basis-conversion.*`: expression facts, plan registry, selection, execution, and
+  conversion/multiplication entry points.
+- `basis-coefficient.*`: targeted coefficient selection and scalar transitions.
 - `basis-conversion-kernels.*`: basis-family formulas, Jacobi–Trudi,
   characters, Hall--Littlewood transitions, straightening, and direct
   conversions.

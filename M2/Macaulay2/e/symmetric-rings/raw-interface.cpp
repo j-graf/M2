@@ -58,6 +58,48 @@ bool rawSymmetricRingsSetHallLittlewoodParameter(const Ring *R,
     }
 }
 
+bool rawSymmetricRingsSetComputationLimits(
+    const Ring *R,
+    int maxWeight,
+    int maxEnumeratedPartitions,
+    int maxGeneratedTerms,
+    int maxRecursiveStates,
+    int maxCacheEntries,
+    int maxCharacterCacheEntries,
+    int maxDeterminantStates,
+    int maxEstimatedMemoryMB)
+{
+  try
+    {
+      const auto *S = symmetricRingFromRing(R);
+      if (error()) return false;
+      if (maxWeight <= 0 || maxEnumeratedPartitions <= 0 ||
+          maxGeneratedTerms <= 0 ||
+          maxRecursiveStates <= 0 || maxCacheEntries <= 0 ||
+          maxCharacterCacheEntries <= 0 ||
+          maxDeterminantStates <= 0 || maxEstimatedMemoryMB <= 0)
+        {
+          ERROR("symmetric-ring computation limits must be positive integers");
+          return false;
+        }
+      S->setComputationLimits(
+          static_cast<size_t>(maxWeight),
+          static_cast<size_t>(maxEnumeratedPartitions),
+          static_cast<size_t>(maxGeneratedTerms),
+          static_cast<size_t>(maxRecursiveStates),
+          static_cast<size_t>(maxCacheEntries),
+          static_cast<size_t>(maxCharacterCacheEntries),
+          static_cast<size_t>(maxDeterminantStates),
+          static_cast<size_t>(maxEstimatedMemoryMB));
+      return true;
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return false;
+    }
+}
+
 bool rawSymmetricRingsRememberBasis(const Ring *R,
                                     int basisId,
                                     M2_string canonicalBasisKey,
@@ -214,7 +256,7 @@ const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
     }
 }
 
-const RingElement *rawSymmetricRingsProductToBasisDispatch(
+const RingElement *rawSymmetricRingsMultiplyToBasis(
     const RingElement *f,
     const RingElement *g,
     int targetBasisId)
@@ -228,7 +270,7 @@ const RingElement *rawSymmetricRingsProductToBasisDispatch(
           ERROR("expected elements in the same symmetric ring");
           return nullptr;
         }
-      ring_elem result = S->productToBasisDispatch(
+      ring_elem result = S->multiplyToBasis(
           f->get_value(),
           g->get_value(),
           targetBasisId);
@@ -337,10 +379,15 @@ bool rawSymmetricRingsCopyConversionMetadata(const RingElement *source,
       if (error()) return false;
       const auto *targetRing = symmetricRingFromElement(target);
       if (error()) return false;
-      (void) sourceRing;
-      (void) targetRing;
+      auto metadata = polyValue(source->get_value())->conversionMetadata;
+      if (metadata && sourceRing != targetRing)
+        {
+          // Basis IDs are ring-local. The M2 fallback reconstructs atoms on
+          // the target ring, so the exact facts profile must be recomputed.
+          metadata->expressionFactsComplete = false;
+        }
       mutablePolyValue(target->get_value())->conversionMetadata =
-          polyValue(source->get_value())->conversionMetadata;
+          std::move(metadata);
       mutablePolyValue(target->get_value())->combinatorialTags =
           polyValue(source->get_value())->combinatorialTags;
       return true;

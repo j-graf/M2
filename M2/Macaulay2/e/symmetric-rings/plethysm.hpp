@@ -16,7 +16,19 @@
 // Specialized Schur Plethysm
 // ============================================================================
 
+  enum class PlethysmToBasisRoute
+  {
+    ViaSchurAdamsJacobiTrudi,
+    ViaPowerSumsThenBasisConversion
+  };
+
   bool singleSchurPartition(ring_elem f, int schurId, Partition& lambda) const;
+  bool schurPlethysmToSchurViaAdamsJacobiTrudiApplicable(
+      ring_elem f,
+      ring_elem g,
+      int targetBasisId,
+      Partition& outer,
+      Partition& inner) const;
   std::string completePlethysmCacheKey(const std::string& algorithm,
                                          int n,
                                          int schurId,
@@ -32,12 +44,24 @@
                                        int schurId,
                                        const std::string& schurDisplay,
                                        int schurOrder) const;
-  bool trySchurPlethysmToSchurViaAdamsJacobiTrudi(ring_elem f,
-                              ring_elem g,
-                              int targetBasisId,
-                              const std::string& targetDisplay,
-                              int targetOrder,
-                              ring_elem& result) const;
+// ============================================================================
+// Plethysm-To-Basis Selection And Execution
+// ============================================================================
+
+  PlethysmToBasisRoute selectPlethysmToBasisRoute(
+      ring_elem f,
+      ring_elem g,
+      int targetBasisId) const;
+  const char *plethysmToBasisRouteName(PlethysmToBasisRoute route) const;
+  void tracePlethysmToBasisSelection(
+      PlethysmToBasisRoute route,
+      int targetBasisId) const;
+  ring_elem executePlethysmToBasisRoute(
+      PlethysmToBasisRoute route,
+      ring_elem f,
+      ring_elem g,
+      int targetBasisId) const;
+  void requirePlethysmWithinWeightLimit(ring_elem f, ring_elem g) const;
 
 // ============================================================================
 // Public Plethysm Entry Points

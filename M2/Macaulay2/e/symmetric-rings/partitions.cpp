@@ -2,8 +2,12 @@
 
 #include "symmetric-rings/partitions.hpp"
 
+#include "error.h"
+#include "exceptions.hpp"
+
 #include <algorithm>
 #include <functional>
+#include <limits>
 #include <sstream>
 
 namespace symmetric_rings {
@@ -34,9 +38,16 @@ Partition normalizePartition(const Partition& p)
 
 int partitionWeight(const Partition& p)
 {
-  int result = 0;
-  for (int part : p) result += part;
-  return result;
+  long long result = 0;
+  for (int part : p)
+    {
+      result += part;
+      if (result < std::numeric_limits<int>::min() ||
+          result > std::numeric_limits<int>::max())
+        throw exc::engine_error(
+            "partition weight exceeds the supported integer range");
+    }
+  return static_cast<int>(result);
 }
 
 int partitionLength(const Partition& p)
@@ -145,6 +156,32 @@ std::pair<int, Partition> straightenSchurIndex(const Partition& alpha)
 // Enumeration And Power-Sum Statistics
 // ============================================================================
 
+size_t partitionCountUpToLimit(int n, size_t limit)
+{
+  if (n < 0) return 0;
+  std::vector<mpz_class> counts;
+  counts.push_back(1);
+  const mpz_class threshold(limit);
+  for (int degree = 1; degree <= n; ++degree)
+    {
+      mpz_class count = 0;
+      for (int k = 1;; ++k)
+        {
+          const int pentagonal1 = k * (3 * k - 1) / 2;
+          if (pentagonal1 > degree) break;
+          const int sign = (k % 2 == 1) ? 1 : -1;
+          count += sign * counts[degree - pentagonal1];
+          const int pentagonal2 = k * (3 * k + 1) / 2;
+          if (pentagonal2 <= degree)
+            count += sign * counts[degree - pentagonal2];
+        }
+      if (count > threshold)
+        return limit == std::numeric_limits<size_t>::max() ? limit : limit + 1;
+      counts.push_back(count);
+    }
+  return counts[n].get_ui();
+}
+
 void partitionsRec(int n, int maxPart, Partition& current, std::vector<Partition>& result)
 {
   if (n == 0)
@@ -168,18 +205,28 @@ std::vector<Partition> partitionsOf(int n)
   return result;
 }
 
-long assignmentCountRec(
+mpz_class assignmentCountRec(
     const Partition& parts,
     size_t pos,
     const Partition& targets,
-    std::map<std::pair<size_t, Partition>, long>& memo)
+    std::map<std::pair<size_t, Partition>, mpz_class>& memo,
+    size_t maxStates,
+    size_t& states,
+    bool& limitExceeded)
 {
+  if (limitExceeded) return 0;
+  if (states >= maxStates)
+    {
+      limitExceeded = true;
+      return 0;
+    }
+  ++states;
   if (pos == parts.size()) return targets.empty() ? 1 : 0;
   auto key = std::make_pair(pos, targets);
   auto cached = memo.find(key);
   if (cached != memo.end()) return cached->second;
 
-  long total = 0;
+  mpz_class total = 0;
   int part = parts[pos];
   size_t i = 0;
   while (i < targets.size())
@@ -192,8 +239,16 @@ long assignmentCountRec(
         next[i] -= part;
         std::sort(next.begin(), next.end(), std::greater<int>());
         while (!next.empty() && next.back() == 0) next.pop_back();
-        total += static_cast<long>(j - i) *
-                 assignmentCountRec(parts, pos + 1, next, memo);
+        total += mpz_class(j - i) *
+                 assignmentCountRec(
+                     parts,
+                     pos + 1,
+                     next,
+                     memo,
+                     maxStates,
+                     states,
+                     limitExceeded);
+        if (limitExceeded) return 0;
       }
       i = j;
     }
@@ -201,20 +256,33 @@ long assignmentCountRec(
   return total;
 }
 
-long pToMonomialCoefficient(const Partition& lambda, const Partition& mu)
+mpz_class pToMonomialCoefficientWithLimit(
+    const Partition& lambda,
+    const Partition& mu,
+    size_t maxStates,
+    bool& limitExceeded)
 {
+  limitExceeded = false;
   Partition normalizedLambda = normalizePartition(lambda);
   Partition normalizedMu = normalizePartition(mu);
   if (partitionWeight(normalizedLambda) != partitionWeight(normalizedMu)) return 0;
-  std::map<std::pair<size_t, Partition>, long> memo;
-  return assignmentCountRec(normalizedLambda, 0, normalizedMu, memo);
+  std::map<std::pair<size_t, Partition>, mpz_class> memo;
+  size_t states = 0;
+  return assignmentCountRec(
+      normalizedLambda,
+      0,
+      normalizedMu,
+      memo,
+      maxStates,
+      states,
+      limitExceeded);
 }
 
-long zValue(const Partition& lambda)
+mpz_class zValue(const Partition& lambda)
 {
   std::map<int, int> multiplicities;
   for (int part : lambda) multiplicities[part]++;
-  long result = 1;
+  mpz_class result = 1;
   for (const auto& item : multiplicities)
     {
       for (int i = 0; i < item.second; ++i) result *= item.first;
@@ -325,8 +393,18 @@ void rimHookRec(const Partition& lambda,
                 int row,
                 int remainingSize,
                 std::vector<int>& removed,
-                std::vector<RimHookRemoval>& result)
+                std::vector<RimHookRemoval>& result,
+                size_t maxStates,
+                size_t& states,
+                bool& limitExceeded)
 {
+  if (limitExceeded) return;
+  if (states >= maxStates)
+    {
+      limitExceeded = true;
+      return;
+    }
+  ++states;
   if (row == static_cast<int>(lambda.size()))
     {
       if (remainingSize != 0) return;
@@ -342,44 +420,94 @@ void rimHookRec(const Partition& lambda,
   for (int count = 0; count <= std::min(lambda[row], remainingSize); ++count)
     {
       removed[row] = count;
-      rimHookRec(lambda, row + 1, remainingSize - count, removed, result);
+      rimHookRec(
+          lambda,
+          row + 1,
+          remainingSize - count,
+          removed,
+          result,
+          maxStates,
+          states,
+          limitExceeded);
+      if (limitExceeded) return;
     }
   removed[row] = 0;
 }
 
-std::vector<RimHookRemoval> rimHookRemovals(const Partition& lambda, int size)
+std::vector<RimHookRemoval> rimHookRemovals(
+    const Partition& lambda,
+    int size,
+    size_t maxStates,
+    size_t& states,
+    bool& limitExceeded)
 {
   std::vector<RimHookRemoval> result;
   std::vector<int> removed(lambda.size(), 0);
-  rimHookRec(lambda, 0, size, removed, result);
+  rimHookRec(
+      lambda,
+      0,
+      size,
+      removed,
+      result,
+      maxStates,
+      states,
+      limitExceeded);
   return result;
 }
 
-int characterValueMemo(const Partition& lambda,
-                       const Partition& mu,
-                       std::map<std::string, int>& memo)
+mpz_class characterValueMemo(const Partition& lambda,
+                             const Partition& mu,
+                             std::map<std::string, mpz_class>& memo,
+                             size_t maxStates,
+                             size_t& states,
+                             bool& limitExceeded)
 {
+  if (limitExceeded) return 0;
+  if (states >= maxStates)
+    {
+      limitExceeded = true;
+      return 0;
+    }
+  ++states;
   if (mu.empty()) return lambda.empty() ? 1 : 0;
   std::string key = partitionKey(lambda) + "|" + partitionKey(mu);
   auto it = memo.find(key);
   if (it != memo.end()) return it->second;
-
-  int total = 0;
+  mpz_class total = 0;
   int hookSize = mu.front();
   Partition rest(mu.begin() + 1, mu.end());
-  for (const auto& removal : rimHookRemovals(lambda, hookSize))
+  for (const auto& removal :
+       rimHookRemovals(
+           lambda,
+           hookSize,
+           maxStates,
+           states,
+           limitExceeded))
     {
       int sign = (removal.height % 2 == 0) ? 1 : -1;
-      total += sign * characterValueMemo(removal.remaining, rest, memo);
+      total += sign * characterValueMemo(
+          removal.remaining,
+          rest,
+          memo,
+          maxStates,
+          states,
+          limitExceeded);
+      if (limitExceeded) return 0;
     }
   memo[key] = total;
   return total;
 }
 
-int characterValue(const Partition& lambda, const Partition& mu)
+mpz_class characterValueWithLimit(const Partition& lambda,
+                                  const Partition& mu,
+                                  size_t maxStates,
+                                  bool& limitExceeded)
 {
-  static std::map<std::string, int> memo;
-  return characterValueMemo(lambda, mu, memo);
+  std::map<std::string, mpz_class> memo;
+  size_t states = 0;
+  limitExceeded = false;
+  return characterValueMemo(
+      lambda, mu, memo, maxStates, states, limitExceeded);
 }
 
 

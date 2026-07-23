@@ -200,6 +200,8 @@ TEST ///
     assert(HScaledSolo_{2,1} == HScaledSolo_2*HScaledSolo_1)
     assert(toBasis(HScaledSolo_2, p) == 2*toBasis(h_2, p))
     assert(toBasis(p_2, "HScaledSolo") == HScaledSolo_2 - (1/4)*HScaledSolo_{1,1})
+    assert(multiplyToBasis(HScaledSolo_2, S_1, S) ==
+           toBasis(HScaledSolo_2*S_1, S))
     assert(hallInnerProduct(HScaledSolo_{2,1}, m_{2,1}) == 4_QQ)
 ///
 
@@ -497,6 +499,13 @@ TEST ///
     assert(toBasis(p_2, "e") == e_{1,1} - 2*e_2)
     assert((last rawTerms toBasis(p_30, h))#0 == -1)
     assert((last rawTerms toBasis(p_30, e))#0 == 1)
+    ones21 = 21:1
+    assert(basisCoefficient(toBasis(h_21, p), p_ones21) == 1_QQ/21!)
+    assert(basisCoefficient(toBasis(e_21, p), p_ones21) == 1_QQ/21!)
+    assert(basisCoefficient(toBasis(S_21, p), p_ones21) == 1_QQ/21!)
+    assert(toBasis(toBasis(h_21, p), h) == h_21)
+    assert(toBasis(toBasis(h_21, p), h) == h_21)
+    assert(hallInnerProduct(p_ones21, p_ones21) == 21!)
     assert(toBasis(p_2, "S") == S_2 - S_{1,1})
     assert(toP(h_2) == toBasis(h_2, p))
     assert(toS(p_2) == toBasis(p_2, S))
@@ -574,6 +583,12 @@ TEST ///
     assert(S_2 @ S_2 == toBasis(plethysm(S_2, S_2), S))
     assert(S_2 @ S_{1,1} == toBasis(plethysm(S_2, S_{1,1}), S))
     assert(S_{5,1} @ S_{3,1} == toBasis(plethysm(S_{5,1}, S_{3,1}), S))
+    -- Combined plethysm chooses either one complete fused calculation or the
+    -- ordinary plethysm followed by the default conversion workflow.
+    assert(S_{3,1} @ S_2 == toBasis(plethysm(S_{3,1}, S_2), S))
+    assert(S_{4,2} @ S_3 == toBasis(plethysm(S_{4,2}, S_3), S))
+    assert(S_{3,2,1} @ S_2 == toBasis(plethysm(S_{3,2,1}, S_2), S))
+    assert(h_{3,1} @ h_2 == toBasis(plethysm(h_{3,1}, h_2), h))
 ///
 
 TEST ///
@@ -813,6 +828,101 @@ TEST ///
 TEST ///
     E = frac(QQ[t])
     R4 = symmetricRing E
+    assertConversionAgreement = (F, target) -> (
+        defaultResult := toBasis(F, target);
+        broadDefaultResult := toBasis(toBasis(F, p), target);
+        assert(rawTerms defaultResult === rawTerms broadDefaultResult);
+        )
+    assertMultiplicationAgreement = (F, G, target) -> (
+        assert(rawTerms(multiplyToBasis(F, G, target)) ===
+               rawTerms(toBasis(F*G, target)));
+        )
+    conversionAgreementInput =
+        S_2*h_1 + e_3 + p_{2,1} + S_{{3,2},{1}}
+    scan({p, h, e, S, Somega},
+        target -> assertConversionAgreement(
+            conversionAgreementInput, target))
+    hallAgreementInput = q_2*q_1 + Q_{2,1} + P_3
+    scan({p, q, Q, P},
+        target -> assertConversionAgreement(hallAgreementInput, target))
+    smallBasisElements = {
+        p_{2,1}, h_{2,1}, e_{2,1}, m_{2,1}, ff_{2,1}, S_{2,1},
+        Somega_{2,1}, q_{2,1}, b_{2,1}, Q_{2,1}, B_{2,1},
+        P_{2,1}, Pomega_{2,1}}
+    allTargets = {p, h, e, m, ff, S, Somega, q, b, Q, B, P, Pomega}
+    scan(smallBasisElements, F ->
+        scan(allTargets, target ->
+            assertConversionAgreement(F, target)))
+    assertConversionAgreement(0_R4, S)
+    assertConversionAgreement(3_R4, h)
+    assertConversionAgreement(S_{{3,2},{1}}, S)
+    assertConversionAgreement(Somega_{{3,2},{1}}, p)
+    assertConversionAgreement(S_{{3,2},{1}}*e_1, S)
+    assertConversionAgreement(S_2*e_1*p_1, S)
+    assertConversionAgreement(S_2*e_1*p_1, h)
+    assertConversionAgreement(S_2*e_1*p_1, q)
+    assertConversionAgreement(p_3 + 2*p_2 + p_1, S)
+    assertConversionAgreement(p_3 + 2*p_2 + p_1, Somega)
+    assertConversionAgreement(p_3 + 2*p_2 + 3*p_1, Q)
+    hybridAgreementInput =
+        p_{4,4,3,3} + p_{4,4,3,2,1} + p_{4,3,3,2,2} +
+        p_{4,3,2,2,1,1,1} + p_{3,3,3,3,2} +
+        p_{3,3,2,2,2,1,1} + p_{2,2,2,2,2,2,1,1} +
+        p_{2,2,2,2,2,1,1,1,1} + p_14
+    assertConversionAgreement(hybridAgreementInput, S)
+    assertMultiplicationAgreement(S_2, e_1, S)
+    assertMultiplicationAgreement(S_2, S_1, S)
+    assertMultiplicationAgreement(S_2, h_1, S)
+    assertMultiplicationAgreement(S_2, p_1, S)
+    assertMultiplicationAgreement(h_2, e_1, h)
+    assertMultiplicationAgreement(Q_2, Q_1, Q)
+    assertMultiplicationAgreement(P_2, P_1, P)
+    assertMultiplicationAgreement(B_2, B_1, B)
+    assertMultiplicationAgreement(Pomega_2, Pomega_1, Pomega)
+    assertMultiplicationAgreement(m_2, m_1, m)
+    assertMultiplicationAgreement(ff_2, ff_1, ff)
+    assertMultiplicationAgreement(p_2, e_1, m)
+    assertMultiplicationAgreement(h_2, e_1, ff)
+    assertMultiplicationAgreement(q_2, q_1, q)
+    assertMultiplicationAgreement(b_2, b_1, b)
+    assertMultiplicationAgreement(m_2, S_1, S)
+    assertMultiplicationAgreement(S_2 + S_1, S_1, S)
+    assertMultiplicationAgreement(S_{{3,2},{1}}, S_1, S)
+    assertMultiplicationAgreement(0_R4, S_1, S)
+    assertMultiplicationAgreement(3_R4, S_1, S)
+    cachedPowerSums = toBasis(p_3 + 2*p_2 + 3*p_1, p)
+    cancelledPowerSums = cachedPowerSums - p_3
+    assertConversionAgreement(cancelledPowerSums, Q)
+    scaledPowerSums = 2*cachedPowerSums
+    assertConversionAgreement(scaledPowerSums, B)
+    cachedScalar = toBasis(3_R4, h)
+    cachedZero = toBasis(0_R4, h)
+    assert(toBasis(cachedScalar, S) == 3_R4)
+    assert(toBasis(cachedZero, S) == 0_R4)
+    assert(try (multiplyToBasis(S_2*S_1, S_1, S); false) else true)
+///
+
+TEST ///
+    R5 = symmetricRing (ZZ/5)
+    assert(toBasis(toBasis(S_2, p), S) == S_2)
+    assert(toBasis(toBasis(p_2, S), p) == p_2)
+    assert(multiplyToBasis(S_2, S_1, S) ==
+           toBasis(S_2*S_1, S))
+    RZ = symmetricRing ZZ
+    assert(try (toBasis(S_2, p); false) else true)
+///
+
+TEST ///
+    RdefaultLimit = symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "MaxWeight" => 6})
+    assert(multiplyToBasis(S_3, S_3, S) ==
+           toBasis(S_3*S_3, S))
+    assert(try (toBasis(p_7, S); false) else true)
+///
+
+TEST ///
+    E = frac(QQ[t])
+    R4 = symmetricRing E
     assert(multiplyToBasis(Q_2, Q_1, Q) == toBasis(Q_2*Q_1, Q))
     assert(multiplyToBasis(P_2, P_1, P) == toBasis(P_2*P_1, P))
     assert(multiplyToBasis(B_2, B_1, B) == toBasis(B_2*B_1, B))
@@ -1016,6 +1126,7 @@ TEST ///
     assert(toBasis(toBasis(purePowerSums, m), p) == purePowerSums)
     assert(toBasis(toBasis(purePowerSums, ff), p) == purePowerSums)
     assert(basisCoefficient(S_1*S_1, S_2) == 1_QQ)
+    assert(hallInnerProduct(S_1*S_1, S_2) == 1_QQ)
     pFromComplete = toP h_2
     pFromElementary = toP e_2
     assert(toS(pFromComplete + pFromElementary) == toS(toP(h_2 + e_2)))
@@ -1039,7 +1150,8 @@ TEST ///
     assert(toS(S_{1,3}*p_2) == toBasis(toP(S_{1,3}*p_2), S))
     assert(toS(S_{1,3}*h_2) == toBasis(toP(S_{1,3}*h_2), S))
     assert(toS(S_{1,3}*e_2) == toBasis(toP(S_{1,3}*e_2), S))
-    assert(multiplyToBasis(S_2*h_2*e_1, p_2, S) == toS(S_2*h_2*e_1*p_2))
+    assert(multiplyToBasis(toBasis(S_2*h_2*e_1, S), p_2, S) ==
+           toS(S_2*h_2*e_1*p_2))
     assert(multiplyToBasis(m_2, p_1, m) == toBasis(m_2*p_1, m))
 ///
 
@@ -1191,10 +1303,14 @@ TEST ///
     shadowPlethysm = plethysm(S_{3,1}, S_{2,1})
     shadowInput = toBasis(shadowPlethysm*S_1, p)
     assert(toS shadowInput == toBasis(toBasis(shadowInput, h), S))
+    assert(toBasis(shadowInput, S) ==
+           toBasis(toBasis(shadowInput, h), S))
 
     nonconstantInput = sum(take(partitions 10, 8),
         mu -> t*p_(toList mu))
     assert(toS nonconstantInput ==
+           toBasis(toBasis(nonconstantInput, h), S))
+    assert(toBasis(nonconstantInput, S) ==
            toBasis(toBasis(nonconstantInput, h), S))
 ///
 
@@ -1225,4 +1341,76 @@ TEST ///
         false,
         (Rwork, Fwork) -> Fwork)
     assert(ring nativeResult === R0)
+///
+
+TEST ///
+    -- Computation safeguards reject work before large combinatorial
+    -- structures are materialized.  These deliberately tiny limits exercise
+    -- the guard paths without performing a stress computation.
+    Rpartition = symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "MaxEnumeratedPartitions" => 2})
+    assert(Rpartition#"ComputationLimits"#"MaxGeneratedTerms" == 250000)
+    assert(toBasis(p_100, p) == p_100)
+    assert(try (toBasis(h_4, p); false) else true)
+
+    RpartitionPass = symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "MaxEnumeratedPartitions" => 5})
+    assert(toBasis(h_4, p) == p_4/4 + p_{3,1}/3 + p_{2,2}/8 +
+        p_{2,1,1}/4 + p_{1,1,1,1}/24)
+
+    Rterms = symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "MaxEnumeratedPartitions" => 10,
+        "MaxGeneratedTerms" => 2})
+    assert(try (toBasis(h_4, p); false) else true)
+
+    Rdeterminant = symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "MaxDeterminantStates" => 4})
+    assert(try (hJacobiTrudi {3,2,1}; false) else true)
+    RdeterminantPass = symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "MaxDeterminantStates" => 8})
+    assert(hJacobiTrudi {3,2,1} == S_{3,2,1})
+
+    Rcharacters = symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "MaxCharacterCacheEntries" => 1})
+    assert(try (toBasis(S_{2,1}, p); false) else true)
+
+    Rrecursion = symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "MaxRecursiveStates" => 1})
+    assert(try (toBasis(S_{2,1}*S_{2,1}, S); false) else true)
+
+    Rmemory = symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "MaxEnumeratedPartitions" => 100000,
+        "MaxEstimatedMemoryMB" => 1})
+    assert(try (toBasis(h_36, p); false) else true)
+
+    Rweight = symmetricRing QQ
+    assert(try (p_201; false) else true)
+    assert(try (S_{2147483647,1}; false) else true)
+    assert(try (p_150*p_51; false) else true)
+    assert(try (S_20@S_20; false) else true)
+    RweightRaised = symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "MaxWeight" => 250})
+    assert(weight p_201 == 201)
+
+    Rexact = symmetricRing QQ
+    ones21 = apply(21, i -> 1)
+    ones22 = apply(22, i -> 1)
+    assert(basisCoefficient(p_ones21, m_ones21) ==
+        51090942171709440000)
+    assert(basisCoefficient(p_ones22, S_{7,4,4,3,2,2}) ==
+        2182430250)
+
+    RkostkaRecursion = symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "MaxRecursiveStates" => 1})
+    assert(try (hallInnerProduct(S_{2,1}, h_{2,1}); false) else true)
+
+    Rcache = symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "MaxCacheEntries" => 1})
+    toBasis(h_2, p)
+    assert(try (toBasis(h_3, p); false) else true)
+
+    assert(try (symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "MaxGeneratedTerms" => 0}); false) else true)
+    assert(try (symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "UnknownLimit" => 1}); false) else true)
 ///

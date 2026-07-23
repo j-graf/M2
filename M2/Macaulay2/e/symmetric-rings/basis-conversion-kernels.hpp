@@ -8,7 +8,8 @@
 // ============================================================================
 // Shared Conversion Utilities
 // ============================================================================
-// Coefficient maps, basis metadata, and stored basis-element inspection.
+// Coefficient maps, basis metadata, stored basis-element inspection, and the
+// policy-free assembler for canonical built-in expansions to power sums.
 
   ring_elem scaled(ring_elem coeff, ring_elem f) const;
   ring_elem coefficientQuotient(ring_elem numerator, ring_elem denominator) const;
@@ -23,6 +24,7 @@
   CoeffMap multiplyCoeffMaps(const CoeffMap& a, const CoeffMap& b) const;
   CoeffMap oneCoeffMap() const;
   ring_elem cachedInteger(long n) const;
+  ring_elem cachedInteger(const mpz_class& n) const;
   Partition leadingPartition(const CoeffMap& H) const;
   ring_elem coeffMapToElement(const CoeffMap& H,
                                   int targetBasisId,
@@ -48,6 +50,9 @@
   bool powerSumIndexFromMonomial(const SymmetricMonomial& monomial,
                                      Partition& index) const;
   ring_elem powerSumElementFromIndex(const Partition& index) const;
+  ring_elem canonicalExpressionToPowerSumsViaBasisFormulas(
+        ring_elem f,
+        BasisKind sourceKind) const;
   bool singleBasisIndexFromMonomial(const SymmetricMonomial& monomial,
                                         int basisId,
                                         Partition& index) const;
@@ -133,7 +138,10 @@
                                     int schurOrder,
                                     const std::string& display,
                                     long sign) const;
-  ring_elem powerSumIndexToSchurViaCharacters(const Partition& mu, int schurId, int schurOrder) const;
+  ring_elem powerSumIndexToSchurViaCharacters(
+      const Partition& mu,
+      int schurId,
+      int schurOrder) const;
   ring_elem powerSumsToSchurLikeViaCharacters(ring_elem f,
                                      int schurId,
                                      int schurOrder,
@@ -209,8 +217,12 @@
         bool capitalToNormalized) const;
   CoeffMap raisingExpansion(const Partition& lambda) const;
   CoeffMap raisingGeneratorMap(const Partition& lambda) const;
-  ring_elem hallLittlewoodCapitalToPowerSumsViaRaisingOperators(const Partition& lambda, bool omega) const;
-  ring_elem hallLittlewoodNormalizedToPowerSumsViaCapitalNormalization(const Partition& lambda, bool omega) const;
+  ring_elem hallLittlewoodCapitalToPowerSumsViaRaisingOperators(
+      const Partition& lambda,
+      bool omega) const;
+  ring_elem hallLittlewoodNormalizedToPowerSumsViaCapitalNormalization(
+      const Partition& lambda,
+      bool omega) const;
   CoeffMap triangularReduceHallCapital(const CoeffMap& generatorMap,
                                            bool omega) const;
   ring_elem skewQOrBFunction(const Partition& lambda,

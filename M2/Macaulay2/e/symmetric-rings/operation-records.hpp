@@ -17,13 +17,13 @@ namespace symmetric_rings {
 struct SchurConversionRecipeEntry
 {
   Partition lambda;
-  std::vector<std::pair<size_t, int>> contributions;
+  std::vector<std::pair<size_t, mpz_class>> contributions;
 };
 
 struct PartitionCoefficientTerm
 {
   Partition partition;
-  long coefficient;
+  mpz_class coefficient;
 };
 
 struct OmegaTarget

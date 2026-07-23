@@ -3,7 +3,8 @@
 #ifndef M2_SYMMETRIC_RINGS_PARTITIONS_HPP_
 #define M2_SYMMETRIC_RINGS_PARTITIONS_HPP_
 
-#include <limits>
+#include <gmpxx.h>
+
 #include <map>
 #include <string>
 #include <utility>
@@ -13,14 +14,12 @@ namespace symmetric_rings {
 
 using Partition = std::vector<int>;
 
-constexpr int unknownCharacterValue = std::numeric_limits<int>::min();
-
 struct CharacterTable
 {
   std::vector<Partition> partitions;
-  std::vector<long> zValues;
+  std::vector<mpz_class> zValues;
   std::map<Partition, size_t> partitionRows;
-  mutable std::vector<std::vector<int>> values;
+  mutable std::map<std::pair<size_t, size_t>, mpz_class> values;
 };
 
 std::string partitionKey(const Partition& p);
@@ -35,10 +34,19 @@ bool lexLessPartition(const Partition& a, const Partition& b);
 Partition trimTrailingZerosPartition(const Partition& p);
 Partition conjugatePartition(const Partition& p);
 std::pair<int, Partition> straightenSchurIndex(const Partition& alpha);
+// Returns limit + 1 when p(n) exceeds limit.  This counts without
+// materializing the partitions and stops as soon as the limit is crossed.
+size_t partitionCountUpToLimit(int n, size_t limit);
 std::vector<Partition> partitionsOf(int n);
-long pToMonomialCoefficient(const Partition& lambda, const Partition& mu);
-long zValue(const Partition& lambda);
-int characterValue(const Partition& lambda, const Partition& mu);
+mpz_class pToMonomialCoefficientWithLimit(const Partition& lambda,
+                                          const Partition& mu,
+                                          size_t maxStates,
+                                          bool& limitExceeded);
+mpz_class zValue(const Partition& lambda);
+mpz_class characterValueWithLimit(const Partition& lambda,
+                                  const Partition& mu,
+                                  size_t maxStates,
+                                  bool& limitExceeded);
 
 } // namespace symmetric_rings
 

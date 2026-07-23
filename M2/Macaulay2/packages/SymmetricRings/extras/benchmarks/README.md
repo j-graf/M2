@@ -268,7 +268,7 @@ rings, and semantic constructions.  Prefer mathematically recognizable inputs
 such as Schur products, Pieri products, plethysms, and round-trip basis
 conversions alongside synthetic stress cases.
 
-Do not make a benchmark depend on the current dispatcher's choice unless the
+Do not make a benchmark depend on the default selector's choice unless the
 case is explicitly a selector test.  Most cases should state a mathematical
 operation and allow production routing to evolve.
 
@@ -303,6 +303,8 @@ The suite is divided into small components for maintainability:
   reporting;
 - `update-latest.awk` updates per-device most recent verified medians;
 - `test-history.sh` checks record retention and latest-result replacement;
+- `test-plan-forcing.sh` checks forced conversion and multiplication plans
+  against unforced results in fresh processes;
 - estimation prefers latest per-case medians and predicts duration without
   running cases;
 - system, condition, and calibration code describe the environment;
@@ -329,7 +331,7 @@ If timings unexpectedly regress:
 2. compare family calibration probes;
 3. confirm the coefficient ring and exact case definition;
 4. use dispatcher tracing outside the timed region;
-5. compare a forced old and new route on the same expanded input;
+5. compare applicable forced plans on the same expanded input;
 6. repeat the case in a fresh run;
 7. inspect whether input construction, shadow-QQ conversion, or the target
    operation is actually responsible.

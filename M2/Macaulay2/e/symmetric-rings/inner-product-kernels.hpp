@@ -22,7 +22,7 @@
   // Kostka-Number Pairings
   // ============================================================================
 
-  long kostkaNumberViaSemistandardTableaux(
+  mpz_class kostkaNumberViaSemistandardTableaux(
       const Partition& shape,
       const Partition& content) const;
   ring_elem kostkaInnerProductForBasisElements(

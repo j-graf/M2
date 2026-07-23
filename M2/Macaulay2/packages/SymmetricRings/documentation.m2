@@ -194,6 +194,24 @@ doc ///
     @TO "symmetricRing(...,\"NormalizeSomega\"=>...)"@ controls whether
     Schur Omega (@TT "Somega"@) basis elements are immediately rewritten as
     Schur functions.
+   Text
+    The @TT "ComputationLimits"@ option accepts a hash table of positive
+    integer overrides.  Its keys are @TT "MaxWeight"@,
+    @TT "MaxEnumeratedPartitions"@, @TT "MaxGeneratedTerms"@,
+    @TT "MaxRecursiveStates"@, @TT "MaxCacheEntries"@,
+    @TT "MaxCharacterCacheEntries"@, @TT "MaxDeterminantStates"@, and
+    @TT "MaxEstimatedMemoryMB"@.  The defaults are respectively 200,
+    250000, 250000, 5000000, 250000, 2000000, 262144, and 512.
+    @TT "MaxWeight"@ is enforced when basis elements and products are
+    constructed; it also bounds the absolute size and length of an index, so
+    large positive and negative parts cannot evade the limit by cancellation.
+    @TT "MaxCacheEntries"@ bounds aggregate entries added to the engine's
+    persistent computation caches; the character-specific limit remains an
+    additional bound on character values.
+    A computation that would
+    cross a limit reports an error before the guarded structure is allocated;
+    results are never silently truncated.  Supply only the keys that need to
+    change.
    Example
     A = QQ[t,q]
     R = symmetricRing(A, "HallLittlewoodParameter" => t,
@@ -202,6 +220,12 @@ doc ///
     R#"HallLittlewoodParameter"
     R#"MacdonaldParameters"
     Somega_2
+   Example
+    R = symmetricRing(QQ, "ComputationLimits" => hashTable {
+        "MaxWeight" => 150,
+        "MaxGeneratedTerms" => 100000,
+        "MaxEstimatedMemoryMB" => 256})
+    R#"ComputationLimits"
    Text
     With the default normalization, the Schur Omega basis Somega is mainly an auxiliary basis used to
     describe omega images.  The function @TO omegaInvolution@ has its own
@@ -958,8 +982,10 @@ doc ///
    toBasis(f,B)
   Description
    Text
-    The function toBasis rewrites f in the basis B.  Built-in conversions use
-    the power sums, @TO hJacobiTrudi@, @TO eJacobiTrudi@, triangular
+    The function toBasis rewrites f in the basis B.  It normalizes the
+    expression, resolves products, groups terms by source basis and weight,
+    and selects conversion plans from the shared engine registry.  Built-in
+    plans use power sums, @TO hJacobiTrudi@, @TO eJacobiTrudi@, triangular
     reductions, and Hall-Littlewood formulas as appropriate.  For instance,
     $h_2=(p_2+p_1^2)/2$ and $p_2=s_2-s_{1,1}$.
    Text
@@ -1001,10 +1027,11 @@ doc ///
    multiplyToBasis(f,g,B)
   Description
    Text
-    This operation preserves f and g as separate operands while selecting a
-    product expansion and conversion route. It is useful when the caller still
-    has the factors separately; ordinary toBasis continues to classify products
-    already present in an expression.
+    This operation accepts product-free expansions f and g and preserves them
+    as separate operands while selecting a multiplication plan and any
+    required operand or result conversions from the shared registry. It is
+    useful when the caller still has the factors separately; ordinary toBasis
+    owns expressions that already contain products.
    Example
     A = frac(QQ[t])
     R = symmetricRing A

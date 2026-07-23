@@ -84,6 +84,17 @@ coefficientRing SymmetricRing := R0 -> R0.CoefficientRing
 coefficientRing SymmetricRingElement := f -> coefficientRing ring f
 
 -- Default options for constructing a symmetric function ring.
+computationLimitDefaults = hashTable {
+    "MaxWeight" => 200,
+    "MaxEnumeratedPartitions" => 250000,
+    "MaxGeneratedTerms" => 250000,
+    "MaxRecursiveStates" => 5000000,
+    "MaxCacheEntries" => 250000,
+    "MaxCharacterCacheEntries" => 2000000,
+    "MaxDeterminantStates" => 262144,
+    "MaxEstimatedMemoryMB" => 512
+    }
+
 symmetricRingOptionDefaults = hashTable {
     "Parameters" => {},
     "HallLittlewoodParameter" => null,
@@ -91,8 +102,23 @@ symmetricRingOptionDefaults = hashTable {
     "DefaultSeriesVariables" => {},
     "BasisSymbols" => hashTable {},
     "NormalizeSomega" => true,
-    "CreateConstantQQShadow" => true
+    "CreateConstantQQShadow" => true,
+    "ComputationLimits" => computationLimitDefaults
     }
+
+normalizeComputationLimits = limits -> (
+    if not instance(limits, HashTable) then
+        error "expected ComputationLimits to be a hash table";
+    unknown := select(keys limits, key -> not computationLimitDefaults#?key);
+    if #unknown > 0 then
+        error("unknown ComputationLimits key: ", toString first unknown);
+    normalized := hashTable apply(keys computationLimitDefaults, key ->
+        key => if limits#?key then limits#key else computationLimitDefaults#key);
+    scan(values normalized, value ->
+        if class value =!= ZZ or value <= 0 or value > 2147483647 then
+            error "expected ComputationLimits values to be positive small integers");
+    normalized
+    )
 
 -- Finds a coefficient-ring generator with a given displayed name.
 coefficientRingGeneratorNamed = (A, name) -> (
@@ -157,6 +183,18 @@ symmetricRing = args -> (
     opts := parseStringOptions(symmetricRingOptionDefaults, drop(L, 1), "symmetricRing");
     if not (A.?Engine and A.Engine) then error "expected coefficient ring handled by the engine";
     R0 := newSymmetricEngineRing rawSymmetricRing raw A;
+    computationLimits := normalizeComputationLimits opts#"ComputationLimits";
+    if not rawSymmetricRingsSetComputationLimits(
+        raw R0,
+        computationLimits#"MaxWeight",
+        computationLimits#"MaxEnumeratedPartitions",
+        computationLimits#"MaxGeneratedTerms",
+        computationLimits#"MaxRecursiveStates",
+        computationLimits#"MaxCacheEntries",
+        computationLimits#"MaxCharacterCacheEntries",
+        computationLimits#"MaxDeterminantStates",
+        computationLimits#"MaxEstimatedMemoryMB") then
+        error "could not set symmetric-ring computation limits";
     hlParameter := opts#"HallLittlewoodParameter";
     if hlParameter === null then hlParameter = inferHallLittlewoodParameter A;
     if hlParameter =!= null then (
@@ -171,6 +209,7 @@ symmetricRing = args -> (
     R0#"MacdonaldParameters" = macdonaldParameters;
     R0#"DefaultSeriesVariables" = opts#"DefaultSeriesVariables";
     R0#"NormalizeSomega" = opts#"NormalizeSomega";
+    R0#"ComputationLimits" = computationLimits;
     if class R0#"NormalizeSomega" =!= Boolean then error "expected Boolean value for option NormalizeSomega";
     R0#"Bases" = ringAvailableBases R0;
     initializeBasisSymbolMaps(R0, opts#"BasisSymbols");
@@ -187,6 +226,7 @@ symmetricRing = args -> (
         Rqq := try symmetricRing(QQ,
             "BasisSymbols" => symbolOptionsForQQ,
             "NormalizeSomega" => R0#"NormalizeSomega",
+            "ComputationLimits" => R0#"ComputationLimits",
             "CreateConstantQQShadow" => false) else null;
         CurrentSymmetricRing = R0;
         installBasisAliases R0;

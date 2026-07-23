@@ -133,7 +133,11 @@ operator expansion, and `applyOperator`/function-call/juxtaposition syntax.
 ### `symmetricRingsAndElements.m2`
 
 This file constructs `SymmetricRing` objects and wraps raw engine elements as
-`SymmetricRingElement` values. It owns:
+`SymmetricRingElement` objects. Ring construction also validates the
+per-ring `ComputationLimits` hash table and sends the weight, partition,
+generated-term, recursion, character-cache, determinant-state, and estimated-memory
+budgets to the engine. Constant-QQ shadow rings inherit the same limits.
+It owns:
 
 - coefficient-ring parameter inference;
 - basis availability on a particular ring;
@@ -145,7 +149,8 @@ This file constructs `SymmetricRing` objects and wraps raw engine elements as
 
 ### `computations.m2`
 
-This file owns public computational policy:
+This file owns public computational policy, including the `toBasis` and
+`multiplyToBasis` workflows:
 
 - straightening and equality;
 - Jacobi–Trudi constructors;
@@ -156,6 +161,23 @@ This file owns public computational policy:
 - omega involution;
 - Hall and Hall–Littlewood inner products;
 - the optional constant-QQ working-ring policy.
+
+The engine implementation of `multiplyToBasis` accepts and distributes
+product-free linear combinations into calls to a strict binary helper. That helper follows
+the redesign contract: it accepts exactly two normalized mathematical basis
+elements and selects one multiplication plan together with any operand
+conversions. The owning workflow executes those conversions, runs the
+policy-free product kernel, normalizes the declared kernel output when
+necessary, and only then selects and executes the post-kernel conversion
+through the same basis-conversion registry.
+
+`toBasis` uses one workflow for pure and mixed expressions: normalize,
+resolve products, group canonical terms by source basis and weight, select
+every composition and direct plan, execute the selections, and combine the
+target-basis result. Its picker may use any registered intermediate basis, not
+only power sums, and exact ordered compositions can be forced for contract
+tests. Built-in plans invoke mathematical kernels directly; custom and
+transformed formulas remain at the M2 registry boundary.
 
 ## Basis identity: key, id, and symbol
 

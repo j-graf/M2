@@ -8,6 +8,8 @@
 #include "rings/ZZ.hpp"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <map>
 #include <sstream>
@@ -88,6 +90,31 @@ bool SymmetricEngineRing::singleSchurPartition(ring_elem f, int schurId, Partiti
     return isPartitionIndex(lambda);
   }
 
+bool SymmetricEngineRing::
+schurPlethysmToSchurViaAdamsJacobiTrudiApplicable(
+    ring_elem f,
+    ring_elem g,
+    int targetBasisId,
+    Partition& outer,
+    Partition& inner) const
+{
+    if (!hasBasisKind(targetBasisId, BasisKind::Schur)) return false;
+    if (!singleSchurPartition(f, targetBasisId, outer)) return false;
+    if (!singleSchurPartition(g, targetBasisId, inner)) return false;
+    if (inner.size() != 1) return false;
+    // The materialized power-sum route is faster for one-row outer input.
+    if (outer.size() == 1) return false;
+
+    // Adams/Jacobi-Trudi grows both with the determinant dimension and with
+    // the Adams dilation supplied by the one-row inner shape. Crossover
+    // sweeps give a conservative stable region: two-row outers through inner
+    // size four, and three-row outers for inner size two.
+    int innerPart = inner.front();
+    if (outer.size() == 2 && innerPart > 4) return false;
+    if (outer.size() == 3 && innerPart > 2) return false;
+    return outer.size() <= 3;
+  }
+
 // Specialized Schur-plethysm path used for one-row inner Schur functions.
 std::string SymmetricEngineRing::completePlethysmCacheKey(
                                        const std::string& algorithm,
@@ -143,6 +170,7 @@ ring_elem SymmetricEngineRing::completePlethysmViaAdamsRecurrence(int n,
     ring_elem reciprocal = rationalCoefficient(1, n);
     if (error()) return zero();
     ring_elem result = scaled(reciprocal, total);
+    requireCacheEntryCapacity("Schur plethysm cache");
     schurCompletePlethysmCache[key] = result;
     return copyPolyValue(polyValue(result));
   }
@@ -179,6 +207,9 @@ ring_elem SymmetricEngineRing::schurPlethysmToSchurViaAdamsJacobiTrudi(const Par
         }
 
     size_t limit = static_cast<size_t>(1) << n;
+    if (!determinantStatesWithinLimit(
+            limit, "plethysm Jacobi-Trudi determinant"))
+      return zero();
     RingElemVector dp;
     dp.reserve(limit);
     for (size_t i = 0; i < limit; ++i) dp.push_back(zero());
@@ -209,46 +240,121 @@ ring_elem SymmetricEngineRing::schurPlethysmToSchurViaAdamsJacobiTrudi(const Par
     return dp[limit - 1];
   }
 
-bool SymmetricEngineRing::trySchurPlethysmToSchurViaAdamsJacobiTrudi(ring_elem f,
-                            ring_elem g,
-                            int targetBasisId,
-                            const std::string& targetDisplay,
-                            int targetOrder,
-                            ring_elem& result) const
+// ============================================================================
+// Plethysm-To-Basis Selection And Execution
+// ============================================================================
+// A combined request makes exactly one complete decision before performing
+// algebra. The broad route materializes the canonical power-sum plethysm and
+// delegates its only conversion decision to the shared conversion registry.
+
+SymmetricEngineRing::PlethysmToBasisRoute
+SymmetricEngineRing::selectPlethysmToBasisRoute(
+    ring_elem f,
+    ring_elem g,
+    int targetBasisId) const
 {
-    if (!hasBasisKind(targetBasisId, BasisKind::Schur)) return false;
     Partition outer;
     Partition inner;
-    if (!singleSchurPartition(f, targetBasisId, outer)) return false;
-    if (!singleSchurPartition(g, targetBasisId, inner)) return false;
-    if (inner.size() != 1) return false;
-    // The guaranteed post-plethysm power-sum pipeline is faster for one-row
-    // outer input.
-    if (outer.size() == 1) return false;
-    // Adams/Jacobi-Trudi grows both with the determinant dimension and with
-    // the Adams dilation supplied by the one-row inner shape. Crossover
-    // sweeps give a conservative stable region: two-row outers through inner
-    // size four, and three-row outers for inner size two. Outside that region
-    // materialization followed by the shared p -> S dispatcher avoids sharp
-    // high-inner and four-row regressions.
-    int innerPart = inner.front();
-    if (outer.size() == 2 && innerPart > 4) return false;
-    if (outer.size() == 3 && innerPart > 2) return false;
-    if (outer.size() > 3) return false;
-    result = schurPlethysmToSchurViaAdamsJacobiTrudi(outer,
-                                      inner,
-                                      targetBasisId,
-                                      targetDisplay,
-                                      targetOrder);
-    return !error();
+    if (schurPlethysmToSchurViaAdamsJacobiTrudiApplicable(
+            f, g, targetBasisId, outer, inner))
+      return PlethysmToBasisRoute::ViaSchurAdamsJacobiTrudi;
+    return PlethysmToBasisRoute::ViaPowerSumsThenBasisConversion;
+  }
+
+const char *SymmetricEngineRing::plethysmToBasisRouteName(
+    PlethysmToBasisRoute route) const
+{
+    switch (route)
+      {
+        case PlethysmToBasisRoute::ViaSchurAdamsJacobiTrudi:
+          return "S->S:Adams-Jacobi-Trudi";
+        case PlethysmToBasisRoute::ViaPowerSumsThenBasisConversion:
+          return "p-materialization->target:default-conversion";
+      }
+    return "unknown";
+  }
+
+void SymmetricEngineRing::tracePlethysmToBasisSelection(
+    PlethysmToBasisRoute route,
+    int targetBasisId) const
+{
+    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr)
+      return;
+    std::fprintf(
+        stderr,
+        "SymmetricRings plethysm-to-basis: target=%s route=%s\n",
+        basisKeyForId(targetBasisId).c_str(),
+        plethysmToBasisRouteName(route));
+  }
+
+ring_elem SymmetricEngineRing::executePlethysmToBasisRoute(
+    PlethysmToBasisRoute route,
+    ring_elem f,
+    ring_elem g,
+    int targetBasisId) const
+{
+    if (route == PlethysmToBasisRoute::ViaSchurAdamsJacobiTrudi)
+      {
+        Partition outer;
+        Partition inner;
+        if (!schurPlethysmToSchurViaAdamsJacobiTrudiApplicable(
+                f, g, targetBasisId, outer, inner))
+          {
+            ERROR("a selected plethysm route violated its applicability contract");
+            return zero();
+          }
+        const auto& target = requireBasis(targetBasisId);
+        ring_elem result = schurPlethysmToSchurViaAdamsJacobiTrudi(
+            outer,
+            inner,
+            targetBasisId,
+            target.displaySymbol,
+            target.displayOrder);
+        if (error()) return zero();
+        ExpressionFacts facts = inferCanonicalExpansionFacts(
+            result,
+            targetBasisId,
+            partitionWeight(outer) * partitionWeight(inner));
+        if (error()) return zero();
+        attachExpressionFacts(
+            result,
+            facts,
+            targetBasisId,
+            combinatorialTagMask(CombinatorialTag::Plethysm));
+        return result;
+      }
+
+    ring_elem powerSums = plethysm(f, g);
+    if (error()) return zero();
+    return toBasis(powerSums, targetBasisId);
   }
 
 // ============================================================================
 // Public Plethysm Entry Points
 // ============================================================================
 
+void SymmetricEngineRing::requirePlethysmWithinWeightLimit(
+    ring_elem f, ring_elem g) const
+{
+    auto maximumAbsoluteWeight = [](const SymmetricRingPoly *poly) {
+      long long maximum = 0;
+      for (const auto& term : poly->terms)
+        {
+          const long long weight = monomialWeight(term.monomial);
+          const long long magnitude = weight < 0 ? -weight : weight;
+          maximum = std::max(maximum, magnitude);
+        }
+      return maximum;
+    };
+    const long long outerWeight = maximumAbsoluteWeight(polyValue(f));
+    const long long innerWeight = maximumAbsoluteWeight(polyValue(g));
+    requireWeightWithinLimit(
+        outerWeight * innerWeight, "symmetric-function plethysm");
+  }
+
 ring_elem SymmetricEngineRing::plethysm(ring_elem f, ring_elem g) const
 {
+    requirePlethysmWithinWeightLimit(f, g);
     int pBasisId = requiredBasisIdForKind(BasisKind::PowerSum);
     ring_elem fPowerSums = toBasis(f, pBasisId);
     if (error()) return zero();
@@ -284,37 +390,12 @@ ring_elem SymmetricEngineRing::plethysmToBasisDispatch(ring_elem f,
                             ring_elem g,
                             int targetBasisId) const
 {
-    int pBasisId = requiredBasisIdForKind(BasisKind::PowerSum);
-    const auto& powerSums = requireBasis(pBasisId);
-    const auto& target = requireBasis(targetBasisId);
-
-    ConversionGuarantees guarantees;
-    ConversionGuarantees outerGuarantees =
-        inferConversionGuarantees(f, targetBasisId);
-    ConversionGuarantees innerGuarantees =
-        inferConversionGuarantees(g, targetBasisId);
-    if (outerGuarantees.homogeneousWeight &&
-        innerGuarantees.homogeneousWeight)
-      guarantees.homogeneousWeight =
-          *outerGuarantees.homogeneousWeight *
-          *innerGuarantees.homogeneousWeight;
-    ConversionInput input{
-        zero(),
-        std::move(guarantees),
-        combinatorialTagMask(CombinatorialTag::Plethysm)};
-    ConversionRequest request{
-        ConversionRequestKind::PostPlethysm,
-        input,
-        f,
-        g};
-    return conversionRequestToBasisDispatch(request,
-                                            pBasisId,
-                                            powerSums.displaySymbol,
-                                            powerSums.displayOrder,
-                                            powerSums.multiplicative,
-                                            targetBasisId,
-                                            target.displaySymbol,
-                                            target.displayOrder,
-                                            target.multiplicative);
+    requirePlethysmWithinWeightLimit(f, g);
+    requireBasis(targetBasisId);
+    if (error()) return zero();
+    PlethysmToBasisRoute route =
+        selectPlethysmToBasisRoute(f, g, targetBasisId);
+    tracePlethysmToBasisSelection(route, targetBasisId);
+    return executePlethysmToBasisRoute(route, f, g, targetBasisId);
   }
 } // namespace symmetric_rings

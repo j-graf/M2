@@ -73,9 +73,6 @@ eJacobiTrudi(List, List) := (lambda, mu) -> jacobiTrudiInBasis("Elementary", lam
 -- ============================================================================
 
 -- Asks the C++ engine to convert between built-in bases.
--- This path assumes the engine understands the source atoms. Callers must route
--- elements containing M2-level ToPowerSums hooks through elementToPowerSumsM2
--- before asking the engine for a final target basis.
 engineToBasis = (F, B) -> (
     R0 := ring F;
     userSymmetricElement(R0, rawSymmetricRingsToBasis(raw F, B#"BasisId"))
@@ -95,7 +92,8 @@ needsM2PowerSumConversion = F -> (
     any(rawTerms F, term -> any(term#1, atom -> atomNeedsM2PowerSumConversion(R0, atom)))
     )
 
--- Converts one atom to power sums using metadata or the engine.
+-- These helpers preserve M2-defined custom-basis hooks while
+-- keeping all built-in engine conversion on the shared entry point.
 atomToPowerSums = (R0, atom) -> (
     B := basisWithId(R0, atom#"BasisId");
     atomElement := atomAsElement(R0, atom);
@@ -103,10 +101,6 @@ atomToPowerSums = (R0, atom) -> (
     else engineToBasis(atomElement, p)
     )
 
--- Converts an element to power sums by expanding atoms at the M2 level.
--- This deliberately expands monomials atom by atom. It preserves custom basis
--- hooks for transformed/user bases, then relies on ordinary multiplication to
--- rebuild the product in the ambient symmetric ring.
 elementToPowerSumsM2 = F -> (
     R0 := ring F;
     A := coefficientRing R0;
@@ -121,15 +115,10 @@ elementToPowerSumsM2 = F -> (
     result
     )
 
--- Chooses the M2 or engine route for conversion to power sums.
 toPowerSumsForConversion = F -> (
     if needsM2PowerSumConversion F then elementToPowerSumsM2 F
     else engineToBasis(F, p)
     )
-
--- Public methods for basis conversion.
-toBasis = method()
-toBasisFallback = method()
 
 -- Accepts either a basis object, symbol/string, or indexed variable table.
 -- Unavailable tables carry SymmetricBasis === null so an expression like Q can
@@ -158,7 +147,11 @@ constantQQRingFor = R0 -> (
     oldCurrent := CurrentSymmetricRing;
     symbolOptions := if R0#?"BasisKeyToSymbol" then hashTable pairs R0#"BasisKeyToSymbol" else hashTable {};
     normalizeSomega := if R0#?"NormalizeSomega" then R0#"NormalizeSomega" else true;
-    Rqq := try symmetricRing(QQ, "BasisSymbols" => symbolOptions, "NormalizeSomega" => normalizeSomega) else (
+    computationLimits := if R0#?"ComputationLimits" then R0#"ComputationLimits" else computationLimitDefaults;
+    Rqq := try symmetricRing(QQ,
+        "BasisSymbols" => symbolOptions,
+        "NormalizeSomega" => normalizeSomega,
+        "ComputationLimits" => computationLimits) else (
         CurrentSymmetricRing = oldCurrent;
         if oldCurrent =!= null then installBasisAliases oldCurrent;
         null
@@ -307,34 +300,33 @@ tryConstantQQOperation = (R0, inputs, compute) -> (
 -- Conversion And Product Policy
 -- ============================================================================
 
--- Fallback conversion route: convert the whole element through the standard
--- basis-conversion machinery without product-aware M2 dispatch.
-toBasisFallback(SymmetricRingElement, Thing) := (f, target) -> (
+-- Fallback policy for toBasis. Custom basis hooks remain in M2;
+-- all built-in conversion uses the shared engine workflow.
+toBasisFallback = (f, target) -> (
     R0 := ring f;
     B := targetBasisOnRing(R0, target);
+    P := basis(R0, p);
     if needsM2PowerSumConversion f then (
         FP := elementToPowerSumsM2 f;
         if B#"BasisId" == P#"BasisId" then return FP;
         if B#"FromPowerSums" =!= null then return (B#"FromPowerSums")(FP, B);
         return engineToBasis(FP, B);
         );
-    if B#"FromPowerSums" =!= null then return (B#"FromPowerSums")(toPowerSumsForConversion f, B);
+    if B#"FromPowerSums" =!= null then
+        return (B#"FromPowerSums")(toPowerSumsForConversion f, B);
     engineToBasis(f, B)
     )
 
 -- Product-aware multiplication followed by conversion to a target basis.
 multiplyToBasis = method()
 
--- The engine product pipeline is used only when both inputs and the target are
--- engine-understood. Custom ToPowerSums/FromPowerSums hooks force the conservative
--- fallback so user-registered bases keep their M2-defined semantics.
 multiplyToBasis(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, target) -> (
     R0 := ring f;
     if ring g =!= R0 then error "expected elements in the same symmetric ring";
     B := targetBasisOnRing(R0, target);
-    P := basis(R0, p);
-    if needsM2PowerSumConversion f or needsM2PowerSumConversion g or B#"FromPowerSums" =!= null then return toBasisFallback(f*g, B);
-    userSymmetricElement(R0, rawSymmetricRingsProductToBasisDispatch(
+    if needsM2PowerSumConversion f or needsM2PowerSumConversion g or
+       B#"FromPowerSums" =!= null then return toBasisFallback(f*g, B);
+    userSymmetricElement(R0, rawSymmetricRingsMultiplyToBasis(
         raw f, raw g, B#"BasisId"))
     )
 
@@ -376,6 +368,8 @@ preferConstantQQForOrdinaryToPowerSums = (R0, f, B) -> (
 -- Converts a symmetric function to the requested basis. Plethysm provenance
 -- and moderately large pure-p support make the constant-QQ shadow the first
 -- choice; other inputs remain native-first and use it only after native failure.
+toBasis = method()
+
 toBasis(SymmetricRingElement, Thing) := (f, target) -> (
     R0 := ring f;
     B := targetBasisOnRing(R0, target);

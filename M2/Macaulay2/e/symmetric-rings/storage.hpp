@@ -15,6 +15,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace symmetric_rings {
@@ -65,21 +66,134 @@ constexpr bool hasCombinatorialTag(CombinatorialTags tags,
   return (tags & combinatorialTagMask(tag)) != 0;
 }
 
-struct SymmetricConversionMetadata
+class SymmetricConversionMetadata : public our_gc_cleanup
 {
+ public:
+  SymmetricConversionMetadata() = default;
+
+  // A metadata object owns ordinary STL containers, so it is finalized
+  // independently of its containing polynomial.  Copy and move construction
+  // must run the default our_gc_cleanup constructor to register that new
+  // allocation with the collector before assigning the stored facts.
+  SymmetricConversionMetadata(const SymmetricConversionMetadata& other)
+      : our_gc_cleanup()
+  {
+    *this = other;
+  }
+  SymmetricConversionMetadata(SymmetricConversionMetadata&& other)
+      : our_gc_cleanup()
+  {
+    *this = std::move(other);
+  }
+  SymmetricConversionMetadata& operator=(
+      const SymmetricConversionMetadata&) = default;
+  SymmetricConversionMetadata& operator=(
+      SymmetricConversionMetadata&&) = default;
+
+  // True only when the exact canonical core needed for a workflow bypass was
+  // attached together. Expensive selector-only profiles remain optional and
+  // are enriched lazily from the expression when a policy consumes them.
+  // Arithmetic that can change the core leaves this false.
+  bool expressionFactsComplete = false;
   std::optional<int> pureBasis;
   std::optional<int> expandedBasis;
   std::optional<int> homogeneousWeight;
   std::optional<size_t> termCount;
+  std::optional<size_t> scalarTermCount;
+  std::optional<size_t> singleFactorTermCount;
+  std::optional<size_t> productTermCount;
+  std::optional<size_t> maximumFactorsPerTerm;
   std::optional<size_t> maximumPartitionLength;
   std::optional<double> density;
   std::optional<std::vector<int>> factorBases;
+  std::optional<size_t> skewFactorCount;
+  std::optional<int> singleBasisElementId;
+  std::optional<Partition> singleBasisElementIndex;
+  std::optional<bool> singleBasisElementCoefficientOne;
   std::optional<bool> singleBasisElement;
   std::optional<bool> singleTerm;
   std::optional<bool> noProducts;
   bool normalized = false;
   bool skewFree = false;
   bool collected = false;
+};
+
+// Polynomial objects are the engine's pervasive value representation. Keep
+// their uncommon, comparatively large conversion profile out of line and
+// share it across ordinary copies. A mutable access detaches first, preserving
+// the previous value semantics without copying profiles that are only read.
+class SymmetricConversionMetadataSlot
+{
+ public:
+  SymmetricConversionMetadataSlot() = default;
+  SymmetricConversionMetadataSlot(const SymmetricConversionMetadata& value)
+      : mValue(new SymmetricConversionMetadata(value))
+  {
+  }
+  SymmetricConversionMetadataSlot(SymmetricConversionMetadata&& value)
+      : mValue(new SymmetricConversionMetadata(std::move(value)))
+  {
+  }
+  SymmetricConversionMetadataSlot(
+      const SymmetricConversionMetadataSlot& other)
+      : mValue(other.mValue)
+  {
+  }
+  SymmetricConversionMetadataSlot(
+      SymmetricConversionMetadataSlot&& other) noexcept
+      : mValue(other.mValue)
+  {
+    other.mValue = nullptr;
+  }
+
+  SymmetricConversionMetadataSlot& operator=(
+      const SymmetricConversionMetadataSlot& other)
+  {
+    mValue = other.mValue;
+    return *this;
+  }
+  SymmetricConversionMetadataSlot& operator=(
+      SymmetricConversionMetadataSlot&& other) noexcept
+  {
+    mValue = other.mValue;
+    other.mValue = nullptr;
+    return *this;
+  }
+  SymmetricConversionMetadataSlot& operator=(
+      const SymmetricConversionMetadata& value)
+  {
+    mValue = new SymmetricConversionMetadata(value);
+    return *this;
+  }
+  SymmetricConversionMetadataSlot& operator=(
+      SymmetricConversionMetadata&& value)
+  {
+    mValue = new SymmetricConversionMetadata(std::move(value));
+    return *this;
+  }
+
+  explicit operator bool() const { return mValue != nullptr; }
+  SymmetricConversionMetadata& operator*()
+  {
+    detach();
+    return *mValue;
+  }
+  const SymmetricConversionMetadata& operator*() const { return *mValue; }
+  SymmetricConversionMetadata *operator->()
+  {
+    detach();
+    return mValue;
+  }
+  const SymmetricConversionMetadata *operator->() const { return mValue; }
+
+ private:
+  void detach()
+  {
+    if (mValue == nullptr) return;
+    mValue = new SymmetricConversionMetadata(*mValue);
+  }
+
+  SymmetricConversionMetadata *mValue = nullptr;
 };
 
 class SymmetricRingPoly : public our_new_delete
@@ -89,7 +203,7 @@ class SymmetricRingPoly : public our_new_delete
   // Semantic operation tags are independent of conversion-profile metadata:
   // ordinary arithmetic can create them even when no conversion has run.
   CombinatorialTags combinatorialTags = 0;
-  std::optional<SymmetricConversionMetadata> conversionMetadata;
+  SymmetricConversionMetadataSlot conversionMetadata;
 };
 
 // ============================================================================

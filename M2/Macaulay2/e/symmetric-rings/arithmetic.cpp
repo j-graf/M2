@@ -86,6 +86,7 @@ SymmetricMonomial SymmetricEngineRing::multiplyPowerSumMonomials(const Symmetric
     SymmetricMonomial result;
     appendAtomBlock(
         result, makeAtomBlock(order, registeredPowerSumBasisId(), 0, index));
+    requireMonomialWithinWeightLimit(result, "symmetric-function product");
     return result;
   }
 
@@ -103,7 +104,9 @@ SymmetricMonomial SymmetricEngineRing::multiplyMonomials(const SymmetricMonomial
     result.data.reserve(a.data.size() + b.data.size());
     result.data.insert(result.data.end(), a.data.begin(), a.data.end());
     result.data.insert(result.data.end(), b.data.begin(), b.data.end());
-    return canonicalMonomial(result);
+    result = canonicalMonomial(result);
+    requireMonomialWithinWeightLimit(result, "symmetric-function product");
+    return result;
   }
 
 ring_elem SymmetricEngineRing::copyPolyValue(const SymmetricRingPoly *poly) const
@@ -121,11 +124,21 @@ void SymmetricEngineRing::appendTermIfNonZero(VECTOR(SymmetricTerm)& terms,
                            ring_elem coeff,
                            const SymmetricMonomial& monomial) const
 {
-    if (!coefficientRing->is_zero(coeff)) terms.push_back({coeff, monomial});
+    if (coefficientRing->is_zero(coeff)) return;
+    if (terms.size() >= computationLimits.maxGeneratedTerms)
+      throw exc::engine_error(
+          "generated-term limit exceeded; increase MaxGeneratedTerms in the symmetricRing ComputationLimits option");
+    terms.push_back({coeff, monomial});
   }
 
 ring_elem SymmetricEngineRing::fromTermVector(VECTOR(SymmetricTerm)& terms, bool isSorted) const
 {
+    if (terms.size() > computationLimits.maxGeneratedTerms)
+      throw exc::engine_error(
+          "generated-term limit exceeded before term collection; increase MaxGeneratedTerms in the symmetricRing ComputationLimits option");
+    for (const auto& term : terms)
+      requireMonomialWithinWeightLimit(
+          term.monomial, "symmetric-function expression");
     if (!isSorted)
       std::sort(terms.begin(), terms.end(),
                 [](const SymmetricTerm& a, const SymmetricTerm& b) {
@@ -154,6 +167,11 @@ ring_elem SymmetricEngineRing::fromTermVector(VECTOR(SymmetricTerm)& terms, bool
 ring_elem SymmetricEngineRing::concatenateTerms(const SymmetricRingPoly *first,
                              const SymmetricRingPoly *second) const
 {
+    if (first->terms.size() > computationLimits.maxGeneratedTerms ||
+        second->terms.size() >
+            computationLimits.maxGeneratedTerms - first->terms.size())
+      throw exc::engine_error(
+          "generated-term limit exceeded during addition; increase MaxGeneratedTerms in the symmetricRing ComputationLimits option");
     auto result = new SymmetricRingPoly;
     result->terms.reserve(first->terms.size() + second->terms.size());
     result->terms.insert(result->terms.end(), first->terms.begin(), first->terms.end());
@@ -170,6 +188,9 @@ void SymmetricEngineRing::addToAccumulator(GCMap<std::vector<int>, ring_elem>& a
     auto existing = accumulator.find(key);
     if (existing == accumulator.end())
       {
+        if (accumulator.size() >= computationLimits.maxGeneratedTerms)
+          throw exc::engine_error(
+              "generated-term limit exceeded during collection; increase MaxGeneratedTerms in the symmetricRing ComputationLimits option");
         accumulator[key] = coeff;
         return;
       }
@@ -223,16 +244,30 @@ ring_elem SymmetricEngineRing::basisElement(int basisId,
         ERROR("invalid skew inner shape length");
         return zero();
       }
-    const auto& basis = requireBasis(basisId);
+    Partition payload;
+    payload.reserve(payloadLength);
+    if (index != nullptr)
+      for (int i = 0; i < payloadLength; ++i)
+        payload.push_back(index->array[i]);
     if (innerLength == 0)
       {
-        Partition userIndex;
-        userIndex.reserve(payloadLength);
-        if (index != nullptr)
-          for (int i = 0; i < payloadLength; ++i)
-            userIndex.push_back(index->array[i]);
-        if (hasNegativeTailWeight(userIndex)) return zero();
+        if (hasNegativeTailWeight(payload)) return zero();
+        requirePartitionWithinWeightLimit(payload, "basis element");
       }
+    else
+      {
+        const size_t outerLength =
+            static_cast<size_t>(payloadLength - innerLength);
+        Partition outer(payload.begin(), payload.begin() + outerLength);
+        Partition inner(payload.begin() + outerLength, payload.end());
+        requirePartitionWithinWeightLimit(outer, "skew outer index");
+        requirePartitionWithinWeightLimit(inner, "skew inner index");
+        requireWeightWithinLimit(
+            static_cast<long long>(partitionWeight(outer)) -
+                static_cast<long long>(partitionWeight(inner)),
+            "skew basis element");
+      }
+    const auto& basis = requireBasis(basisId);
     auto result = new SymmetricRingPoly;
     SymmetricMonomial monomial;
     appendAtomBlock(
@@ -463,6 +498,9 @@ ring_elem SymmetricEngineRing::negate(const ring_elem f) const
     const auto *poly = polyValue(f);
     result->combinatorialTags = poly->combinatorialTags;
     result->conversionMetadata = poly->conversionMetadata;
+    // Negation can change the exact coefficient-one single-element fact.
+    if (result->conversionMetadata)
+      result->conversionMetadata->expressionFactsComplete = false;
     result->terms.reserve(poly->terms.size());
     for (const auto& term : poly->terms)
       result->terms.push_back({coefficientRing->negate(term.coeff), term.monomial});
@@ -567,6 +605,10 @@ SymmetricRingPoly *SymmetricEngineRing::multByCoefficient(ring_elem coeff,
     if (coefficientRing->is_zero(coeff)) return result;
     result->combinatorialTags = poly->combinatorialTags;
     result->conversionMetadata = poly->conversionMetadata;
+    // Only multiplication by one preserves every coefficient-sensitive fact.
+    if (result->conversionMetadata &&
+        !coefficientRing->is_equal(coeff, coefficientRing->one()))
+      result->conversionMetadata->expressionFactsComplete = false;
     result->terms.reserve(poly->terms.size());
     for (const auto& term : poly->terms)
       {
@@ -737,7 +779,17 @@ ring_elem SymmetricEngineRing::mult(const ring_elem f, const ring_elem g) const
         return preserveProductMetadata(makePolyValue(result));
       }
     VECTOR(SymmetricTerm) products;
-    products.reserve(left->terms.size() * right->terms.size());
+    if (left->terms.size() != 0 &&
+        right->terms.size() >
+            computationLimits.maxGeneratedTerms / left->terms.size())
+      throw exc::engine_error(
+          "generated-term limit exceeded before multiplication expansion; increase MaxGeneratedTerms in the symmetricRing ComputationLimits option");
+    const size_t possibleProducts =
+        left->terms.size() * right->terms.size();
+    if (!estimatedMemoryWithinLimit(
+            possibleProducts, sizeof(SymmetricTerm), "multiplication expansion"))
+      return zero();
+    products.reserve(possibleProducts);
     for (const auto& lt : left->terms)
       for (const auto& rt : right->terms)
         {
@@ -773,8 +825,11 @@ bool SymmetricEngineRing::promoteCollectedExpansion(
     target->terms.reserve(source->terms.size());
     target->combinatorialTags = source->combinatorialTags;
     target->conversionMetadata = source->conversionMetadata;
+    bool supportPreserved = true;
     for (const auto& term : source->terms)
       {
+        requireMonomialWithinWeightLimit(
+            term.monomial, "promoted symmetric-function expression");
         ring_elem coeff;
         const Ring *sourceCoefficients = sourceRing->getCoefficientRing();
         bool promoted = sourceCoefficients == globalQQ
@@ -783,6 +838,24 @@ bool SymmetricEngineRing::promoteCollectedExpansion(
         if (!promoted) return false;
         if (!coefficientRing->is_zero(coeff))
           target->terms.push_back({coeff, term.monomial});
+        else
+          supportPreserved = false;
+      }
+    // rememberBasesFrom preserves the numeric basis-ID map used by transported
+    // monomials.  Exact structural facts therefore remain valid when support is
+    // unchanged; only the coefficient-one predicate must be refreshed.
+    if (target->conversionMetadata)
+      {
+        auto& metadata = *target->conversionMetadata;
+        if (!supportPreserved)
+          metadata.expressionFactsComplete = false;
+        else if (metadata.singleBasisElement &&
+                 *metadata.singleBasisElement &&
+                 target->terms.size() == 1)
+          metadata.singleBasisElementCoefficientOne =
+              coefficientRing->is_equal(
+                  target->terms.front().coeff,
+                  coefficientRing->one());
       }
     result = makePolyValue(target);
     return true;
@@ -808,8 +881,11 @@ bool SymmetricEngineRing::liftCollectedExpansion(
     target->terms.reserve(source->terms.size());
     target->combinatorialTags = source->combinatorialTags;
     target->conversionMetadata = source->conversionMetadata;
+    bool supportPreserved = true;
     for (const auto& term : source->terms)
       {
+        requireMonomialWithinWeightLimit(
+            term.monomial, "lifted symmetric-function expression");
         ring_elem coeff;
         bool lifted = sourceCoefficients == coefficientRing
             ? (coeff = coefficientRing->copy(term.coeff), true)
@@ -836,6 +912,21 @@ bool SymmetricEngineRing::liftCollectedExpansion(
         if (!lifted) return false;
         if (!coefficientRing->is_zero(coeff))
           target->terms.push_back({coeff, term.monomial});
+        else
+          supportPreserved = false;
+      }
+    if (target->conversionMetadata)
+      {
+        auto& metadata = *target->conversionMetadata;
+        if (!supportPreserved)
+          metadata.expressionFactsComplete = false;
+        else if (metadata.singleBasisElement &&
+                 *metadata.singleBasisElement &&
+                 target->terms.size() == 1)
+          metadata.singleBasisElementCoefficientOne =
+              coefficientRing->is_equal(
+                  target->terms.front().coeff,
+                  coefficientRing->one());
       }
     result = makePolyValue(target);
     return true;
