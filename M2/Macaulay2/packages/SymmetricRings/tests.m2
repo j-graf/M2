@@ -317,6 +317,23 @@ TEST ///
 ///
 
 TEST ///
+    -- Once a declared custom conversion path is selected, an execution error
+    -- propagates without retrying the hook or choosing another algorithm.
+    R0 = symmetricRing QQ
+    hookCalls = new MutableHashTable from {"Count" => 0}
+    registerTransformedBasis("FailingConversionOnce", "h",
+        "TermTransform" => (lambda, mu) -> (
+            if lambda == {2} then (
+                hookCalls#"Count" = hookCalls#"Count" + 1;
+                error "intentional conversion failure";
+                );
+            1
+            ))
+    assert(try (toBasis(FailingConversionOnce_2, p); false) else true)
+    assert(hookCalls#"Count" == 1)
+///
+
+TEST ///
     R0 = symmetricRing QQ
     registerTransformedBasis("StableDisplayBasis", "S",
         "BasisKey" => "StableTransform")
@@ -1365,6 +1382,10 @@ TEST ///
     assert(Rpartition#"ComputationLimits"#"MaxGeneratedTerms" == 250000)
     assert(toBasis(p_100, p) == p_100)
     assert(try (toBasis(h_4, p); false) else true)
+    -- Equality has an applicable p-basis comparison here. The selected
+    -- conversion exceeds the configured limit, so equality must propagate the
+    -- resource error rather than reporting a false mathematical result.
+    assert(try (h_4 == S_4; false) else true)
 
     RpartitionPass = symmetricRing(QQ, "ComputationLimits" => hashTable {
         "MaxEnumeratedPartitions" => 5})

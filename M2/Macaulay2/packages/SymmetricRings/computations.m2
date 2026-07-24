@@ -21,8 +21,10 @@ straighten SymmetricRingElement := f -> (
 -- comparison when conversion is available.
 powerSumEqualityFallback = (f, g) -> (
     R0 := ring f;
-    diffP := try toBasis(f - g, p) else null;
-    if diffP === null then false else raw diffP === raw zeroSymmetricElement R0
+    difference := f - g;
+    if not isPowerSumConversionApplicable difference then return false;
+    diffP := toBasis(difference, p);
+    raw diffP === raw zeroSymmetricElement R0
     )
 
 -- Equality straightens first and then compares raw or power-sum forms.
@@ -78,31 +80,79 @@ engineToBasis = (F, B) -> (
     userSymmetricElement(R0, rawSymmetricRingsToBasis(raw F, B#"BasisId"))
     )
 
--- Tests whether an atom needs an M2-level ToPowerSums hook.
-atomNeedsM2PowerSumConversion = (R0, atom) -> (
-    B := basisWithId(R0, atom#"BasisId");
-    B#"ToPowerSums" =!= null
+-- Tests whether a basis is implemented by the C++ engine. This is a
+-- mathematical capability check, not a performance-policy decision.
+isEngineReadableBasis = B ->
+    any(builtinSymmetricBases, B0 -> B0#"BasisId" == B#"BasisId")
+
+-- Tests whether a numeric basis id is available on a particular ring.
+isBasisIdAvailableOnRing = (R0, basisId) ->
+    any(R0#"Bases", B0 -> B0#"BasisId" == basisId)
+
+-- Tests whether one basis has a declared route to power sums. Built-in bases
+-- use the engine registry; custom and transformed bases must declare a hook.
+isPowerSumConversionAvailableForBasis = B ->
+    isEngineReadableBasis B or B#"ToPowerSums" =!= null
+
+-- Inspects source-basis capabilities once. Pure inputs use their single basis
+-- directly; mixed inputs scan their atoms once and accumulate named facts.
+expressionConversionCapabilities = F -> (
+    R0 := ring F;
+    sourceId := rawSymmetricRingsSingleBasisId raw F;
+    sourceBasis := if sourceId > 0 then basisWithId(R0, sourceId) else null;
+    if sourceBasis =!= null then return hashTable {
+        "SourceBasisId" => sourceId,
+        "SourceBasis" => sourceBasis,
+        "UsesOnlyEngineBases" => isEngineReadableBasis sourceBasis,
+        "PowerSumConversionApplicable" =>
+            isPowerSumConversionAvailableForBasis sourceBasis,
+        "NeedsPowerSumHook" => sourceBasis#"ToPowerSums" =!= null
+        };
+    usesOnlyEngineBases := true;
+    powerSumConversionApplicable := true;
+    needsPowerSumHook := false;
+    scan(rawTerms F, term -> scan(term#1, atom -> (
+                B := basisWithId(R0, atom#"BasisId");
+                isEngineBasis := isEngineReadableBasis B;
+                usesOnlyEngineBases =
+                    usesOnlyEngineBases and isEngineBasis;
+                powerSumConversionApplicable =
+                    powerSumConversionApplicable and
+                    (isEngineBasis or B#"ToPowerSums" =!= null);
+                needsPowerSumHook =
+                    needsPowerSumHook or B#"ToPowerSums" =!= null;
+                )));
+    hashTable {
+        "SourceBasisId" => sourceId,
+        "SourceBasis" => sourceBasis,
+        "UsesOnlyEngineBases" => usesOnlyEngineBases,
+        "PowerSumConversionApplicable" =>
+            powerSumConversionApplicable,
+        "NeedsPowerSumHook" => needsPowerSumHook
+        }
     )
 
+-- Tests whether every atom in an expression belongs to an engine basis.
+isEngineReadableExpression = F ->
+    (expressionConversionCapabilities F)#"UsesOnlyEngineBases"
+
+-- Tests whether every atom in an expression has a declared route to p.
+-- Execution errors from a declared route are deliberately not caught.
+isPowerSumConversionApplicable = F ->
+    (expressionConversionCapabilities F)#"PowerSumConversionApplicable"
+
 -- Tests whether any atom in an element needs M2-level conversion to p.
-needsM2PowerSumConversion = F -> (
-    R0 := ring F;
-    basisId := rawSymmetricRingsSingleBasisId raw F;
-    if basisId > 0 then return (basisWithId(R0, basisId))#"ToPowerSums" =!= null;
-    any(rawTerms F, term -> any(term#1, atom -> atomNeedsM2PowerSumConversion(R0, atom)))
-    )
+needsM2PowerSumConversion = F ->
+    (expressionConversionCapabilities F)#"NeedsPowerSumHook"
 
 -- Inspects the M2-owned conversion boundary once.  The profile records only
 -- facts needed to choose between custom hooks, the native engine, and the
 -- constant-QQ working ring; mathematical plan selection remains in C++.
 conversionDispatchProfile = (f, B) -> (
     R0 := ring f;
-    sourceId := rawSymmetricRingsSingleBasisId raw f;
-    sourceBasis := if sourceId > 0 then basisWithId(R0, sourceId) else null;
-    needsPowerSumHook := if sourceBasis =!= null then
-        sourceBasis#"ToPowerSums" =!= null
-        else any(rawTerms f, term -> any(term#1, atom ->
-                atomNeedsM2PowerSumConversion(R0, atom)));
+    sourceCapabilities := expressionConversionCapabilities f;
+    sourceId := sourceCapabilities#"SourceBasisId";
+    sourceBasis := sourceCapabilities#"SourceBasis";
     preferConstantQQ := false;
     if coefficientRing R0 =!= QQ then (
         targetKey := basisKey B;
@@ -120,7 +170,13 @@ conversionDispatchProfile = (f, B) -> (
         "TargetBasis" => B,
         "SourceBasisId" => sourceId,
         "SourceBasis" => sourceBasis,
-        "NeedsPowerSumHook" => needsPowerSumHook,
+        "SourceUsesOnlyEngineBases" =>
+            sourceCapabilities#"UsesOnlyEngineBases",
+        "PowerSumConversionApplicable" =>
+            sourceCapabilities#"PowerSumConversionApplicable",
+        "NeedsPowerSumHook" =>
+            sourceCapabilities#"NeedsPowerSumHook",
+        "TargetIsEngineReadable" => isEngineReadableBasis B,
         "TargetHasFromPowerSumsHook" => B#"FromPowerSums" =!= null,
         "PreferConstantQQ" => preferConstantQQ
         }
@@ -199,11 +255,20 @@ constantQQRingFor = R0 -> (
         )
     )
 
-constantQQBasisOnShadow = (Rqq, B) -> try basis(Rqq, basisKey B) else null
+-- Tests basis availability before reconstructing or converting in a shadow
+-- ring. A false result selects another declared path; basis() errors after a
+-- true result remain execution errors.
+isBasisAvailableOnRing = (R0, B) ->
+    isBasisIdAvailableOnRing(R0, B#"BasisId")
+
+-- Tests whether every atom can be reconstructed in a target symmetric ring.
+isMonomialAvailableOnRing = (R0, atoms) ->
+    all(atoms, atom -> isBasisIdAvailableOnRing(R0, atom#"BasisId"))
 
 constantQQMonomialOnShadow = (Rqq, atoms) -> (
-    result := try monomialAsElement(Rqq, atoms) else null;
-    result
+    if isMonomialAvailableOnRing(Rqq, atoms)
+    then monomialAsElement(Rqq, atoms)
+    else null
     )
 
 hasPlethysmConversionProvenance = F -> rawSymmetricRingsHasPlethysmProvenance raw F
@@ -322,21 +387,50 @@ withConstantQQIfPossible(SymmetricRingElement, Boolean, Function) := (F, tryQQ, 
 withConstantQQIfPossible(SymmetricRingElement, Function) := (F, compute) ->
     withConstantQQIfPossible(F, true, compute)
 
-tryConstantQQOperation = (R0, inputs, compute) -> (
-    if coefficientRing R0 === QQ then return null;
-    lifted := toConstantQQIfPossible(inputs, true);
-    if #lifted == 0 or ring lifted#0 === R0 then return null;
-    resultQQ := try compute(ring lifted#0, lifted) else null;
-    if resultQQ === null then null else returnFromConstantQQ(resultQQ, R0)
+-- A QQ-shadow algorithm applies only after every input has been lifted into a
+-- distinct QQ ring. This check performs no algebra beyond the transport probe.
+isConstantQQOperationApplicable = (R0, workingInputs) -> (
+    coefficientRing R0 =!= QQ
+    and #workingInputs > 0
+    and ring workingInputs#0 =!= R0
+    )
+
+-- Executes an already-applicable QQ-shadow algorithm exactly once. Any error
+-- from the selected algorithm propagates; it is never interpreted as a reason
+-- to retry another implementation.
+executeConstantQQOperation = (R0, workingInputs, compute) -> (
+    if not isConstantQQOperationApplicable(R0, workingInputs) then
+        error "internal error: QQ-shadow operation is not applicable";
+    resultQQ := compute(ring workingInputs#0, workingInputs);
+    returnFromConstantQQ(resultQQ, R0)
     )
 
 -- ============================================================================
 -- Conversion And Product Policy
 -- ============================================================================
 
--- Fallback policy for toBasis. Custom basis hooks remain in M2;
--- all built-in conversion uses the shared engine workflow.
-toBasisFallbackWithProfile = (f, dispatchData) -> (
+-- Tests whether conversion crosses an M2-owned custom-basis boundary. Every
+-- source must have a route to p, and the target must be engine-readable or
+-- declare its own FromPowerSums hook.
+isM2BasisConversionApplicable = dispatchData -> (
+    (dispatchData#"NeedsPowerSumHook" or
+        dispatchData#"TargetHasFromPowerSumsHook")
+    and dispatchData#"PowerSumConversionApplicable"
+    and (dispatchData#"TargetIsEngineReadable" or
+        dispatchData#"TargetHasFromPowerSumsHook")
+    )
+
+-- Tests whether the complete request can stay in the C++ conversion registry.
+isNativeBasisConversionApplicable = dispatchData -> (
+    dispatchData#"SourceUsesOnlyEngineBases"
+    and dispatchData#"TargetIsEngineReadable"
+    )
+
+-- Executes an already-applicable M2 custom-basis conversion. This function
+-- makes no route choice and never catches hook or engine execution errors.
+executeM2BasisConversion = (f, dispatchData) -> (
+    if not isM2BasisConversionApplicable dispatchData then
+        error "internal error: M2 basis conversion is not applicable";
     R0 := dispatchData#"Ring";
     B := dispatchData#"TargetBasis";
     P := basis(R0, p);
@@ -348,13 +442,31 @@ toBasisFallbackWithProfile = (f, dispatchData) -> (
         );
     if B#"FromPowerSums" =!= null then
         return (B#"FromPowerSums")(toPowerSumsForConversion f, B);
-    engineToBasis(f, B)
+    error "internal error: M2 basis conversion has no target route"
+    )
+
+-- Executes an already-applicable native conversion exactly once.
+executeNativeBasisConversion = (f, dispatchData) -> (
+    if not isNativeBasisConversionApplicable dispatchData then
+        error "internal error: native basis conversion is not applicable";
+    engineToBasis(f, dispatchData#"TargetBasis")
+    )
+
+-- Selects a conversion path only from explicit applicability predicates.
+-- Failure after selection is a computation error and must propagate.
+executeApplicableBasisConversion = (f, dispatchData) -> (
+    if isM2BasisConversionApplicable dispatchData then
+        executeM2BasisConversion(f, dispatchData)
+    else if isNativeBasisConversionApplicable dispatchData then
+        executeNativeBasisConversion(f, dispatchData)
+    else error("no registered basis-conversion path to ",
+        (dispatchData#"TargetBasis")#"BasisSymbol")
     )
 
 toBasisFallback = (f, target) -> (
     R0 := ring f;
     B := targetBasisOnRing(R0, target);
-    toBasisFallbackWithProfile(f, conversionDispatchProfile(f, B))
+    executeApplicableBasisConversion(f, conversionDispatchProfile(f, B))
     )
 
 -- Product-aware multiplication followed by conversion to a target basis.
@@ -366,23 +478,29 @@ multiplyToBasis(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, tar
     B := targetBasisOnRing(R0, target);
     leftProfile := conversionDispatchProfile(f, B);
     rightProfile := conversionDispatchProfile(g, B);
-    if leftProfile#"NeedsPowerSumHook" or
-       rightProfile#"NeedsPowerSumHook" or
-       leftProfile#"TargetHasFromPowerSumsHook" then
-        return toBasisFallback(f*g, B);
-    userSymmetricElement(R0, rawSymmetricRingsMultiplyToBasis(
-        raw f, raw g, B#"BasisId"))
+    isNativeMultiplicationApplicable :=
+        leftProfile#"SourceUsesOnlyEngineBases"
+        and rightProfile#"SourceUsesOnlyEngineBases"
+        and leftProfile#"TargetIsEngineReadable";
+    if isNativeMultiplicationApplicable then
+        userSymmetricElement(R0, rawSymmetricRingsMultiplyToBasis(
+            raw f, raw g, B#"BasisId"))
+    else toBasisFallback(f*g, B)
     )
 
-tryConstantQQBasisConversion = (R0, f, B) -> tryConstantQQOperation(R0, {f}, (Rqq, inputsQQ) -> (
-        Bqq := constantQQBasisOnShadow(Rqq, B);
-        if Bqq === null then error "target basis is not available over QQ";
-        toBasis(inputsQQ#0, Bqq)
-        ))
+-- Tests the complete QQ conversion precondition before invoking conversion.
+isConstantQQBasisConversionApplicable = (R0, workingInputs, B) -> (
+    isConstantQQOperationApplicable(R0, workingInputs)
+    and isBasisAvailableOnRing(ring workingInputs#0, B)
+    )
+
+executeConstantQQBasisConversion = (R0, workingInputs, B) ->
+    executeConstantQQOperation(R0, workingInputs, (Rqq, inputsQQ) ->
+        toBasis(inputsQQ#0, basis(Rqq, basisKey B)))
 
 -- Converts a symmetric function to the requested basis. Plethysm provenance
--- and moderately large pure-p support make the constant-QQ shadow the first
--- choice; other inputs remain native-first and use it only after native failure.
+-- and moderately large pure-p support may select the constant-QQ path. Every
+-- path is checked before it is selected, and the selected path executes once.
 toBasis = method()
 
 toBasis(SymmetricRingElement, Thing) := (f, target) -> (
@@ -391,15 +509,12 @@ toBasis(SymmetricRingElement, Thing) := (f, target) -> (
     dispatchData := conversionDispatchProfile(f, B);
     preferConstantQQ := dispatchData#"PreferConstantQQ";
     if preferConstantQQ then (
-        preferredQQ := tryConstantQQBasisConversion(R0, f, B);
-        if preferredQQ =!= null then return preferredQQ;
+        workingInputs := toConstantQQIfPossible({f}, true);
+        if isConstantQQBasisConversionApplicable(R0, workingInputs, B) then
+            return executeConstantQQBasisConversion(
+                R0, workingInputs, B);
         );
-    native := try toBasisFallbackWithProfile(f, dispatchData) else null;
-    if native =!= null then return native;
-    if debugLevel > 0 then stderr << "SymmetricRings conversion: native route failed; trying QQ shadow" << endl;
-    constantQQ := if preferConstantQQ then null else tryConstantQQBasisConversion(R0, f, B);
-    if constantQQ =!= null then return constantQQ;
-    toBasisFallbackWithProfile(f, dispatchData)
+    executeApplicableBasisConversion(f, dispatchData)
     )
 
 -- ============================================================================
@@ -677,14 +792,16 @@ installMethod(symbol @, SymmetricRingElement, SymmetricRingElement, (f, g) -> (
                 toBasis(hookPlethysmResult, B)
                 )
             else (
-                constantQQ := tryConstantQQOperation(R0, {f, g}, (Rqq, inputsQQ) -> (
-                        Bqq := constantQQBasisOnShadow(Rqq, B);
-                        if Bqq === null then error "target basis is not available over QQ";
-                        inputsQQ#0 @ inputsQQ#1
-                        ));
-                if constantQQ =!= null then (
+                workingInputs := toConstantQQIfPossible({f, g}, true);
+                isConstantQQPlethysmApplicable :=
+                    isConstantQQOperationApplicable(R0, workingInputs)
+                    and isBasisAvailableOnRing(ring workingInputs#0, B);
+                if isConstantQQPlethysmApplicable then (
                     if debugLevel > 0 then stderr << "SymmetricRings plethysm conversion: used QQ shadow" << endl;
-                    constantQQ
+                    executeConstantQQOperation(
+                        R0,
+                        workingInputs,
+                        (Rqq, inputsQQ) -> inputsQQ#0 @ inputsQQ#1)
                     )
                 else plethysmToBasisDispatch(f, g, B)
                 )
@@ -791,8 +908,11 @@ directInnerProductForRule = (F, G, B0, rule) -> (
     if rule === null or not rule#?"DualBasis" or not rule#?"Pairing" then return null;
     R0 := ring F;
     A := coefficientRing R0;
-    dual := try basis(R0, rule#"DualBasis") else null;
-    if dual === null then return null;
+    dualKey := globalBasisKey rule#"DualBasis";
+    if not BasisIndex#?dualKey then return null;
+    dualData := BasisIndex#dualKey;
+    if not isBasisAvailableOnRing(R0, dualData) then return null;
+    dual := basis(R0, dualData);
     left := coefficientsInBasisIfPossibleM2(F, basis(R0, B0));
     if left === null then return null;
     right := coefficientsInBasisIfPossibleM2(G, dual);
@@ -829,11 +949,6 @@ powerSumFallbackInnerProduct = (F, G, contextName) -> (
     result
     )
 
--- Tests whether every basis element in an expression belongs to a built-in
--- basis understood by the C++ engine.
-usesOnlyEngineReadableBases = F -> all(rawTerms F, term -> all(term#1, basisElement ->
-            any(builtinSymmetricBases, B0 -> B0#"BasisId" == basisElement#"BasisId")))
-
 -- Extracts the coefficient of one basis element, using the C++ targeted
 -- coefficient dispatcher for built-in bases and ordinary conversion otherwise.
 basisCoefficient = method()
@@ -848,9 +963,8 @@ basisCoefficient(SymmetricRingElement, SymmetricRingElement) := (F, target) -> (
     if #targetBasisElement#"Inner" != 0 then
         error "expected one non-skew basis element";
     targetBasis := basisWithId(R0, targetBasisElement#"BasisId");
-    targetIsBuiltIn := any(builtinSymmetricBases,
-        B0 -> B0#"BasisId" == targetBasis#"BasisId");
-    if usesOnlyEngineReadableBases F and targetIsBuiltIn then
+    if isEngineReadableExpression F and
+       isEngineReadableBasis targetBasis then
         return new A from rawSymmetricRingsBasisCoefficient(raw F, raw target);
     expanded := toBasis(F, targetBasis);
     coefficients := coefficientsInBasisIfPossibleM2(expanded, targetBasis);
@@ -916,7 +1030,7 @@ hallInnerProduct = args -> (
     G := prepared#1;
     contextName := prepared#2;
     R0 := ring F;
-    if usesOnlyEngineReadableBases F and usesOnlyEngineReadableBases G then (
+    if isEngineReadableExpression F and isEngineReadableExpression G then (
         engineResult := engineHallInnerProduct(F, G, contextName);
         if engineResult =!= null then return engineResult;
         );

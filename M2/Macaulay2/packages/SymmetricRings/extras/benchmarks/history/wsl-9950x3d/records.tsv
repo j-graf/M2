@@ -62,12 +62,12 @@ cross-L2-r6-combined	2026-07-23 09:17:03 EDT	2.31548	QQ	3	20260723-091703-full-i
 roundtrip-P-three	2026-07-23 23:16:35 EDT	1.23266	FracQQt	3	20260723-231635-fixes-roundtrip	wsl-9950x3d
 prod-small-balanced-product	2026-07-24 10:07:29 EDT	8.0772e-05	FracQQt	5	20260724-100729-dispatch-facts-final-schur-product-small	wsl-9950x3d
 conv-e16-p	2026-07-23 15:51:27 EDT	0.00109058	QQ	5	20260723-155126-postopt5-new-basis-small	wsl-9950x3d
-extra-conv-p-combination-S	2026-07-24 10:12:01 EDT	0.000891922	FracQQt	5	20260724-101201-remaining-audit-conversion-extra-medium	wsl-9950x3d
+extra-conv-p-combination-S	2026-07-24 12:13:24 EDT	0.000888101	FracQQt	5	20260724-121324-applicability-routing-standard	wsl-9950x3d
 cross-L2-r8-split-to-S	2026-07-23 09:17:03 EDT	0.194713	QQ	3	20260723-091703-full-initial	wsl-9950x3d
 cross-L2-r3-combined	2026-07-23 09:17:03 EDT	0.0032327	QQ	3	20260723-091703-full-initial	wsl-9950x3d
 extra-conv-h-to-S	2026-07-24 10:04:16 EDT	0.000300438	FracQQt	5	20260724-100416-dispatch-facts-conversion-extra-small	wsl-9950x3d
 prod-large-four-to-p	2026-07-23 23:15:47 EDT	0.0300234	FracQQt	3	20260723-231547-fixes-schur-product	wsl-9950x3d
-extra-prod-direct-lr	2026-07-23 09:17:03 EDT	0.0003996	FracQQt	3	20260723-091703-full-initial	wsl-9950x3d
+extra-prod-direct-lr	2026-07-24 12:13:24 EDT	0.00039891	FracQQt	5	20260724-121324-applicability-routing-standard	wsl-9950x3d
 prod-hook-balanced-to-p	2026-07-24 10:04:53 EDT	0.00160576	FracQQt	5	20260724-100453-dispatch-facts-schur-product-small	wsl-9950x3d
 pleth-hook-row-combined	2026-07-23 09:17:03 EDT	0.00556207	FracQQt	3	20260723-091703-full-initial	wsl-9950x3d
 pleth-row-row-split-to-S	2026-07-23 09:17:03 EDT	0.193003	FracQQt	3	20260723-091703-full-initial	wsl-9950x3d
@@ -80,7 +80,7 @@ pieri-four-r3-horizontal	2026-07-24 10:07:03 EDT	0.000288977	FracQQt	5	20260724-
 pleth-repeated-row-combined	2026-07-23 09:17:03 EDT	0.00376539	FracQQt	3	20260723-091703-full-initial	wsl-9950x3d
 pleth-four-row2-combined	2026-07-23 09:17:03 EDT	0.369262	FracQQt	3	20260723-091703-full-initial	wsl-9950x3d
 prod-small-balanced-p-to-S	2026-07-24 10:07:29 EDT	0.00122752	FracQQt	5	20260724-100729-dispatch-facts-final-schur-product-small	wsl-9950x3d
-cross-L3-r4-split-to-S	2026-07-23 09:17:03 EDT	0.0834806	QQ	3	20260723-091703-full-initial	wsl-9950x3d
+cross-L3-r4-split-to-S	2026-07-24 12:13:24 EDT	0.0828419	QQ	5	20260724-121324-applicability-routing-standard	wsl-9950x3d
 hl-small-retained	2026-07-23 15:48:19 EDT	0.00526253	FracQQt	3	20260723-154819-postopt-current-hl-small	wsl-9950x3d
 hl-small-ordinary	2026-07-24 10:05:35 EDT	0.00540798	FracQQt	5	20260724-100534-dispatch-facts-hall-product-small	wsl-9950x3d
 pleth-three-row2-split-to-S	2026-07-23 09:17:03 EDT	0.406327	FracQQt	3	20260723-091703-full-initial	wsl-9950x3d
