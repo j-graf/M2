@@ -31,17 +31,17 @@ flowchart TD
     F -->|"No"| G
 
     G --> H["Group canonical terms by source basis"]
-    H --> L["Select one complete registered X-to-Y plan<br/>for each source group"]
-    L --> M["Execute each plan generically<br/>Partition by ordered cases; run an atomic kernel<br/>or its fixed named child-plan composition"]
+    H --> L["Select one complete X-to-Y plan<br/>for each source group"]
+    L --> M["Execute each plan generically<br/>Partition by ordered cases; use a kernel,<br/>one named plan, or a fixed composition"]
     M --> N["Combine all target terms once"]
     N --> R
 ```
 
-The picker considers only complete registered plans with the requested
+The picker considers only complete available plans with the requested
 source and target endpoints. A plan is an ordered set of cases over the whole
 expression, individual terms, or homogeneous components. Cases receive only
 unassigned input, and the final `otherwise` case proves complete coverage.
-Each case contains one atomic kernel, a fixed named-plan delegation, or an
+Each case contains one kernel, one fixed named plan, or an
 ordered composition of named child plans.
 
 For a mathematician, a plan can be read as a named casewise identity: its
@@ -52,10 +52,13 @@ among complete identities; it does not alter their mathematics.
 
 The selected top-level plan fixes every kernel and child identifier that
 execution can reach. The generic executor evaluates child cases against the
-actual intermediate expression, but never calls the picker. The broad
-`X -> PowerSum -> Y` paths are ordinary named composition plans, and the
-power-sum-to-Schur component and term hybrids are ordinary piecewise plans;
-neither is special pipeline control flow.
+actual intermediate expression, but never calls the picker. When no specific
+plan is preferred, one parameterized generic plan resolves the designated
+`X -> PowerSum` and `PowerSum -> Y` fallback plans and becomes an ordinary
+immutable composition before execution. It is the only broad
+`X -> PowerSum -> Y` plan; there are no separately materialized copies for
+individual endpoint pairs. The power-sum-to-Schur component and term hybrids
+are ordinary piecewise plans, not special pipeline control flow.
 
 Canonical target output is an unconditional kernel and plan invariant checked
 by the executor. A plan's `outputGuarantee` condition records only a stronger
@@ -124,8 +127,8 @@ flowchart TD
 The public wrapper has a fast path for two canonical unit-coefficient basis
 elements. Otherwise it uses exact metadata or normalizes both operands,
 requires product-free expansions, prepares every atom once, and distributes
-over term pairs. Scalar pairs bypass the product registry. Nonscalar pairs use
-the strict workflow, and all distributed results are collected once.
+over term pairs. Scalar pairs bypass multiplication-plan selection. Nonscalar
+pairs use the strict workflow, and all distributed results are collected once.
 
 ```mermaid
 flowchart TD
@@ -143,7 +146,7 @@ flowchart TD
     S --> S1["Select multiplication plan<br/>and operand conversions"]
     S1 --> S2["Execute operand conversions"]
     S2 --> S3["Execute policy-free product kernel"]
-    S3 --> S4["Normalize declared kernel output X<br/>unless its contract proves it canonical"]
+    S3 --> S4["Normalize the product in X<br/>unless its contract proves it canonical"]
     S4 --> S5["Select and execute X-to-Y<br/>unless X is already Y"]
     S5 --> Q["Canonical Y result for this pair"]
     U --> Q
@@ -158,9 +161,9 @@ flowchart TD
 Multiplication plans declare their operand bases, mathematical output basis,
 and canonical-output guarantee. Selection fixes operand conversions before
 kernel execution. The owning binary workflow selects any support-dependent
-post-kernel conversion only after the normalized kernel output exists.
+final product conversion only after the normalized product exists.
 Hall--Littlewood multiplication reaches generator bases through the same
-conversion registry.
+conversion plan database.
 
 Stable multiplication plan names are rendered from typed plan identifiers;
 applicability and execution never branch on their diagnostic strings.
@@ -171,10 +174,14 @@ applicability and execution never branch on their diagnostic strings.
 - `expression-conditions.*` owns inspectable mathematical conditions, logical
   composition, diagnostics, and ordered expression-piece partitioning.
 - `basis-conversion.hpp` declares expression facts, plan contracts,
-  registries, pickers, executors, and public engine entry points.
-- `basis-conversion.cpp` contains the declarative conversion-plan database and
-  implements preparation, metadata, selection, execution, product resolution,
-  and conversion and multiplication workflows.
+  database indexes, pickers, executors, and public engine entry points.
+- `basis-conversion-plans.cpp` is the policy-free inventory of complete named
+  conversion plans.
+- `basis-conversion-picker.cpp` is the complete inventory of endpoint
+  performance choices.
+- `basis-conversion.cpp` implements preparation, metadata, plan indexing and
+  validation, generic execution, product resolution, and conversion and
+  multiplication workflows.
 - `basis-conversion-kernels.*` owns basis-family conversion mathematics.
 - `basis-conversion-products.*` owns Littlewood--Richardson, Pieri,
   border-strip, and monomial-like product mathematics.
@@ -183,27 +190,39 @@ applicability and execution never branch on their diagnostic strings.
   `inner-product-kernels.*` own their operation-specific workflows.
 - `raw-interface.*` and `computations.m2` form the C++/M2 boundary.
 
-To add a direct conversion plan:
+To add an ordinary direct conversion path, make three production edits:
 
-1. Add or reuse a policy-free mathematical kernel.
-2. Add its contract to `BasisConversionKernel`.
-3. Add one hard-coded definition, including its source, target, stable
-   identifier, applicability, piece kind, and ordered cases, to
-   `basisConversionPlanDatabase`.
-4. Express mathematical preconditions with inspectable conditions; add a
-   primitive predicate to its natural mathematical owner when needed.
-5. Add its executor arm to `executeBasisConversionKernel`.
-6. Add forced-plan coverage and a differential test against power sums.
+1. Implement one callable formula in `basis-conversion-kernels.cpp` (and add
+   its mechanical member declaration in `basis-conversion-kernels.hpp`).
+2. Add one complete named plan in `basis-conversion-plans.cpp`. The plan is
+   the sole declaration of the formula's source, target, applicability, cases,
+   and output guarantee.
+3. Add one ordered performance rule to the endpoint block in
+   `basis-conversion-picker.cpp`.
 
-Multiplication follows the same division: registration belongs in
-`buildMultiplicationPlans`, applicability in
+For example, the existing power-sum-to-Schur character path consists of
+`powerSumsToSchurViaFrobeniusCharacterFormula`, the one-kernel plan
+`PowerSum->Schur:Frobenius-character-formula`, and its explicit non-automatic
+entry beside the automatically chosen
+`PowerSum->Schur:homogeneous-component-formulas` plan. No kernel enum, endpoint
+contract switch, executor case, `toBasis` branch, or other dispatch edit is
+needed.
+
+Express mathematical preconditions with inspectable conditions, adding a
+primitive predicate to its natural mathematical owner only when needed.
+Then add forced-plan coverage, an automatic-selection assertion if the picker
+can choose the plan, and a differential test against an independent broad
+fallback.
+
+Multiplication follows the same division: plan construction belongs in
+`buildMultiplicationPlansFor`, applicability in
 `multiplicationPlanApplicable`, and execution in
 `executeMultiplicationKernel`. Internal kernels use the shared picker and
 executor and do not call public conversion or multiplication entry points.
 
 The same complete-plan abstraction is used everywhere conversion occurs. A
 caller provides a canonical source expansion, asks the picker for one stable
-top-level plan identifier, and passes the resolved definition to the generic
+top-level plan identifier, and passes the ring-specific plan to the generic
 executor. Callers do not split input for particular basis pairs, and composed
 plans never re-enter the picker.
 
@@ -215,7 +234,7 @@ the applicable specialized Schur recurrence or computes power-sum plethysm and
 passes that canonical result, with provenance metadata, to `toBasis`.
 
 The selector tests the fused route's structural applicability before any
-algebra. Benchmark evidence determines whether that route remains registered;
+algebra. Benchmark evidence determines whether that route remains available;
 benchmarking is not performed at runtime. The fused executor validates its
 contract again before running.
 

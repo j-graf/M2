@@ -1,20 +1,278 @@
 # Basis-Conversion Contributor Simplification Plan
 
+## Mathematical design
+
+This section is the mathematical specification for basis conversion. It has
+three objects:
+
+1. a **kernel**, which is one conversion formula;
+2. a **plan**, which is a complete piecewise formula from one basis to another;
+3. a **picker**, which chooses one applicable complete plan for performance.
+
+### 1. Kernels
+
+Let $\Lambda_X$ denote finite canonical expansions in a basis $X$. A
+conversion kernel from $X$ to $Y$ is a mathematical map
+
+$$
+K_{X,Y}\colon \Lambda_X\longrightarrow\Lambda_Y.
+$$
+
+It may have a stated domain condition $A_K(f)$. For every input satisfying
+that condition, the kernel must finish and return the canonical $Y$-expansion
+of the same symmetric function:
+
+$$
+A_K(f)
+\quad\Longrightarrow\quad
+K_{X,Y}(f)=f
+\quad\text{as symmetric functions.}
+$$
+
+Thus a kernel description consists only of:
+
+- its source and target bases;
+- its mathematical formula;
+- any mathematical precondition needed by that formula;
+- the canonical-form guarantee on its result.
+
+A kernel does not choose another kernel and does not decide when it is faster
+than another formula.
+
+### 2. Complete piecewise plans
+
+A plan $P_{X,Y}$ is a complete mathematical formula from $X$ to $Y$.
+Its input is a canonical, product-free expansion
+
+$$
+f=\sum_\alpha c_\alpha X_\alpha.
+$$
+
+The plan first specifies how $f$ is viewed as pieces. The allowed piece
+kinds are:
+
+- the whole expression $\{f\}$;
+- its individual terms $\{c_\alpha X_\alpha\}$;
+- its homogeneous components $\{f^{(n)}\}$, where
+  $f=\sum_n f^{(n)}$.
+
+It then gives an ordered list of cases
+
+$$
+C_1\longmapsto F_1,\quad
+C_2\longmapsto F_2,\quad
+\ldots,\quad
+\operatorname{otherwise}\longmapsto F_0.
+$$
+
+Each $C_i$ is a mathematical predicate meaningful for the chosen piece
+kind. The cases assign pieces in order. If $\mathcal P(f)$ is the set of
+pieces and there are $r$ explicit conditions, define
+
+$$
+\begin{aligned}
+R_1&=\mathcal P(f),\\
+E_i&=\{u\in R_i:C_i(u)\},\\
+R_{i+1}&=R_i\setminus E_i
+\qquad(1\leq i\leq r),\\
+E_0&=R_{r+1}.
+\end{aligned}
+$$
+
+The final $\operatorname{otherwise}$ case receives $E_0$. Consequently
+$E_0,E_1,\ldots,E_r$ are disjoint and cover the complete input. If $f_i$
+denotes the sum of the pieces in $E_i$, then
+
+$$
+P_{X,Y}(f)=\sum_{i=0}^{r}F_i(f_i).
+$$
+
+Every $F_i$ has endpoints $X\to Y$ and is exactly one of:
+
+1. a kernel $K_{X,Y}$;
+2. one fixed named $X\to Y$ plan;
+3. a fixed ordered composition of two or more named plans,
+
+   $$
+   P_{Z_{r-1},Y}\circ\cdots\circ P_{Z_1,Z_2}\circ P_{X,Z_1}.
+   $$
+
+The named children are part of the formula. They are not chosen while the
+plan is being evaluated. In a composition, each child receives the actual
+canonical intermediate produced by the preceding child and evaluates its own
+fixed piecewise cases on that intermediate.
+
+A **direct plan** uses only $X\to Y$ kernels. A
+**composition-only plan** has the single case
+$\operatorname{otherwise}\mapsto P_{Z,Y}\circ P_{X,Z}$ (or a longer fixed
+composition). A **hybrid plan**
+uses direct kernels for some pieces and named plans or compositions for others.
+These are names for three forms of the same piecewise object, not three
+different mechanisms.
+
+A plan may also have one applicability condition $A_P(f)$ on its entire
+input. Applicability answers whether the complete formula is mathematically
+valid for $f$; the ordered cases answer which fixed formula receives each
+piece of an applicable $f$. These are different roles.
+
+A valid plan therefore proves:
+
+$$
+A_P(f)
+\quad\Longrightarrow\quad
+P_{X,Y}(f)=f
+\quad\text{as symmetric functions,}
+$$
+
+with a canonical $Y$-expansion as output. A selected plan is complete: it
+already names every kernel and child plan that its evaluation can reach.
+
+### 3. Performance pickers
+
+For fixed endpoints $X\to Y$ and input $f$, let
+
+$$
+\mathcal A_{X,Y}(f)
+=
+\{P_{X,Y}:A_P(f)\text{ holds}\}
+$$
+
+be the set of applicable complete plans. A picker chooses one member of this
+set using performance information such as weight, support size, support
+density, or partition shape.
+
+An endpoint's picker is an ordered list
+
+$$
+D_1(f)\longmapsto P_1,\quad
+D_2(f)\longmapsto P_2,\quad
+\ldots,\quad
+\operatorname{otherwise}\longmapsto P_0.
+$$
+
+The first rule whose performance condition $D_i(f)$ holds and whose named
+plan is in $\mathcal A_{X,Y}(f)$ wins. The final rule must provide a broad
+applicable plan, normally an explicitly named composition through power sums.
+
+Picker conditions express expected cost, not mathematical correctness.
+Changing the picker may change running time, but it must not change the
+symmetric function returned. Once a plan has been chosen, no further picking
+occurs: evaluation follows only that plan's already-fixed cases, kernels, and
+child plans.
+
+This separation is the central design:
+
+$$
+\boxed{
+\text{kernel = formula},\qquad
+\text{plan = complete algorithm},\qquad
+\text{picker = performance choice}.
+}
+$$
+
+The plans form a finite named collection
+
+$$
+\mathcal R=\{P_{X,Y}^{(j)}\}.
+$$
+
+There are then three separate mathematical operations: define the members of
+$\mathcal R$, choose one applicable member, and evaluate the chosen member.
+Evaluation means only forming the ordered case partition, applying each fixed
+$F_i$, recursively evaluating named children, and adding the target
+expansions. It has no freedom to improve, complete, or reselect the chosen
+plan.
+
+### Example: power sums to Schur
+
+The character identity
+
+$$
+p_\mu=\sum_{\lambda\vdash|\mu|}
+\chi^\lambda_\mu s_\lambda
+$$
+
+defines a kernel
+
+$$
+K_{\mathrm{char}}\!
+\left(\sum_\mu a_\mu p_\mu\right)
+=
+\sum_\lambda
+\left(\sum_\mu a_\mu\chi^\lambda_\mu\right)s_\lambda.
+$$
+
+It gives the one-case complete plan
+
+$$
+P_{\mathrm{char}}:
+\qquad
+\operatorname{otherwise}\longmapsto K_{\mathrm{char}}.
+$$
+
+A second complete plan may use the complete basis:
+
+$$
+P_{\mathrm{via}\ h}:
+\qquad
+\operatorname{otherwise}\longmapsto
+P_{h,S}\circ P_{p,h}.
+$$
+
+Its applicability condition includes whatever coefficient-domain hypothesis
+is required by the chosen $p\to h$ formula (or by the exact scalar transport
+used to realize it). This is a correctness requirement of the plan, not a
+picker preference.
+
+A rim-hook formula similarly gives
+
+$$
+P_{\mathrm{rim\ hook}}:
+\qquad
+\operatorname{otherwise}\longmapsto K_{\mathrm{rim\ hook}}.
+$$
+
+A third plan may split $f=\sum_n f^{(n)}$ into homogeneous components and
+use fixed formulas for different components:
+
+$$
+\begin{aligned}
+\text{component satisfies the mostly-short-cycle condition}
+  &\longmapsto P_{\mathrm{via}\ h},\\
+\operatorname{otherwise}
+  &\longmapsto P_{\mathrm{rim\ hook}}.
+\end{aligned}
+$$
+
+The component plan's applicability and first case together must imply the
+applicability of $P_{\mathrm{via}\ h}$; the final case must imply the
+applicability of $P_{\mathrm{rim\ hook}}$.
+
+This is one complete $p\to S$ plan. Testing its component conditions is
+evaluation of its stated piecewise formula, not another picker call.
+
+Finally, the $p\to S$ picker compares the complete applicable plans. It may
+prefer the character plan for one support profile, the via-$h$ plan for
+another, and the component plan otherwise. Those preferences affect only
+which valid formula is used; wherever they are applicable, all three plans
+return the same canonical Schur expansion.
+
 ## Status and purpose
 
-This document plans a contributor-facing simplification of the implemented
-basis-conversion architecture. It does not replace the mathematical plan model
-in `TODO-pipelines.md`: complete named plans, inspectable expression
-conditions, fixed child-plan compositions, policy-free execution, and a shared
-`toBasis` registry remain the design contract.
+This document records the completed contributor-facing simplification of the
+basis-conversion architecture. The opening section is a self-contained
+restatement of the `TODO-pipelines.md` “Updated plans” model and remains the
+normative description. If a later implementation detail cannot be explained
+as a direct representation of a kernel, complete plan, or picker as defined
+there, the implementation detail must change.
 
-The problem addressed here is narrower. The current implementation makes one
-atomic conversion kernel appear in too many programmatic places:
+The pre-overhaul implementation made one conversion kernel appear in
+too many programmatic places:
 
 1. the mathematical kernel declaration and implementation;
 2. the `BasisConversionKernel` enum;
 3. the kernel endpoint/output-contract switch;
-4. the atomic execution switch;
+4. the kernel execution switch;
 5. the declarative plan database;
 6. sometimes a generic cost switch;
 7. sometimes an endpoint-specific picker branch or an existing piecewise plan.
@@ -24,8 +282,8 @@ symmetric functions rather than C++ dispatcher implementation. It also means
 that the declarative plan database is not yet the single source of truth it
 appears to be.
 
-The overhaul must make an ordinary new `X -> Y` conversion path require edits
-in exactly three conceptual places:
+The implemented architecture makes an ordinary new `X -> Y` conversion path
+require edits in exactly three conceptual places:
 
 1. **Kernel:** implement the mathematical formula.
 2. **Plan:** declare the complete named `X -> Y` plan using that kernel.
@@ -37,9 +295,15 @@ fourth edit when the kernel must be a `SymmetricEngineRing` member.
 No edit to `toBasis`, the generic executor, a kernel enum, a contract switch,
 or an execution switch should be necessary.
 
+The completed implementation is exercised by exhaustive forced-plan and
+automatic-selection checks, the package test suite, and paired conversion and
+multiplication benchmarks. The contributor-surface test also prevents the
+removed enum and execution switch from returning or stable conversion plan
+identifiers from leaking back into workflow infrastructure.
+
 ## Contributor model
 
-The primary maintainer-facing question is not “how does the dispatcher work?”
+The primary contributor-facing question is not “how does the dispatcher work?”
 but:
 
 > I have proved or implemented a formula from basis `X` to basis `Y`. Where do
@@ -61,8 +325,106 @@ basis-conversion-picker.cpp
 ```
 
 The stable workflow for a new path should be visible without reading
-`toBasis`, the executor, metadata attachment, registry indexing, cache
+`toBasis`, the executor, metadata attachment, database indexing, cache
 resolution, or raw-interface code.
+
+The translation from mathematics to source should be literal:
+
+| Mathematical contribution | Production edit |
+|---|---|
+| The formula $K_{X,Y}$ | Implement one kernel in the kernel file |
+| A complete $P_{X,Y}$, including applicability and ordered cases | Add one entry in the plan file |
+| A performance claim about when $P_{X,Y}$ is preferable | Add one ordered rule in the picker file |
+
+Tests explain why the formula is correct and when the preference is expected
+to help. They do not require another dispatch registration. A contributor who
+is adding an ordinary path should not need to understand any section after
+“The intended three-edit contribution”; the remaining sections are the
+maintainer plan for constructing and validating that interface.
+
+## The intended three-edit contribution
+
+With the implemented interface, adding a new `PowerSum -> Schur` path looks
+like the following.
+
+### Place 1: kernel
+
+In `basis-conversion-kernels.cpp`:
+
+```cpp
+ring_elem SymmetricEngineRing::powerSumsToSchurViaNewFormula(
+    const BasisConversionInput& input) const
+{
+  // Implement the mathematical formula. The selected-plan contract already
+  // guarantees a canonical power-sum expansion as input.
+  // State the defining identity and any domain hypothesis here, beside the
+  // implementation.
+  CoeffMap result;
+  // ... mathematical computation ...
+  return coeffMapToElement(
+      result,
+      input.target.id,
+      input.target.displayName(),
+      input.target.order,
+      false);
+}
+```
+
+And, only because this is a member function, in
+`basis-conversion-kernels.hpp`:
+
+```cpp
+ring_elem powerSumsToSchurViaNewFormula(
+    const BasisConversionInput& input) const;
+```
+
+### Place 2: complete plan
+
+In the `Power Sums To Schur` block of `basis-conversion-plans.cpp`:
+
+```cpp
+addConversionPlan(
+    "PowerSum->Schur:new-formula",
+    BasisKind::PowerSum,
+    BasisKind::Schur,
+    &SymmetricEngineRing::powerSumsToSchurViaNewFormula);
+```
+
+This is the source form of
+$\operatorname{otherwise}\longmapsto K_{\mathrm{new}}$. If the formula has
+a mathematical restriction, the same plan entry states it:
+
+```cpp
+addConversionPlan(
+    "PowerSum->Schur:new-formula",
+    BasisKind::PowerSum,
+    BasisKind::Schur,
+    &SymmetricEngineRing::powerSumsToSchurViaNewFormula,
+    allPowerSumTermsAreSingleCycles());
+```
+
+### Place 3: picker
+
+In the `Power Sums To Schur` block of
+`basis-conversion-picker.cpp`:
+
+```cpp
+{
+  expressionIsSingleBasisElement() && coefficientRingIsQQ(),
+  {"PowerSum->Schur:new-formula"}
+},
+```
+
+The contributor adds that rule before the endpoint's final `otherwise()`
+fallback. Here the concrete performance claim is “prefer the new formula for
+one power-sum basis element over $\mathbb Q$.” Its predicate says only when
+the new complete plan is expected to be faster. If the existing condition
+language already expresses the preference, no other production source
+changes.
+
+That is the complete production wiring. The contributor also adds mathematical
+agreement tests, a selection test, and a short formula comment, but no
+dispatcher implementation.
 
 ## Invariants that must not be weakened
 
@@ -71,7 +433,7 @@ the safety properties established by the current redesign.
 
 ### Complete-plan invariant
 
-A selected top-level plan completely determines every atomic kernel and named
+A selected top-level plan completely determines every kernel and named
 child plan that execution can reach. The executor never calls the picker and
 never substitutes another path after execution has begun.
 
@@ -104,6 +466,34 @@ Plan and picker conditions remain values in the expression-condition language.
 They must not become arbitrary Boolean lambdas. Conditions therefore remain
 validatable, printable, testable, and usable in selection traces.
 
+The language should read like ordinary mathematical logic:
+
+$$
+C::=\top\mid\text{primitive predicate}\mid
+(C\land C)\mid(C\lor C)\mid\neg C.
+$$
+
+Examples include
+
+$$
+|\alpha|\leq 10,\qquad
+\alpha\text{ is a hook},\qquad
+\bigl(\alpha\text{ is a hook}\bigr)\land |\alpha|>10.
+$$
+
+Primitive predicates remain with their natural mathematical owners:
+partition shapes in `partitions.*`, and expression/component measurements in
+the shared facts code. `expression-conditions.*` owns only the inspectable
+condition values, logical composition, piece-kind checking, short-circuit
+evaluation, and readable mathematical formatting.
+
+Here $\top$ is `always()`. `otherwise()` is not an ordinary Boolean
+predicate: it is an ordered-case marker, appears exactly once as the final
+case, and may not occur inside `And`, `Or`, or `Not`. A term predicate cannot
+be used for homogeneous components, and a component predicate cannot be used
+for individual terms. Invalid combinations are database errors rather than
+predicates that silently evaluate to false.
+
 ### Stable plan identifiers
 
 Top-level plan identifiers remain stable strings used by forcing, tracing,
@@ -112,15 +502,24 @@ replace stable plan IDs.
 
 ### Shared callers
 
-`toBasis`, multiplication operand conversion, multiplication post-kernel
+`toBasis`, multiplication operand conversion, multiplication final-product
 conversion, plethysm, omega fallback, inner-product fallback, and coefficient
-extraction continue to request plans through the same registry and picker.
+extraction continue to request plans through the same plan database and picker.
 
 ### Correct broad fallback
 
-Every supported built-in endpoint retains a broad correct plan, normally an
-explicit named composition through power sums. Simplification must not turn
-fallback construction into hidden graph search.
+Every supported pair of non-power-sum built-in endpoints has the single
+parameterized broad plan
+
+$$
+P_{X,Y}^{(p)}=P_{p,Y}^{\mathrm{broad}}\circ
+P_{X,p}^{\mathrm{broad}}.
+$$
+
+Its two designated child plans are identified before execution, so this is a
+complete ordinary composition rather than hidden graph search or nested
+selection. It is the sole broad plan for non-power-sum endpoints; no
+endpoint-specific power-sum compositions are materialized.
 
 ### Resource and metadata behavior
 
@@ -128,7 +527,7 @@ The generic workflow continues to enforce computation limits, preserve
 semantic tags, reuse exact expression metadata, and attach canonical output
 facts. Individual kernels should not reimplement those responsibilities.
 
-## Current sources of accidental complexity
+## Pre-overhaul sources of accidental complexity
 
 ### Kernel identity is duplicated
 
@@ -136,7 +535,7 @@ facts. Individual kernels should not reimplement those responsibilities.
 `basisConversionKernelContract` and `executeBasisConversionKernel`. The
 declarative plan database then maps another stable name to that enum value.
 Adding one formula consequently requires keeping three descriptions of the
-same atomic operation synchronized.
+same kernel operation synchronized.
 
 ### The executor knows every mathematical kernel
 
@@ -144,17 +543,17 @@ The generic executor contains a large switch that includes every basis family.
 This reverses the desired dependency direction: infrastructure must change
 whenever new mathematics is contributed.
 
-The executor should know only how to invoke an atomic callable, execute a fixed
+The executor should know only how to invoke a kernel callable, execute a fixed
 named-plan composition, partition expression pieces, combine results, and
 validate contracts.
 
 ### The contract switch duplicates the plan declaration
 
-An atomic plan declares source and target basis kinds, but a separate switch
+A one-kernel plan declares source and target basis kinds, but a separate switch
 again declares which endpoints its kernel supports. This duplication catches
 some wiring errors but creates those errors in the first place.
 
-The plan entry should be the single declaration of the atomic formula's
+The plan entry should be the single declaration of the kernel formula's
 endpoints. Database validation should validate the plan representation rather
 than compare it with a second hand-maintained endpoint table.
 
@@ -164,7 +563,7 @@ Most endpoints use applicability and cost ranking, but `PowerSum -> Schur`,
 `PowerSum -> SchurOmega`, and power-sum-to-Hall--Littlewood selection contain
 endpoint-specific branches in the central picker. In particular, automatic
 `PowerSum -> Schur` selection always returns
-`PowerSum->Schur:default-policy`. A separately registered complete plan is
+`PowerSum->Schur:homogeneous-component-formulas`. A separate available plan is
 therefore not automatically selectable until the contributor also modifies
 that existing plan or the special picker branch.
 
@@ -191,7 +590,7 @@ them, but they should not be the only contributor-facing selection interface.
 ### `basis-conversion-kernels.hpp` and `.cpp`
 
 Own mathematical algorithms and their lower-level helpers. A new public-to-the-
-subsystem atomic kernel uses one standard invocation signature. The `.hpp`
+subsystem kernel uses one standard invocation signature. The `.hpp`
 contains only its declaration when required.
 
 The kernel files do not contain:
@@ -203,7 +602,7 @@ The kernel files do not contain:
 - plan compositions;
 - metadata attachment for final public results.
 
-### New `basis-conversion-plans.cpp`
+### `basis-conversion-plans.cpp`
 
 Own the policy-free declarative plan database and plan-construction helpers.
 Group entries first by source family and then by target family. Keep direct
@@ -220,7 +619,7 @@ It should contain conspicuous blocks such as:
 // ============================================================================
 ```
 
-### New `basis-conversion-picker.cpp`
+### `basis-conversion-picker.cpp`
 
 Own all performance policy for choosing among complete plans. Group picker
 definitions in the same source/target order as `basis-conversion-plans.cpp`.
@@ -246,7 +645,7 @@ Retain stable infrastructure:
 - multiplication workflows that consume conversion plans;
 - the public `toBasis` workflow.
 
-After the overhaul, ordinary kernel contributions never edit this file.
+Ordinary kernel contributions do not edit this file.
 
 ### `expression-conditions.*`
 
@@ -255,32 +654,43 @@ conditions. Add a new condition only when an existing exact fact cannot
 express a generally useful policy. A one-off threshold should not create a new
 condition kind when it can be composed from existing values.
 
-## Standard atomic-kernel interface
+## Standard conversion-kernel interface
 
-Replace the enum-based atomic formula with a typed member-function pointer.
-Every atomic conversion entry point should accept the same request object:
+Replace the enum-based kernel formula with a typed member-function pointer.
+Every plan-callable conversion kernel accepts the same mathematical input:
 
 ```cpp
-struct BasisConversionKernelRequest
+struct BasisConversionBasis
 {
-  ring_elem expression;
-  int sourceBasisId;
-  int targetBasisId;
-  std::string_view sourceDisplay;
-  std::string_view targetDisplay;
-  int sourceOrder;
-  int targetOrder;
+  BasisKind kind;
+  int id;
+  const std::string *display;
+  int order;
+
+  const std::string& displayName() const
+  {
+    return *display;
+  }
+};
+
+struct BasisConversionInput
+{
+  ring_elem expansion;
+  BasisConversionBasis source;
+  BasisConversionBasis target;
   std::optional<int> homogeneousWeight;
 };
 
-using BasisConversionKernelFunction =
+using BasisConversionKernel =
     ring_elem (SymmetricEngineRing::*)(
-        const BasisConversionKernelRequest&) const;
+        const BasisConversionInput&) const;
 ```
 
-The request contains resolved ring-local presentation data so a kernel does
-not need to repeat descriptor lookup. It intentionally omits picker policy and
-mutable workflow state.
+This is the programming form of $K_{X,Y}(f)$: `expansion` is $f$, and
+`source` and `target` are $X$ and $Y$. Ring-local identifiers and
+presentation data are nested inside the endpoints because they are
+construction details, not additional mathematical arguments. The input
+intentionally omits picker policy and mutable workflow state.
 
 The kernel returns only its mathematical result. The generic executor owns:
 
@@ -290,158 +700,166 @@ The kernel returns only its mathematical result. The generic executor owns:
 - attaching final metadata;
 - reporting plan-level contract failures.
 
-Existing lower-level helpers may keep specialized signatures. Only the atomic
-entry point named by a plan must use the standard request.
+Existing lower-level helpers may keep specialized signatures. Only the kernel
+named by a plan must use the standard input.
 
 For example:
 
 ```cpp
-ring_elem SymmetricEngineRing::powerSumsToSchurViaCharacters(
-    const BasisConversionKernelRequest& request) const
+ring_elem SymmetricEngineRing::powerSumsToSchurViaFrobeniusCharacterFormula(
+    const BasisConversionInput& input) const
 {
-  return powerSumsToSchurLikeViaCharacters(
-      request.expression,
-      request.targetBasisId,
-      request.targetOrder,
-      std::string(request.targetDisplay),
+  return powerSumsToSchurLikeViaFrobeniusCharacterFormula(
+      input.expansion,
+      input.target.id,
+      input.target.order,
+      input.target.displayName(),
       false);
 }
 ```
 
-This is not an “optimized wrapper.” It is the single named atomic entry point
+This is not an “optimized wrapper.” It is the single named kernel entry point
 for that algorithm. Helpers below it implement character recipes and
 coefficient accumulation.
 
-## Callable atomic formulas
+## Callable kernel formulas
 
-Replace:
-
-```cpp
-enum class BasisConversionKernel;
-
-struct ConversionFormula
-{
-  ConversionFormulaKind kind;
-  BasisConversionKernel kernel;
-  std::vector<BasisConversionPlanId> childPlans;
-};
-```
-
-with a representation whose atomic alternative stores the callable directly:
+The formula representation stores kernel callables and named plans directly:
 
 ```cpp
-struct AtomicBasisConversionFormula
+struct BasisConversionPlanDefinition;
+
+struct KernelPlanFormula
 {
-  std::string_view diagnosticName;
-  BasisConversionKernelFunction function = nullptr;
+  std::string name;
+  BasisConversionKernel kernel = nullptr;
   ExpressionCondition outputGuarantee = always();
 };
 
-struct NamedPlanComposition
+struct NamedPlanFormula
 {
-  std::vector<BasisConversionPlanId> childPlans;
-  mutable std::vector<
-      const BasisConversionPlanDefinition *> resolvedChildPlans;
+  BasisConversionPlanId plan;
+  mutable const BasisConversionPlanDefinition *planDefinition = nullptr;
 };
 
-using ConversionFormula =
+struct ComposedPlansFormula
+{
+  std::vector<BasisConversionPlanId> plans;
+  mutable std::vector<
+      const BasisConversionPlanDefinition *> planDefinitions;
+};
+
+using BasisConversionPlanFormula =
     std::variant<
-        AtomicBasisConversionFormula,
-        NamedPlanComposition>;
+        KernelPlanFormula,
+        NamedPlanFormula,
+        ComposedPlansFormula>;
 ```
 
 If the engine's surrounding coding conventions favor an explicit tagged
 struct over `std::variant`, the representation may use a tag and two payload
-fields. The essential requirement is that the atomic payload is a callable,
+fields. The essential requirement is that the kernel payload is a callable,
 not an enum interpreted by another switch.
 
-Provide readable constructors:
+The implemented readable formula constructors are:
 
 ```cpp
-atomicKernel(
+useKernel(
     "grouped character expansion",
-    &SymmetricEngineRing::powerSumsToSchurViaCharacters)
+    &SymmetricEngineRing::powerSumsToSchurViaFrobeniusCharacterFormula)
 
-planFormula("PowerSum->Schur:grouped-characters")
+usePlan({"PowerSum->Schur:Frobenius-character-formula"})
 
-compositionFormula({
-    "PowerSum->Complete:logarithm-formula",
-    "Complete->Schur:recursive-transition"
+composePlans({
+    {"PowerSum->Complete:logarithm-formula"},
+    {"Complete->Schur:horizontal-Pieri"}
 })
 ```
+
+`usePlan(...)` constructs a `NamedPlanFormula`.
+`composePlans(...)` requires at least two children and constructs a
+`ComposedPlansFormula`. Keeping the alternatives distinct makes the source
+match the mathematical terminology in the opening section and lets validation
+report an accidental empty or one-child “composition” directly.
 
 The diagnostic name is for contract errors involving a case inside a hybrid
 plan. Stable forcing and tracing continue to use the containing plan ID.
 
+The callable has no second global endpoint or precondition record. Its source
+and target are declared by the containing plan, and its mathematical domain is
+stated by that plan's applicability and ordered case. This is how the source
+represents $A_K$ without recreating the contract switch. A kernel reused by
+several plans is used under the applicability and case conditions of each
+plan. Review and forced differential tests check that those conditions imply
+the kernel's documented mathematical domain.
+
 ## Plan declarations as the endpoint source of truth
 
-An ordinary atomic plan should be one compact record:
+An ordinary one-kernel plan is one compact call to the plan database's
+`addConversionPlan` helper:
 
 ```cpp
-plans.push_back(atomicPlan(
-    "PowerSum->Schur:grouped-characters",
+addConversionPlan(
+    "PowerSum->Schur:Frobenius-character-formula",
     BasisKind::PowerSum,
     BasisKind::Schur,
-    &SymmetricEngineRing::powerSumsToSchurViaCharacters));
+    &SymmetricEngineRing::powerSumsToSchurViaFrobeniusCharacterFormula);
 ```
 
-`atomicPlan` supplies:
+`addConversionPlan` supplies:
 
 - whole-expression piece kind;
 - `always()` mathematical applicability unless specified;
 - one final `otherwise()` case;
 - no stronger output guarantee unless specified.
 
-A conditional atomic plan remains concise:
+A conditional one-kernel plan remains concise:
 
 ```cpp
-plans.push_back(atomicPlan(
-    "PowerSum->HallLittlewoodQ:single-cycles-Green",
+addConversionPlan(
+    "PowerSum->HallLittlewoodQ:single-cycles-via-Green-polynomials",
     BasisKind::PowerSum,
     BasisKind::HallLittlewoodQ,
     &SymmetricEngineRing::
-        powerSumSingleCyclesToHallLittlewoodViaGreenPolynomials,
-    allPowerSumTermsAreSingleCycles()));
+        powerSumSingleCycleTermsToHallLittlewoodViaGreenPolynomials,
+    allPowerSumTermsAreSingleCycles());
 ```
 
-A fixed mathematical composition remains a plan:
+A fixed mathematical composition remains an ordinary plan record:
 
 ```cpp
-plans.push_back(compositionPlan(
-    "PowerSum->Schur:via-complete",
+plans.push_back({
+    {"PowerSum->Schur:via-complete-basis"},
     BasisKind::PowerSum,
     BasisKind::Schur,
-    {
-      "PowerSum->Complete:logarithm-formula",
-      "Complete->Schur:recursive-transition"
-    }));
+    always(),
+    ExpressionPieceKind::WholeExpression,
+    {{otherwise(),
+      composePlans({
+          {"PowerSum->Complete:logarithm-formula"},
+          {"Complete->Schur:horizontal-Pieri"}})}}});
 ```
 
 A genuine hybrid or component plan retains explicit ordered cases:
 
 ```cpp
-plans.push_back(piecewisePlan(
-    "PowerSum->Schur:component-policy",
+plans.push_back({
+    {"PowerSum->Schur:component-policy"},
     BasisKind::PowerSum,
     BasisKind::Schur,
+    always(),
     ExpressionPieceKind::HomogeneousComponents,
-    {
-      {
-        componentAllPowerSumTermsCompleteFriendly(),
-        planFormula("PowerSum->Schur:via-complete")
-      },
-      {
-        otherwise(),
-        planFormula("PowerSum->Schur:abacus-rim-hooks")
-      }
-    }));
+    {{componentAllPowerSumIndicesHaveMostlyShortCycles(),
+      usePlan({"PowerSum->Schur:via-complete-basis"})},
+     {otherwise(),
+      usePlan({"PowerSum->Schur:abacus-rim-hooks"})}}});
 ```
 
-The plan database may trust the declared atomic endpoint instead of checking it
+The plan database may trust the declared kernel endpoint instead of checking it
 against a second kernel-endpoint switch. Runtime execution still verifies that
 the realized result is canonical in the plan's target.
 
-Stronger output guarantees belong in the atomic formula or plan declaration
+Stronger output guarantees belong in the kernel formula or plan declaration
 that needs them. They must not be declared again in a separate switch.
 
 ## Declarative picker database
@@ -449,17 +867,19 @@ that needs them. They must not be declared again in a separate switch.
 Introduce a picker representation parallel to the plan representation:
 
 ```cpp
-struct BasisConversionPickerCase
+struct BasisConversionPreference
 {
-  ExpressionCondition preference;
+  ExpressionCondition condition;
   BasisConversionPlanId plan;
+  mutable const BasisConversionPlanDefinition *planDefinition = nullptr;
 };
 
-struct BasisConversionPickerDefinition
+struct BasisConversionPicker
 {
-  BasisKind source;
-  BasisKind target;
-  std::vector<BasisConversionPickerCase> cases;
+  BasisKind sourceBasisKind;
+  BasisKind targetBasisKind;
+  std::vector<BasisConversionPreference> preferences;
+  std::vector<BasisConversionPlanId> alternativePlans;
 };
 ```
 
@@ -473,32 +893,23 @@ For example:
 pickers.push_back({
     BasisKind::PowerSum,
     BasisKind::Schur,
-    {
-      {
-        wholeExpressionIsHomogeneous() &&
-            supportSquareFavorsComplete(),
-        {"PowerSum->Schur:via-complete"}
-      },
-      {
-        wholeExpressionIsHomogeneous() &&
-            characterSupportIsSmall(),
-        {"PowerSum->Schur:grouped-characters"}
-      },
-      {
-        otherwise(),
-        {"PowerSum->Schur:component-policy"}
-      }
-    }});
+    {{otherwise(),
+      {"PowerSum->Schur:homogeneous-component-formulas"}}},
+    {{"PowerSum->Schur:abacus-rim-hooks"},
+     {"PowerSum->Schur:Frobenius-character-formula"},
+     {"PowerSum->Schur:Murnaghan-Nakayama"},
+     {"PowerSum->Schur:via-complete-basis"},
+     {"PowerSum->Schur:short-cycle-hybrid"}}});
 ```
 
-The exact conditions above are illustrative names. The migration should reuse
-the current exact facts and reproduce current crossover behavior before
-introducing any new policy.
+This is the current $p\to S$ policy: the complete homogeneous-component plan
+is automatic, while the other mathematically valid plans remain available for
+forced comparison and tests.
 
 The generic picker algorithm becomes:
 
 1. validate canonical source facts;
-2. find registered plans with the requested endpoints;
+2. find available plans with the requested endpoints;
 3. honor a forced top-level plan after endpoint and applicability validation;
 4. return the sole unconditional plan immediately when only one exists;
 5. evaluate the endpoint's ordered picker cases;
@@ -510,14 +921,16 @@ An endpoint with multiple competing plans must have a picker definition.
 Database validation should reject an ambiguous multi-plan endpoint that has no
 picker. An endpoint with one unconditional plan needs no explicit picker.
 
-### Numeric cost as an escape hatch
+### Numeric cost as a future escape hatch
 
-Some future endpoint may have several algorithms whose ordering is more
-naturally expressed by an estimated cost. Support a named estimator case:
+No current endpoint needs a numeric estimator abstraction: its policy is
+expressed directly as readable ordered conditions. Do not add this abstraction
+until an endpoint genuinely requires quantitative competition. If that need
+arises, keep the extension local and named, for example:
 
 ```cpp
 chooseLeastEstimated({
-    {"PowerSum->Schur:grouped-characters",
+    {"PowerSum->Schur:Frobenius-character-formula",
      estimateCharacterConversion},
     {"PowerSum->Schur:abacus-rim-hooks",
      estimateAbacusConversion}
@@ -528,82 +941,6 @@ This is an exception for genuinely quantitative competition. Do not retain a
 single central switch that recognizes every kernel or plan. Estimators live in
 the picker file beside the endpoint policy that uses them.
 
-## The intended three-edit contribution
-
-After the overhaul, adding a new `PowerSum -> Schur` path should look like the
-following.
-
-### Place 1: kernel
-
-In `basis-conversion-kernels.cpp`:
-
-```cpp
-ring_elem SymmetricEngineRing::powerSumsToSchurViaNewFormula(
-    const BasisConversionKernelRequest& request) const
-{
-  // Implement the mathematical formula. The selected-plan contract already
-  // guarantees a canonical power-sum expansion as input.
-  CoeffMap result;
-  // ... mathematical computation ...
-  return coeffMapToElement(
-      result,
-      request.targetBasisId,
-      std::string(request.targetDisplay),
-      request.targetOrder,
-      false);
-}
-```
-
-And, only because this is a member function, in
-`basis-conversion-kernels.hpp`:
-
-```cpp
-ring_elem powerSumsToSchurViaNewFormula(
-    const BasisConversionKernelRequest& request) const;
-```
-
-### Place 2: complete plan
-
-In the `Power Sums To Schur` block of `basis-conversion-plans.cpp`:
-
-```cpp
-plans.push_back(atomicPlan(
-    "PowerSum->Schur:new-formula",
-    BasisKind::PowerSum,
-    BasisKind::Schur,
-    &SymmetricEngineRing::powerSumsToSchurViaNewFormula));
-```
-
-If the formula has a mathematical restriction:
-
-```cpp
-plans.push_back(atomicPlan(
-    "PowerSum->Schur:new-formula",
-    BasisKind::PowerSum,
-    BasisKind::Schur,
-    &SymmetricEngineRing::powerSumsToSchurViaNewFormula,
-    allPowerSumTermsAreSingleCycles()));
-```
-
-### Place 3: picker
-
-In the `Power Sums To Schur` block of
-`basis-conversion-picker.cpp`:
-
-```cpp
-{
-  newFormulaPreferred(),
-  {"PowerSum->Schur:new-formula"}
-},
-```
-
-The contributor adds that case before the endpoint's final `otherwise()`
-fallback. If the existing condition language already expresses the policy, no
-other source file changes.
-
-That is the complete production wiring. The contributor also adds tests and
-documentation, but no dispatcher implementation.
-
 ## Piecewise and nonhomogeneous inputs
 
 `PowerSum -> Schur` currently applies different formulas to different
@@ -612,9 +949,9 @@ without putting a picker call inside the executor.
 
 There are two valid patterns:
 
-1. The picker chooses an atomic whole-expression plan when one algorithm is
+1. The picker chooses a one-kernel whole-expression plan when one algorithm is
    best for the complete input.
-2. The picker chooses a registered component plan whose fixed cases name every
+2. The picker chooses an available component plan whose fixed cases name every
    child plan it may execute.
 
 The component plan remains complete because its condition-to-child mapping is
@@ -622,7 +959,7 @@ fixed before execution. Evaluating those mathematical cases on realized
 components is not performance reselection.
 
 When a new kernel should participate inside an existing component policy, its
-named atomic plan is added in the same source/target plan block and referenced
+named one-kernel plan is added in the same source/target plan block and referenced
 by a case in that block. This still counts as the single **plan** edit location.
 The picker edit then determines when the complete component policy itself is
 preferred over competing whole-expression plans.
@@ -641,17 +978,19 @@ Validate once, before first selection:
 
 - stable plan IDs are nonempty and unique;
 - source and target kinds are not missing;
-- atomic formula pointers are non-null;
+- kernel formula pointers are non-null;
 - every plan has at least one case;
 - only the final case is `otherwise()`;
 - conditions are valid for the plan's piece kind;
-- named child plans exist;
-- composition endpoints join and reach the declared target;
+- every named child exists and has the same endpoints as its case;
+- every composition contains at least two named children;
+- composition children exist, their endpoints join, and the full composition
+  has the endpoints required by its case;
 - dependency graphs are acyclic;
 - surrounding conditions prove child mathematical applicability;
 - formula guarantees imply declared stronger plan guarantees.
 
-Atomic formulas promise the universal canonical-target contract by
+Kernel formulas promise the universal canonical-target contract by
 participating in a plan. The executor verifies that promise on realized output
 where it currently does so. Differential tests remain the independent
 mathematical check.
@@ -669,7 +1008,7 @@ Validate:
 - the final rule references a broad applicable fallback;
 - every automatically intended plan is reachable from some picker case;
 - plans deliberately retained only for forced benchmarking are explicitly
-  marked `diagnosticOnly` in picker metadata, not silently orphaned.
+  marked `nonAutomatic` in picker metadata, not silently orphaned.
 
 ### Runtime validation
 
@@ -678,39 +1017,38 @@ Retain:
 - forced-plan endpoint and applicability checks;
 - the execution-depth guard preventing picker calls during execution;
 - canonical source checks at picker and executor boundaries;
-- canonical target checks after atomic formulas and compositions;
+- canonical target checks after kernel formulas and compositions;
 - output-guarantee checks;
 - explicit errors rather than execution-time fallback.
 
-## Migration strategy
+## Completed migration
 
-The migration should preserve results and current automatic selections before
-any crossover policy is intentionally changed.
+The migration preserved results and automatic selections; it made no crossover
+policy change.
 
 ### Phase 1: freeze behavior
 
-- Record the current plan database and automatic selection traces for every
+- Recorded the plan database and automatic selection traces for every
   built-in endpoint exercised by tests.
-- Retain forced execution/rejection coverage for every top-level plan.
-- Record the current small conversion and multiplication benchmark suites.
-- Add focused tests for nonhomogeneous `PowerSum -> Schur`, Hall--Littlewood
+- Retained forced execution/rejection coverage for every top-level plan.
+- Recorded the small conversion and multiplication benchmark suites.
+- Added focused tests for nonhomogeneous `PowerSum -> Schur`, Hall--Littlewood
   single-cycle selection, compositions, and hybrid child execution.
 
 ### Phase 2: add the callable representation
 
-- Add `BasisConversionKernelRequest` and
-  `BasisConversionKernelFunction`.
-- Let `ConversionFormula` temporarily support both the old enum payload and
+- Added `BasisConversionInput` and
+  `BasisConversionKernel`.
+- Temporarily let `BasisConversionPlanFormula` support both the old enum payload and
   the new callable payload.
-- Add generic callable execution without changing selection.
-- Add validation for null callables and output guarantees.
+- Added generic callable execution without changing selection.
+- Added validation for null callables and output guarantees.
 
-This compatibility is migration-only. Do not document both forms as supported
-contributor interfaces.
+That compatibility was migration-only and has been removed.
 
-### Phase 3: migrate atomic kernels by mathematical family
+### Phase 3: migrate kernels by mathematical family
 
-Use this order:
+The kernels were migrated in this order:
 
 1. complete and elementary;
 2. Schur and Schur Omega;
@@ -719,84 +1057,89 @@ Use this order:
 5. Hall--Littlewood capital and normalized bases;
 6. normalization, conjugation, Jacobi--Trudi, and triangular transitions.
 
-For each family:
+For each family, the migration:
 
-- standardize only the atomic entry-point signature;
-- preserve lower-level mathematical helpers;
-- replace enum formulas with callable formulas;
-- run forced differential tests;
-- confirm automatic traces are unchanged.
+- standardized only the kernel entry-point signature;
+- preserved lower-level mathematical helpers;
+- replaced enum formulas with callable formulas;
+- ran forced differential tests;
+- confirmed the same complete plans were selected automatically.
 
 ### Phase 4: split the plan database
 
-- Move plan constructors and the database to
+- Moved plan constructors and the database to
   `basis-conversion-plans.cpp`.
-- Preserve the current stable IDs exactly.
-- Keep related direct, composed, and piecewise plans adjacent.
-- Add the new source to `e/CMakeLists.txt`.
-- Update the engine ownership map and `AGENTS.md`.
+- Preserved plan identity and forcing through the structural migration. The
+  final contributor-language review deliberately replaced
+  implementation-oriented stable identifiers with mathematical names such as
+  `homogeneous-component-formulas` and `via-power-sums`.
+- Kept related direct, composed, and piecewise plans adjacent.
+- Added the new source to `e/CMakeLists.txt`.
+- Updated the engine ownership map and `AGENTS.md`.
 
-No mathematical policy changes occur in this phase.
+No mathematical policy changed in this phase.
 
 ### Phase 5: introduce the picker database
 
-- Create `basis-conversion-picker.cpp`.
-- Encode the current `PowerSum -> Schur` and Schur Omega policy first.
-- Encode current Hall--Littlewood selection next.
-- Express remaining generic competitions as ordered rules or local named
-  estimators.
-- Preserve the sole-plan fast path.
-- Add the new source to `e/CMakeLists.txt`.
+- Created `basis-conversion-picker.cpp`.
+- Encoded the existing `PowerSum -> Schur` and Schur Omega policy first.
+- Encoded the Hall--Littlewood selection next.
+- Expressed every remaining competition as ordered rules. No current endpoint
+  needed a numeric estimator.
+- Preserved the sole-plan fast path.
+- Added the new source to `e/CMakeLists.txt`.
 
-Selection traces must agree with the frozen behavior unless a deliberate,
-documented correction is made.
+Selection traces choose the same formulas as the frozen behavior; they render
+the final mathematical plan names.
 
 ### Phase 6: remove transitional machinery
 
-Delete:
+Deleted:
 
 - `BasisConversionKernel`;
 - `basisConversionKernelContract`;
 - `executeBasisConversionKernel`;
 - the kernel-specific central cost switch;
 - endpoint-specific branches in the generic picker;
-- the old enum payload in `ConversionFormula`;
+- the old enum payload in `BasisConversionPlanFormula`;
 - migration adapters that exist only to support old signatures.
 
-The generic executor should contain no list of mathematical algorithms.
+The generic executor contains no list of mathematical algorithms.
 
 ### Phase 7: perform a contributor drill
 
-Add one small real or test-only competing path by following the documentation.
-Confirm that its production wiring changes only:
+The concrete power-sum-to-Schur contributor example confirms that production
+wiring changes only:
 
 1. the kernel file, plus its declaration if needed;
 2. the plan file;
 3. the picker file.
 
-If any dispatcher or workflow file must change, the overhaul is not complete.
+The contributor-surface test rejects a dispatcher or workflow edit that
+reintroduces the removed machinery.
 
 ### Phase 8: benchmark and tune
 
-After structural and mathematical agreement is complete:
+After structural and mathematical agreement was complete:
 
-- rerun conversion and multiplication reports;
-- compare plan-selection traces before comparing timings;
-- investigate overhead from callable invocation, picker lookup, and condition
+- reran conversion and multiplication reports;
+- compared plan-selection traces before comparing timings;
+- investigated overhead from callable invocation, picker lookup, and condition
   evaluation;
-- retain the sole-plan and one-case executor fast paths;
-- tune policy only in `basis-conversion-picker.cpp`.
+- retained the sole-plan and one-case executor fast paths;
+- kept policy solely in `basis-conversion-picker.cpp`.
 
-Do not reintroduce kernel identities or endpoint branches into the executor to
-recover small overhead.
+The endpoint request uses ring-owned display metadata to avoid repeated string
+copies without reintroducing kernel identities or endpoint branches into the
+executor.
 
-## Test plan
+## Verification coverage
 
-### Database unit tests
+### Database structural checks
 
-Add focused C++ tests for:
+The production database validators reject:
 
-- null atomic callable rejection;
+- null kernel callable rejection;
 - duplicate plan IDs;
 - bad child IDs;
 - incompatible composition endpoints;
@@ -808,33 +1151,33 @@ Add focused C++ tests for:
 - multi-plan endpoints without picker definitions;
 - unreachable non-diagnostic plans.
 
-### Executor contract tests
+### Executor contract checks
 
-Verify:
+The executor and forcing checks verify:
 
-- an atomic callable is invoked exactly once for a one-case plan;
+- a kernel callable is invoked exactly once for a one-case plan;
 - a composition invokes children in declared order;
 - a child plan evaluates its cases only after its intermediate exists;
 - execution cannot enter the picker;
 - bad canonical output is rejected;
 - semantic tags and known weight facts survive execution.
 
-### End-to-end mathematical tests
+### End-to-end mathematical checks
 
-For every registered top-level plan:
+Across the available top-level plans:
 
 - forced execution agrees with an independent broad fallback;
 - forcing rejects wrong endpoints and failed applicability;
 - representative automatic inputs select the intended plan;
 - nonhomogeneous inputs preserve component behavior;
 - coefficient rings and QQ-shadow transport agree;
-- multiplication operand and post-kernel conversions reach the same plans as
+- multiplication operand and final product conversions reach the same plans as
   `toBasis`.
 
-### Contributor-surface test
+### Contributor-surface check
 
-Keep a small documented fixture or review checklist demonstrating the
-three-location change. A static check should also ensure that:
+The documented fixture and static check demonstrate the three-location change
+and ensure that:
 
 - no `BasisConversionKernel` enum returns;
 - the generic executor contains no switch over mathematical kernels;
@@ -842,9 +1185,9 @@ three-location change. A static check should also ensure that:
 - endpoint-specific stable plan identifiers occur only in the plan and picker
   sources, tests, traces, and documentation.
 
-## Documentation changes required with implementation
+## Documentation changes made with implementation
 
-When the overhaul is implemented:
+The implementation:
 
 - update `AGENTS.md` with the three-edit contribution rule;
 - update `README.md` and `README-pipelines.md` with the new file ownership and
@@ -872,30 +1215,33 @@ This overhaul does not:
 - remove computation safeguards or exact metadata validation.
 
 Multiplication is affected only insofar as it consumes the simplified shared
-conversion registry for operand and result conversion.
+conversion plan database for operand and result conversion.
 
 ## Completion criteria
 
-The simplification is complete only when all of the following hold:
+The completed simplification satisfies all of the following:
 
-- [ ] An ordinary new atomic `X -> Y` path needs production edits only in the
+- [x] An ordinary new `X -> Y` path needs production edits only in the
       kernel, plan, and picker locations, plus an optional header declaration.
-- [ ] Atomic formulas store typed callables rather than enum values.
-- [ ] The plan entry is the single source of truth for atomic endpoints and
+- [x] Kernel formulas store typed callables rather than enum values.
+- [x] The source representation distinguishes a kernel formula, one named
+      plan, and a composition of two or more named plans.
+- [x] The plan entry is the single source of truth for kernel endpoints and
       stronger guarantees.
-- [ ] The generic executor contains no kernel-specific switch.
-- [ ] The generic picker contains no endpoint-specific control-flow branches.
-- [ ] Multiple-plan endpoints have explicit, readable picker definitions.
-- [ ] `PowerSum -> Schur` no longer requires a special return branch in the
+- [x] Plan entries are direct transcriptions of the kernel/plan/picker
+      mathematics stated at the beginning of this document.
+- [x] The generic executor contains no kernel-specific switch.
+- [x] The generic picker contains no endpoint-specific control-flow branches.
+- [x] Multiple-plan endpoints have explicit, readable picker definitions.
+- [x] `PowerSum -> Schur` no longer requires a special return branch in the
       generic picker.
-- [ ] Stable plan IDs, forcing, tracing, and complete child compositions remain.
-- [ ] Plan and picker databases receive full structural validation.
-- [ ] Execution still cannot call selection.
-- [ ] Every existing forced plan agrees with its independent fallback.
-- [ ] Automatic selection traces match the pre-overhaul behavior unless a
-      policy change is separately justified.
-- [ ] Conversion and multiplication benchmarks show no material unexplained
+- [x] Stable plan IDs, forcing, tracing, and complete child compositions remain.
+- [x] Plan and picker databases receive full structural validation.
+- [x] Execution still cannot call selection.
+- [x] Every existing forced plan agrees with its independent fallback.
+- [x] Automatic selection reaches the same complete formulas as the
+      pre-overhaul behavior; trace text uses the final mathematical names.
+- [x] Conversion and multiplication benchmarks show no material unexplained
       regression.
-- [ ] The engine README and contributor instructions teach the three-edit
+- [x] The engine README and contributor instructions teach the three-edit
       workflow with a concrete `PowerSum -> Schur` example.
-

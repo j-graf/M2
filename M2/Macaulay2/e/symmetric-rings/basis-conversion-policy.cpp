@@ -30,7 +30,7 @@ size_t partitionCountForConversionSelection(int weight)
   return counts[static_cast<size_t>(weight)];
 }
 
-bool completeFriendlyPowerSumIndexForConversionSelection(
+bool powerSumIndexHasMostlyShortCycles(
     const Partition& index,
     int weight)
 {
@@ -41,7 +41,7 @@ bool completeFriendlyPowerSumIndexForConversionSelection(
   // Repeated short cycles create broad rim-hook frontiers, but their
   // logarithmic complete expansions remain narrow. Hybrid conversion has a
   // fixed split-and-merge cost, so only strongly short-cycle indices should
-  // enter its complete-friendly subgroup.
+  // enter the mostly-short-cycle subgroup.
   return 4 * smallCycleWeight >= 3 * weight;
 }
 

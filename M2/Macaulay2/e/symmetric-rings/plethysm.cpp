@@ -146,13 +146,12 @@ ring_elem SymmetricEngineRing::completePlethysmViaAdamsRecurrence(int n,
       {
         ring_elem pIAtInner = powerSumsViaAdamsOperation(innerPowerSums, i);
         if (error()) return zero();
-        // In this specialized route the retained inner Schur function is a
-        // short row, so every Adams image has only partitionCount(|inner|)
-        // power-sum terms even though its total degree is i*|inner|.  Applying
-        // rim hooks to that sparse support avoids constructing and scanning
-        // character data for the much larger dilated degree.
-        ring_elem pIAtInnerSchur = powerSumsToSchurViaAbacusRimHooks(
-            pIAtInner, schurId, schurDisplay, schurOrder);
+        // The realized Adams image is an ordinary canonical power-sum
+        // expansion. Preserve its plethysm provenance and let the shared
+        // p -> Schur picker choose and execute the complete conversion plan.
+        mutablePolyValue(pIAtInner)->combinatorialTags =
+            combinatorialTagMask(CombinatorialTag::Plethysm);
+        ring_elem pIAtInnerSchur = toBasis(pIAtInner, schurId);
         if (error()) return zero();
         ring_elem rest = completePlethysmViaAdamsRecurrence(n - i,
                                                       inner,
@@ -189,7 +188,14 @@ ring_elem SymmetricEngineRing::schurPlethysmToSchurViaAdamsJacobiTrudi(const Par
         return zero();
       }
 
-    ring_elem innerPowerSums = schurLikeToPowerSumsViaCharacters(inner, false);
+    ring_elem innerSchur = basisElementFromIndex(schurId, inner);
+    mutablePolyValue(innerSchur)->combinatorialTags =
+        combinatorialTagMask(CombinatorialTag::Plethysm);
+    const int powerSumId =
+        requiredBasisIdForKind(BasisKind::PowerSum);
+    if (error()) return zero();
+    ring_elem innerPowerSums =
+        toBasis(innerSchur, powerSumId);
     if (error()) return zero();
 
     RingElemMatrix matrix(n, RingElemVector(n));
@@ -245,7 +251,7 @@ ring_elem SymmetricEngineRing::schurPlethysmToSchurViaAdamsJacobiTrudi(const Par
 // ============================================================================
 // A combined request makes exactly one complete decision before performing
 // algebra. The broad route materializes the canonical power-sum plethysm and
-// delegates its only conversion decision to the shared conversion registry.
+// sends its only conversion decision to the shared conversion plan database.
 
 SymmetricEngineRing::PlethysmToBasisRoute
 SymmetricEngineRing::selectPlethysmToBasisRoute(

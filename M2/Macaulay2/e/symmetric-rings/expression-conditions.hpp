@@ -20,7 +20,7 @@ namespace symmetric_rings {
 enum class ExpressionPieceKind
 {
   WholeExpression,
-  Terms,
+  IndividualTerms,
   HomogeneousComponents
 };
 
@@ -34,20 +34,20 @@ enum class ExpressionConditionKind
   ComponentWeightGreaterThan,
   ComponentTermCountAtLeast,
   ComponentDensityAtLeast,
-  ComponentSupportSquareFavorsComplete,
-  ComponentAllPowerSumTermsCompleteFriendly,
-  ComponentHasMixedCompleteFriendlyPowerSumTerms,
-  ComponentCompleteFriendlyFractionAtLeast,
+  ComponentSupportSquareRatioAtLeast,
+  ComponentAllPowerSumIndicesHaveMostlyShortCycles,
+  ComponentHasBothMostlyShortCycleAndOtherTerms,
+  ComponentMostlyShortCycleFractionAtLeast,
   ComponentHasCommonPowerSumPartOne,
-  ComponentHasCommonPowerSumPartAtMostPercent,
+  ComponentHasCommonPowerSumPartAtMostPercentOfWeight,
   IndexIsHook,
   IndexIsRectangle,
   IndexIsSelfConjugate,
   ExpressionHasMultipleWeights,
   ExpressionIsSingleBasisElement,
   AllPowerSumTermsAreSingleCycles,
-  MixedCompleteFriendlyPowerSumExpansion,
-  PowerSumIndexIsCompleteFriendly,
+  MixedShortCyclePowerSumExpansion,
+  PowerSumIndexHasMostlyShortCycles,
   CombinatorialTagsEqual,
   HasCombinatorialTag,
   CoefficientRingIsQQ,
@@ -66,7 +66,7 @@ struct ExpressionCondition
   std::vector<ExpressionCondition> operands;
 };
 
-struct ExpressionConditionContext
+struct ExpressionPieceFacts
 {
   ExpressionPieceKind pieceKind = ExpressionPieceKind::WholeExpression;
   std::vector<size_t> termPositions;
@@ -76,19 +76,19 @@ struct ExpressionConditionContext
   std::optional<Partition> index;
   std::optional<bool> singleBasisElement;
   std::optional<bool> allPowerSumTermsSingleCycles;
-  std::optional<size_t> completeFriendlyPowerSumTermCount;
+  std::optional<size_t> mostlyShortCyclePowerSumTermCount;
   std::optional<std::vector<int>> commonPowerSumParts;
-  std::optional<bool> powerSumIndexCompleteFriendly;
+  std::optional<bool> powerSumIndexHasMostlyShortCycles;
   std::optional<bool> expressionHasMultipleWeights;
   std::optional<uint32_t> combinatorialTags;
   std::optional<bool> coefficientRingIsQQ;
 };
 
-struct ExpressionConditionPartition
+struct PlanCaseAssignments
 {
   // Each entry contains the source term positions assigned to the
   // corresponding ordered condition.
-  std::vector<std::vector<size_t>> termPositionsByCase;
+  std::vector<std::vector<size_t>> termPositionsForCase;
 };
 
 // ============================================================================
@@ -104,13 +104,14 @@ ExpressionCondition componentWeightGreaterThan(int weight);
 ExpressionCondition componentTermCountAtLeast(size_t count);
 ExpressionCondition componentDensityAtLeast(
     size_t numerator, size_t denominator);
-ExpressionCondition componentSupportSquareFavorsComplete();
-ExpressionCondition componentAllPowerSumTermsCompleteFriendly();
-ExpressionCondition componentHasMixedCompleteFriendlyPowerSumTerms();
-ExpressionCondition componentCompleteFriendlyFractionAtLeast(
+ExpressionCondition componentSupportSquareRatioAtLeast(
+    size_t numerator, size_t denominator);
+ExpressionCondition componentAllPowerSumIndicesHaveMostlyShortCycles();
+ExpressionCondition componentHasBothMostlyShortCycleAndOtherTerms();
+ExpressionCondition componentMostlyShortCycleFractionAtLeast(
     size_t numerator, size_t denominator, size_t minimumCount);
 ExpressionCondition componentHasCommonPowerSumPartOne();
-ExpressionCondition componentHasCommonPowerSumPartAtMostPercent(
+ExpressionCondition componentHasCommonPowerSumPartAtMostPercentOfWeight(
     int percent);
 ExpressionCondition indexIsHook();
 ExpressionCondition indexIsRectangle();
@@ -118,8 +119,8 @@ ExpressionCondition indexIsSelfConjugate();
 ExpressionCondition expressionHasMultipleWeights();
 ExpressionCondition expressionIsSingleBasisElement();
 ExpressionCondition allPowerSumTermsAreSingleCycles();
-ExpressionCondition mixedCompleteFriendlyPowerSumExpansion();
-ExpressionCondition powerSumIndexIsCompleteFriendly();
+ExpressionCondition mixedShortCyclePowerSumExpansion();
+ExpressionCondition powerSumIndexHasMostlyShortCycles();
 ExpressionCondition combinatorialTagsEqual(uint32_t tags);
 ExpressionCondition hasCombinatorialTag(uint32_t tag);
 ExpressionCondition coefficientRingIsQQ();
@@ -136,7 +137,7 @@ ExpressionCondition operator!(ExpressionCondition condition);
 
 bool expressionConditionHolds(
     const ExpressionCondition& condition,
-    const ExpressionConditionContext& piece);
+    const ExpressionPieceFacts& piece);
 
 void validateExpressionCondition(
     const ExpressionCondition& condition,
@@ -149,8 +150,8 @@ bool expressionConditionImplies(
     const ExpressionCondition& guarantee,
     const ExpressionCondition& requirement);
 
-ExpressionConditionPartition partitionExpressionConditionContexts(
-    const std::vector<ExpressionConditionContext>& pieces,
+PlanCaseAssignments assignExpressionPiecesToCases(
+    const std::vector<ExpressionPieceFacts>& pieces,
     const std::vector<ExpressionCondition>& orderedConditions,
     size_t expectedTermCount);
 

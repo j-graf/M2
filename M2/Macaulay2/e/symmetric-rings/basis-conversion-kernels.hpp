@@ -6,10 +6,116 @@
 // Declaration fragment included inside SymmetricEngineRing.
 
 // ============================================================================
+// Conversion-Kernel Interface
+// ============================================================================
+// Every plan-callable kernel receives the same mathematical input. Lower
+// helpers remain free to use signatures natural to their formulas.
+
+  struct BasisConversionBasis
+  {
+    BasisKind kind = BasisKind::Custom;
+    int id = -1;
+    const std::string *display = nullptr;
+    int order = 0;
+
+    const std::string& displayName() const
+    {
+      return *display;
+    }
+  };
+
+  struct BasisConversionInput
+  {
+    ring_elem expansion;
+    BasisConversionBasis source;
+    BasisConversionBasis target;
+    std::optional<int> homogeneousWeight;
+  };
+
+  using BasisConversionKernel =
+      ring_elem (SymmetricEngineRing::*)(
+          const BasisConversionInput&) const;
+
+// ============================================================================
+// Plan-Callable Conversion Kernels
+// ============================================================================
+// These kernels are the only formula entry points named by conversion plans.
+// Their names state the mathematical source, target, and formula; family
+// helpers later in this file contain no plan selection.
+
+  // Classical and Hall--Littlewood bases to power sums.
+  ring_elem completeToPowerSumsViaNewtonIdentities(
+      const BasisConversionInput& input) const;
+  ring_elem elementaryToPowerSumsViaNewtonIdentities(
+      const BasisConversionInput& input) const;
+  ring_elem schurToPowerSumsViaFrobeniusCharacterFormula(
+      const BasisConversionInput& input) const;
+  ring_elem schurOmegaToPowerSumsViaFrobeniusCharacterFormula(
+      const BasisConversionInput& input) const;
+  ring_elem monomialToPowerSumsViaTransitionMatrix(
+      const BasisConversionInput& input) const;
+  ring_elem forgottenToPowerSumsViaTransitionMatrix(
+      const BasisConversionInput& input) const;
+  ring_elem hallLittlewoodQGeneratorsToPowerSumsViaGeneratingFunction(
+      const BasisConversionInput& input) const;
+  ring_elem hallLittlewoodBGeneratorsToPowerSumsViaGeneratingFunction(
+      const BasisConversionInput& input) const;
+  ring_elem hallLittlewoodQToPowerSumsViaRaisingOperators(
+      const BasisConversionInput& input) const;
+  ring_elem hallLittlewoodBToPowerSumsViaRaisingOperators(
+      const BasisConversionInput& input) const;
+  ring_elem hallLittlewoodPToPowerSumsViaQNormalization(
+      const BasisConversionInput& input) const;
+  ring_elem hallLittlewoodPOmegaToPowerSumsViaBNormalization(
+      const BasisConversionInput& input) const;
+
+  // Power sums to classical bases.
+  ring_elem powerSumsToCompleteViaLogarithmFormula(
+      const BasisConversionInput& input) const;
+  ring_elem powerSumsToElementaryViaLogarithmFormula(
+      const BasisConversionInput& input) const;
+  ring_elem powerSumsToSchurViaMurnaghanNakayama(
+      const BasisConversionInput& input) const;
+  ring_elem powerSumsToSchurViaAbacusRimHooks(
+      const BasisConversionInput& input) const;
+  ring_elem powerSumsToSchurViaFrobeniusCharacterFormula(
+      const BasisConversionInput& input) const;
+  ring_elem powerSumsToSchurOmegaViaMurnaghanNakayama(
+      const BasisConversionInput& input) const;
+  ring_elem powerSumsToSchurOmegaViaAbacusRimHooks(
+      const BasisConversionInput& input) const;
+  ring_elem powerSumsToSchurOmegaViaFrobeniusCharacterFormula(
+      const BasisConversionInput& input) const;
+
+  // Power sums to Hall--Littlewood and monomial-like bases.
+  ring_elem powerSumsToHallLittlewoodGeneratorsViaLogarithmFormula(
+      const BasisConversionInput& input) const;
+  ring_elem powerSumSingleCycleTermsToHallLittlewoodViaGreenPolynomials(
+      const BasisConversionInput& input) const;
+  ring_elem powerSumBasisElementToHallLittlewoodViaGreenPolynomialsAndDuality(
+      const BasisConversionInput& input) const;
+  ring_elem powerSumsToHallLittlewoodViaTriangularReduction(
+      const BasisConversionInput& input) const;
+  ring_elem powerSumsToMonomialOrForgottenViaTransitionMatrix(
+      const BasisConversionInput& input) const;
+
+  // Direct involutions, normalizations, and triangular transitions.
+  ring_elem hallLittlewoodPairedBasesViaDiagonalScaling(
+      const BasisConversionInput& input) const;
+  ring_elem schurAndSchurOmegaViaPartitionConjugation(
+      const BasisConversionInput& input) const;
+  ring_elem schurAndSchurOmegaToGeneratorsViaJacobiTrudi(
+      const BasisConversionInput& input) const;
+  ring_elem completeToSchurViaHorizontalPieri(
+      const BasisConversionInput& input) const;
+  ring_elem hallLittlewoodGeneratorsToCapitalBasesViaTriangularReduction(
+      const BasisConversionInput& input) const;
+
+// ============================================================================
 // Shared Conversion Utilities
 // ============================================================================
-// Coefficient maps, basis metadata, stored basis-element inspection, and the
-// policy-free assembler for canonical built-in expansions to power sums.
+// Coefficient maps, basis metadata, stored basis-element inspection, and
+// linear extension of basis-element formulas.
 
   ring_elem scaled(ring_elem coeff, ring_elem f) const;
   ring_elem coefficientQuotient(ring_elem numerator, ring_elem denominator) const;
@@ -50,9 +156,11 @@
   bool powerSumIndexFromMonomial(const SymmetricMonomial& monomial,
                                      Partition& index) const;
   ring_elem powerSumElementFromIndex(const Partition& index) const;
-  ring_elem canonicalExpressionToPowerSumsViaBasisFormulas(
-        ring_elem f,
-        BasisKind sourceKind) const;
+  ring_elem linearlyExtendToPowerSums(
+        ring_elem expansion,
+        BasisKind sourceKind,
+        const std::function<ring_elem(const Partition&)>&
+            basisElementFormula) const;
   bool singleBasisIndexFromMonomial(const SymmetricMonomial& monomial,
                                         int basisId,
                                         Partition& index) const;
@@ -85,8 +193,8 @@
 // Classical h/e-to-p formulas, logarithmic inverse formulas, and h-to-S transition.
 
  private:
-  ring_elem completePartToPowerSumsViaClassicalFormula(int n) const;
-  ring_elem elementaryPartToPowerSumsViaClassicalFormula(int n) const;
+  ring_elem completePartToPowerSumsViaNewtonIdentities(int n) const;
+  ring_elem elementaryPartToPowerSumsViaNewtonIdentities(int n) const;
   ring_elem powerSumLogarithmCoefficient(const Partition& lambda) const;
   CoeffMap powerSumPartToIntegralGeneratorMapViaLogarithmFormula(
         int n,
@@ -113,8 +221,8 @@
                                                         int elementaryOrder) const;
  public:
   CoeffMap multiplySchurExpansionViaRowPieri(const CoeffMap& source, int row) const;
-  CoeffMap completeToSchurCoefficientsViaRecursiveTransition(const CoeffMap& hCoeffs) const;
-  ring_elem completeToSchurViaRecursiveTransition(ring_elem f,
+  CoeffMap completeToSchurCoefficientsViaHorizontalPieri(const CoeffMap& hCoeffs) const;
+  ring_elem completeToSchurViaHorizontalPieri(ring_elem f,
                                     int hBasisId,
                                     const std::string& hDisplay,
                                     int hOrder,
@@ -135,38 +243,29 @@
         int targetBasisId,
         const std::string& targetDisplay,
         int targetOrder) const;
-  ring_elem schurLikeToPowerSumsViaCharacters(const Partition& lambda,
-                                                 bool omegaStyle) const;
-  ring_elem powerSumIndexToSchurLikeViaCharacters(const Partition& mu,
-                                    int schurId,
-                                    int schurOrder,
-                                    const std::string& display,
-                                    long sign) const;
-  ring_elem powerSumIndexToSchurViaCharacters(
+  ring_elem schurLikeToPowerSumsViaFrobeniusCharacterFormula(
+      const Partition& lambda,
+      bool omegaStyle) const;
+  ring_elem powerSumIndexToSchurLikeViaFrobeniusCharacterFormula(
+      const Partition& mu,
+      int schurId,
+      int schurOrder,
+      const std::string& display,
+      long sign) const;
+  ring_elem powerSumIndexToSchurViaFrobeniusCharacterFormula(
       const Partition& mu,
       int schurId,
       int schurOrder) const;
-  ring_elem powerSumsToSchurLikeViaCharacters(ring_elem f,
-                                     int schurId,
-                                     int schurOrder,
-                                     const std::string& display,
-                                     bool omegaStyle) const;
-  ring_elem powerSumsToSchurViaCharacters(ring_elem f,
-                                             int schurId,
-                                             int schurOrder) const;
-  CoeffMap schurGeneratorMap(const Partition& lambda,
-                                 bool omegaStyle,
-                                 int generatorId,
-                                 const std::string& generatorDisplay) const;
-  CoeffMap triangularReduceSchur(const CoeffMap& generatorMap,
-                                     bool omegaStyle,
-                                     int generatorId,
-                                     const std::string& generatorDisplay) const;
-  bool tryExpressionToSchurViaTriangularReduction(ring_elem f,
-                                           int targetBasisId,
-                                           const std::string& targetDisplay,
-                                           int targetDisplayOrder,
-                                           ring_elem& result) const;
+  ring_elem powerSumsToSchurLikeViaFrobeniusCharacterFormula(
+      ring_elem f,
+      int schurId,
+      int schurOrder,
+      const std::string& display,
+      bool omegaStyle) const;
+  ring_elem powerSumsToSchurViaFrobeniusCharacterFormula(
+      ring_elem f,
+      int schurId,
+      int schurOrder) const;
   std::string powerSumsToSchurRecipeKey(int degree,
                                             const std::vector<Partition>& inputPartitions,
                                             bool omegaStyle) const;
@@ -191,12 +290,15 @@
 // ============================================================================
 // Hall-Littlewood Generator Bases
 // ============================================================================
-// Classical and logarithmic conversions for the multiplicative q and b bases.
+// Generating-function and logarithmic conversions for the multiplicative
+// q and b bases.
 
-  ring_elem hallLittlewoodGeneratorPartToPowerSumsViaClassicalFormula(int n, bool omega) const;
-  CoeffMap hallLittlewoodGeneratorPartToPowerSumsQuotientMapViaClassicalFormula(
-        int n,
-        bool omega) const;
+  ring_elem hallLittlewoodGeneratorPartToPowerSumsViaGeneratingFunction(
+      int n,
+      bool omega) const;
+  CoeffMap hallLittlewoodGeneratorPartToPowerSumsQuotientMapViaGeneratingFunction(
+      int n,
+      bool omega) const;
   CoeffMap powerSumPartToHallGeneratorMapViaLogarithmFormula(int n,
                                                                bool omega) const;
   CoeffMap powerSumIndexToHallGeneratorMapViaLogarithmFormula(
@@ -224,7 +326,7 @@
   ring_elem hallLittlewoodCapitalToPowerSumsViaRaisingOperators(
       const Partition& lambda,
       bool omega) const;
-  ring_elem hallLittlewoodNormalizedToPowerSumsViaCapitalNormalization(
+  ring_elem hallLittlewoodNormalizedToPowerSumsViaPairedBasisNormalization(
       const Partition& lambda,
       bool omega) const;
   CoeffMap triangularReduceHallCapital(const CoeffMap& generatorMap,
@@ -260,27 +362,11 @@
         int targetBasisId,
         const std::string& targetDisplay,
         int targetDisplayOrder) const;
-  bool tryExpressionToHallLittlewoodViaTriangularReduction(ring_elem f,
-                                          int targetBasisId,
-                                          const std::string& targetDisplay,
-                                          int targetDisplayOrder,
-                                          ring_elem& result) const;
-
-// ============================================================================
-// Termwise Conversion Kernels
-// ============================================================================
-// Per-index formulas used by the general conversion fallback.
-
-  ring_elem powerSumIndexToTargetViaTermwiseKernel(const Partition& index,
-                                         const std::string& targetDisplay,
-                                         int targetBasisId,
-                                         int targetDisplayOrder,
-                                         bool targetIsMultiplicative) const;
-  ring_elem powerSumsToTargetViaTermwiseConversion(ring_elem f,
-                                          int targetBasisId,
-                                          const std::string& targetDisplay,
-                                          int targetDisplayOrder,
-                                          bool targetIsMultiplicative) const;
+  ring_elem hallLittlewoodGeneratorsToCapitalViaTriangularReduction(
+      ring_elem f,
+      int targetBasisId,
+      const std::string& targetDisplay,
+      int targetDisplayOrder) const;
 
 // ============================================================================
 // Straightening

@@ -585,7 +585,7 @@ const std::vector<PartitionCoefficientTerm>& SymmetricEngineRing::schurTimesPowe
     return inserted.first->second;
   }
 
-ring_elem SymmetricEngineRing::powerSumsToSchurViaBorderStrips(
+ring_elem SymmetricEngineRing::powerSumsToSchurViaMurnaghanNakayama(
                           ring_elem f,
                           int targetBasisId,
                           const std::string& targetDisplay,
@@ -916,17 +916,17 @@ const char *SymmetricEngineRing::schurFactorMethodName(
         case SchurFactorMethod::AlreadySchur:
           return "already-Schur";
         case SchurFactorMethod::ViaLittlewoodRichardson:
-          return "littlewood-richardson";
+          return "Littlewood-Richardson";
         case SchurFactorMethod::ViaHorizontalPieri:
-          return "horizontal-pieri";
+          return "horizontal-Pieri";
         case SchurFactorMethod::ViaVerticalPieri:
-          return "vertical-pieri";
+          return "vertical-Pieri";
         case SchurFactorMethod::ViaBorderStrips:
           return "border-strips";
         case SchurFactorMethod::ViaAbacusRimHooks:
           return "abacus-rim-hooks";
         case SchurFactorMethod::ViaLittlewoodRichardsonExpansion:
-          return "littlewood-richardson-expansion";
+          return "Littlewood-Richardson-expansion";
       }
     return "unknown";
   }

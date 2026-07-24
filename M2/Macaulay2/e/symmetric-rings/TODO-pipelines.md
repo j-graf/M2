@@ -9,19 +9,19 @@ specifies architectural outcomes before choosing implementation details.
 The conversion and multiplication workflows are implemented by `toBasis`,
 `multiplyTermToBasis`, and `multiplyToBasis`. They use one exact
 canonical-core facts contract with lazy selector profiles, a shared conversion
-registry, policy-free executors, and explicit multiplication stages.
-Differential and forced-plan tests cover every currently registered conversion
+plan database, policy-free executors, and explicit multiplication stages.
+Differential and forced-plan tests cover every currently available conversion
 and multiplication plan family, M2-owned custom and transformed bases,
 coefficient rings and QQ-shadow promotion, metadata invalidation, skew and
 multifactor inputs, and configured resource boundaries.
 
 The unified direct/composition/hybrid plan representation specified below is
-implemented by the current registry. The remaining unchecked items in this
+implemented by the current plan database. The remaining unchecked items in this
 document are independent inner-product, optional-metadata, plethysm, or storage
 experiments rather than unfinished conversion-plan architecture.
 
 The shared-plan workflow owns the public entry points. Unchecked items in the
-shared-registry and conversion/multiplication sections identify work required
+shared-plan and conversion/multiplication sections identify work required
 by the updated plan representation. The later inner-product, plethysm,
 optional-metadata, and storage experiments retain their own independent
 status.
@@ -37,7 +37,7 @@ status.
 
 ## Conversion/multiplication design principles
 
-- [x] Use consistent terminology: workflow, stage, bypass, plan, registry,
+- [x] Use consistent terminology: workflow, stage, bypass, plan, database,
       helper, kernel, and operation-specific pipeline.
 - [x] Give each public calculation one complete owning workflow.
 - [x] Make each workflow mostly linear, using loops only when intrinsic to the
@@ -52,7 +52,7 @@ status.
       make it total over its accepted domain.
 - [x] Keep helper dependencies explicit and acyclic; prefer the direction
       `toBasis -> multiplyTermToBasis -> multiplyToBasis`, with no reverse calls.
-- [x] Use one shared `X -> Y` plan registry from `toBasis`,
+- [x] Use one shared `X -> Y` plan database from `toBasis`,
       `multiplyTermToBasis`, `multiplyToBasis`, and any other calculation needing
       basis conversion.
 - [x] Select one complete source-to-target plan before execution. That plan
@@ -70,11 +70,11 @@ status.
       stages and helper calls.
 - [x] Separate plan non-applicability from mathematical or engine execution
       errors.
-- [x] Trace executed and bypassed stages, helper calls, registry selections, and
+- [x] Trace executed and bypassed stages, helper calls, plan selections, and
       the facts that justified them.
 - [x] Test every bypass and optimized plan against the ordinary broad
       calculation at its selection boundaries.
-- [x] Make adding a kernel or plan a local registry change with explicit
+- [x] Make adding a kernel or plan a local database change with explicit
       preconditions, differential tests, and benchmark evidence when needed.
 
 ## Conversion/multiplication completion criteria
@@ -94,7 +94,7 @@ status.
 - [x] Confirm that broad stage calculations remain independent correctness
       references for optimized plans and bypasses.
 - [x] Confirm that `toBasis`, `multiplyTermToBasis`, and `multiplyToBasis` use the
-      same independent `X -> Y` plan registry.
+      same independent `X -> Y` plan database.
 - [x] Demonstrate adding at least one new conversion kernel using the intended
       contributor workflow.
 - [x] Update `README-pipelines.md` so its decision trees reflect the completed
@@ -144,7 +144,7 @@ contains useful extension points that should not block that redesign.
 - [x] Record a homogeneous weight when the complete expression has one.
 - [x] Record the maximum partition length.
 - [x] Build per-weight component term counts and densities lazily in expression
-      condition contexts when a selected plan needs them.
+      expression-piece facts when a selected plan needs them.
 
 **Factor structure**
 
@@ -162,7 +162,7 @@ contains useful extension points that should not block that redesign.
 - [x] Record whether every power-sum term is a single cycle.
 - [x] Record the parts common to every power-sum index and whether `p_1` is
       common.
-- [x] Record the number of currently complete-friendly terms.
+- [x] Record the number of currently mostly-short-cycle terms.
 - [x] Derive any additional cycle-shape predicates lazily from the realized
       condition piece rather than storing an unused global profile.
 
@@ -276,37 +276,37 @@ benchmarks justify it.
       leading unknown-weight block for all other terms.
 - [ ] Make operations propagate block weights instead of rescanning terms.
 
-## Shared `X -> Y` plan registry
+## Shared `X -> Y` plan database
 
-Basis conversion plans must live in a separate registry rather than inside any
+Basis conversion plans must live in a separate database rather than inside any
 one workflow.  `toBasis`, `multiplyTermToBasis`, and `multiplyToBasis` all
-request plans from this same registry.  Other calculations may use it as well.
+request plans from this same plan database.  Other calculations may use it as well.
 This prevents conversion behavior and performance choices from diverging
 between callers.
 
-There are three parts: the plan registry, the plan picker, and the plan
-executor. A registered plan describes one complete conversion from a canonical
+There are three parts: the plan database, the plan picker, and the plan
+executor. An available plan describes one complete conversion from a canonical
 expression in basis `X` to a canonical expression in basis `Y`. **A plan
 answers exactly one question: which parts of this expression are sent to which
-conversion formulas?** A conversion formula is either an atomic `X -> Y`
-kernel or a fixed composition of named plans with compatible endpoints.
+conversion formulas?** A conversion formula is an `X -> Y` kernel, one fixed
+named plan, or a fixed composition of named plans with compatible endpoints.
 Accordingly, the same plan representation supports direct plans, compositions,
 and hybrids that use kernels for some parts and compositions for others.
 The precise mathematical model appears in the Updated plans subsection below.
 
-The registry is a policy-free catalog of these plans. A basis pair `(A, B)`
-may have several competing plans. Each registered plan has a stable identifier,
+The plan database is the policy-free collection of these plans. A basis pair `(A, B)`
+may have several competing plans. Each available plan has a stable identifier,
 declares its mathematical applicability requirements, and explicitly names
-every kernel or child plan it may use. The registry does not know which
+every kernel or child plan it may use. The database does not know which
 applicable plan is expected to perform best.
 
 The picker owns all performance policy. Given source `X`, target `Y`, and the
-available expression facts, it chooses the expected best applicable registered
+available expression facts, it chooses the expected best applicable
 `X -> Y` plan and returns that plan without executing it. For example, it may
 choose a direct plan at low weights, a plan consisting of a composition at
 higher weights, or a hybrid plan for a particular support shape. It does not
 separately construct a basis composition: every composition is already a
-mathematical formula inside the selected registered plan.
+mathematical formula inside the selected plan.
 
 In automatic mode the picker uses expression metadata, computing or inspecting
 additional expression facts only when needed. For reproducible tests and
@@ -341,20 +341,20 @@ guarantee the preconditions of every named child plan for the subexpression
 that reaches it. The executor may validate those preconditions and report a
 contract error, but it must never respond by choosing another plan.
 
-- [x] Create one independent registry for basis-conversion plans.
+- [x] Create one independent database for basis-conversion plans.
 - [x] Allow any `(X, Y)` pair to register multiple competing plans under stable
       identifiers.
 - [x] Define every plan as an ordered association from parts of one canonical
       source-basis expression to complete source-to-target conversion formulas.
-- [x] Represent each conversion formula uniformly as either an atomic kernel or
-      an ordered composition of named plans.
-- [x] Support direct plans, compositions, and hybrid plans in the same registry
+- [x] Represent each conversion formula uniformly as a kernel, one fixed
+      named plan, or an ordered composition of named plans.
+- [x] Support direct plans, compositions, and hybrid plans in the same database
       and executor.
-- [x] Let registered plans compose named plans with compatible endpoints, but
+- [x] Let available plans compose named plans with compatible endpoints, but
       never call the picker.
 - [x] Keep mathematical plan definitions and applicability requirements in the
-      registry, but keep performance-selection policy out of it.
-- [x] Make the picker choose one complete registered `X -> Y` plan without
+      database, but keep performance-selection policy out of it.
+- [x] Make the picker choose one complete `X -> Y` plan without
       executing it or separately constructing an intermediate-basis route.
 - [x] Let callers prescribe one stable top-level plan identifier as a
       benchmarking bypass; plans containing compositions already fix their
@@ -368,22 +368,22 @@ contract error, but it must never respond by choosing another plan.
 - [x] Make the executor evaluate kernels, compositions, and hybrid cases
       without making performance decisions.
 - [x] Enforce the exact normalized, product-free, single-source-basis input
-      contract at every registry call site.
+      contract at every plan-database call site.
 - [x] Key plan selection by source basis `X`, target basis `Y`, and the relevant
       expression facts.
 - [x] Require every selected plan to be complete for the facts used to select
       it and every child plan to be complete for the subexpression it receives.
-- [x] Keep registry selection side-effect-free and separate from plan execution.
-- [x] Make `toBasis` use the registry for every source-basis group.
-- [x] Make `multiplyTermToBasis` use the same registry directly for one-factor
+- [x] Keep plan selection side-effect-free and separate from plan execution.
+- [x] Make `toBasis` use the plan database for every source-basis group.
+- [x] Make `multiplyTermToBasis` use the same plan database directly for one-factor
       conversion and indirectly through `multiplyToBasis` for each pairwise
       product required by a nonmultiplicative target.
-- [x] Make `multiplyToBasis` use the same registry for conversions required by
+- [x] Make `multiplyToBasis` use the same plan database for conversions required by
       its binary product plans.
-- [x] Allow other calculations to use the registry without depending on
+- [x] Allow other calculations to use the plan database without depending on
       `toBasis`.
 - [x] Do not duplicate `X -> Y` selection logic inside multiplication code.
-- [x] Do not let registry plans call `toBasis`, `multiplyTermToBasis`, or
+- [x] Do not let database plans call `toBasis`, `multiplyTermToBasis`, or
       `multiplyToBasis`.
 - [x] Register a new conversion plan or competing kernel in one obvious
       location.
@@ -413,9 +413,9 @@ $Y$-expansions are added.
 
 A conversion formula is built from these mathematical constructions:
 
-1. An atomic kernel, such as $K_{X,Y}$.
-2. A fixed named plan with the same endpoints. This delegates a case to a
-   child plan with a different piece kind without invoking the picker.
+1. A kernel, such as $K_{X,Y}$.
+2. A fixed named plan with the same endpoints, which may use a different
+   piece kind without invoking the picker.
 3. An ordered composition of two or more plans, such as
    $P_{Z,Y}\circ P_{X,Z}$.
 
@@ -425,8 +425,8 @@ two or more plans.
 
 This gives one consistent terminology:
 
-- A **kernel** is an atomic conversion formula.
-- A **delegation** applies one fixed named child plan.
+- A **kernel** is one conversion formula.
+- A **named plan** applies one fixed child plan.
 - A **composition** is an ordered mathematical composition of two or more
   fixed named child plans.
 - A **plan** is an ordered piecewise association of expression conditions with
@@ -457,7 +457,7 @@ Here:
 
 - $C_i$ is a mathematical condition on terms or components of the source
   expression.
-- $F_i$ is an $X\to Y$ conversion formula: either an atomic kernel or a
+- $F_i$ is an $X\to Y$ conversion formula: a kernel, one named plan, or a
   composition.
 - A condition receives only portions not already assigned by an earlier case.
 - “Otherwise” receives the remaining portion.
@@ -635,56 +635,72 @@ additional applicability condition in its entry.
 static const std::vector<BasisConversionPlanDefinition>
 basisConversionPlanDatabase = {
     {
-        "X->Y:weight-split",
+        {"X->Y:weight-split"},
         BasisKind::X,
         BasisKind::Y,
-        Pieces::Terms,
+        always(),
+        ExpressionPieceKind::IndividualTerms,
         {
-            {termWeightAtMost(10), kernelFormula(Kernel::Kernel1)},
-            {otherwise(),         kernelFormula(Kernel::Kernel2)}
+            {termWeightAtMost(10),
+             useKernel("formula 1",
+                       &SymmetricEngineRing::xToYViaFormula1)},
+            {otherwise(),
+             useKernel("formula 2",
+                       &SymmetricEngineRing::xToYViaFormula2)}
         }
     },
     {
-        "X->Y:shape-split",
+        {"X->Y:shape-split"},
         BasisKind::X,
         BasisKind::Y,
-        Pieces::Terms,
+        always(),
+        ExpressionPieceKind::IndividualTerms,
         {
-            {indexIsHook(),      kernelFormula(Kernel::Hook)},
-            {indexIsRectangle(), kernelFormula(Kernel::Rectangle)},
-            {otherwise(),        kernelFormula(Kernel::General)}
+            {indexIsHook(),
+             useKernel("hook formula",
+                       &SymmetricEngineRing::xToYForHooks)},
+            {indexIsRectangle(),
+             useKernel("rectangle formula",
+                       &SymmetricEngineRing::xToYForRectangles)},
+            {otherwise(),
+             useKernel("general formula",
+                       &SymmetricEngineRing::xToYViaGeneralFormula)}
         }
     },
     {
-        "X->Y:via-Z",
+        {"X->Y:via-Z"},
         BasisKind::X,
         BasisKind::Y,
-        Pieces::WholeExpression,
+        always(),
+        ExpressionPieceKind::WholeExpression,
         {
             {
                 otherwise(),
-                compositionFormula({
-                    PlanId::XToZ,
-                    PlanId::ZToY
+                composePlans({
+                    {"X->Z:formula"},
+                    {"Z->Y:formula"}
                 })
             }
         }
     },
     {
-        "X->Y:weight-dependent",
+        {"X->Y:weight-dependent"},
         BasisKind::X,
         BasisKind::Y,
-        Pieces::Terms,
+        always(),
+        ExpressionPieceKind::IndividualTerms,
         {
             {
                 termWeightAtMost(10),
-                kernelFormula(Kernel::Kernel1)
+                useKernel(
+                    "small-weight formula",
+                    &SymmetricEngineRing::xToYForSmallWeight)
             },
             {
                 otherwise(),
-                compositionFormula({
-                    PlanId::XToZ,
-                    PlanId::ZToY
+                composePlans({
+                    {"X->Z:formula"},
+                    {"Z->Y:formula"}
                 })
             }
         }
@@ -692,9 +708,9 @@ basisConversionPlanDatabase = {
 };
 ```
 
-Here `kernelFormula(...)`, `planFormula(...)`, and
-`compositionFormula(...)` are declarative constructors for the same
-`ConversionFormula` value. They record one kernel, one fixed named child, or
+Here `useKernel(...)`, `usePlan(...)`, and
+`composePlans(...)` are declarative constructors for the same
+`BasisConversionPlanFormula` value. They record one kernel, one fixed named child, or
 an ordered list of named children. None registers, selects, or executes
 anything.
 
@@ -779,26 +795,35 @@ A plan database entry can then use logical combinations directly:
 
 ```cpp
 {
-    "X->Y:shape-and-weight",
+    {"X->Y:shape-and-weight"},
     BasisKind::X,
     BasisKind::Y,
-    Pieces::Terms,
+    always(),
+    ExpressionPieceKind::IndividualTerms,
     {
         {
             indexIsHook() && termWeightGreaterThan(10),
-            kernelFormula(Kernel::LargeHook)
+            useKernel(
+                "large-hook formula",
+                &SymmetricEngineRing::xToYForLargeHooks)
         },
         {
             indexIsHook() || indexIsRectangle(),
-            kernelFormula(Kernel::StructuredShape)
+            useKernel(
+                "hook-or-rectangle formula",
+                &SymmetricEngineRing::xToYForHooksOrRectangles)
         },
         {
             !indexIsSelfConjugate(),
-            kernelFormula(Kernel::NonSelfConjugate)
+            useKernel(
+                "non-self-conjugate formula",
+                &SymmetricEngineRing::xToYForNonSelfConjugateIndices)
         },
         {
             otherwise(),
-            kernelFormula(Kernel::General)
+            useKernel(
+                "general formula",
+                &SymmetricEngineRing::xToYViaGeneralFormula)
         }
     }
 }
@@ -809,7 +834,7 @@ One central evaluator should recursively interpret conditions:
 ```cpp
 bool expressionConditionHolds(
     const ExpressionCondition& condition,
-    const ExpressionConditionContext& piece);
+    const ExpressionPieceFacts& piece);
 ```
 
 The central evaluator should use ordinary short-circuit Boolean evaluation for
@@ -833,7 +858,7 @@ Primitive checks should remain with their natural mathematical owners:
 
 - `partitions.*`: hooks, rectangles, conjugation, Durfee size, containment,
   and other partition properties.
-- Expression facts and piece contexts: weight, term count, basis composition,
+- Expression and piece facts: weight, term count, basis composition,
   lazily derived component density, and other properties of expressions or
   components.
 - `expression-conditions.*`: reusable predicates and logical combinations of
@@ -945,7 +970,7 @@ normalization, `X = Y` may bypass conversion.
 - [x] Represent a zero coefficient as the zero expansion and an empty factor
       list as the unit expansion before entering the common final stage.
 - [x] For one remaining factor in basis `X`, request the same complete
-      `X -> Y` plan used by `toBasis` from the shared picker and registry.
+      `X -> Y` plan used by `toBasis` from the shared picker and plan database.
 - [x] For multiple factors and a multiplicative target `Y`, use one helper that
       converts the factors to `Y`, combines them multiplicatively, and collects
       the result without calling `multiplyToBasis`.
@@ -956,10 +981,10 @@ normalization, `X = Y` may bypass conversion.
       product-to-`Y` plan.
 - [x] Require every product kernel to declare the source basis `X` of its
       output without assuming that the output is already canonical.
-- [x] Require binary product plans to normalize kernel output, including
+- [x] Require binary product plans to normalize the product, including
       straightening indices and expanding skew elements, before requesting a
-      complete conversion plan from the shared picker and registry.
-- [x] Bypass kernel-output normalization or `X -> Y` conversion only when known
+      complete conversion plan from the shared picker and plan database.
+- [x] Bypass product normalization or `X -> Y` conversion only when known
       facts guarantee the corresponding postcondition.
 - [x] Collect like terms and canonicalize target indices after every pairwise
       step to control intermediate growth.
@@ -985,7 +1010,7 @@ flowchart TD
 
     C -->|"Multiple basis factors"| D{"Is target basis Y multiplicative?"}
 
-    D -->|"Yes"| E["Use the multiplicative-target helper<br/>Convert factors to Y, combine multiplicatively,<br/>and collect"]
+    D -->|"Yes"| E["Multiply in the target basis<br/>Convert factors to Y, combine multiplicatively,<br/>and collect"]
 
     D -->|"No"| H{"Do unmultiplied factors remain?"}
 
@@ -1094,7 +1119,7 @@ no unresolved products, mixed bases, skew elements, or indices requiring
 straightening.  A plan returns one coefficient-ring scalar, is complete over
 its declared domain, and cannot decline after execution begins.
 
-The registry is a policy-free catalog and may hold several competing plans for
+The plan database is policy-free and may hold several competing plans for
 the same pairing context and basis pair `(X, Y)`.  Each plan has a stable
 identifier and explicit mathematical preconditions.  A separate picker uses
 the common weight, expression metadata, and the expressions themselves when
@@ -1108,10 +1133,10 @@ pairing, coefficient extraction with a chosen operand orientation, direct
 Kostka or conjugate-Kostka formulas, weighted Schur-character formulas, and
 power-sum diagonal pairing.  Conversion of both inputs to power sums is the
 broad always-applicable plan, not a fallback entered after another plan
-declines.  Plans may use the shared `X -> Y` picker, registry, and executor for
+declines.  Plans may use the shared `X -> Y` picker, plan database, and executor for
 required conversions, but they may not call the public inner-product workflow.
 
-- [ ] Create one independent inner-product plan registry with stable plan
+- [ ] Create one independent inner-product plan database with stable plan
       identifiers and explicit applicability requirements.
 - [ ] Allow multiple competing plans for the same pairing context and basis
       pair `(X, Y)`.
@@ -1122,7 +1147,7 @@ required conversions, but they may not call the public inner-product workflow.
 - [ ] Keep the power-sum diagonal plan broad and always applicable.
 - [ ] Require every selected plan to complete without declining or selecting a
       replacement plan during execution.
-- [ ] Let plans reuse the shared `X -> Y` picker, registry, and executor without
+- [ ] Let plans reuse the shared `X -> Y` picker, plan database, and executor without
       calling the public inner-product workflow.
 - [ ] Test optimized plans against the power-sum diagonal plan at applicability
       and picker-selection boundaries.

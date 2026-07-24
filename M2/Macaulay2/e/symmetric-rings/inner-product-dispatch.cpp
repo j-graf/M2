@@ -470,7 +470,7 @@ ring_elem SymmetricEngineRing::executeInnerProductRoute(
 // ============================================================================
 // Top-Level Inner-Product Pipeline
 // ============================================================================
-// The selector chooses one workflow; execution delegates to one named pipeline.
+// The selector chooses one workflow; execution applies one named pipeline.
 
 SymmetricEngineRing::InnerProductPipeline
 SymmetricEngineRing::selectInnerProductPipeline(

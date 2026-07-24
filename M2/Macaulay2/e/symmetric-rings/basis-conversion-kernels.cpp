@@ -97,10 +97,485 @@ mpz_class labeledCycleAssignmentsToCompleteFactors(
 } // namespace
 
 // ============================================================================
+// Plan-Callable Conversion Kernels
+// ============================================================================
+// These are the mathematical kernels named by complete plans. Shared
+// coefficient assembly and combinatorial helpers follow in the family blocks
+// below. These formulas contain no applicability or performance selection;
+// plans state mathematical domains and pickers state performance preferences.
+
+// ----------------------------------------------------------------------------
+// Classical And Hall--Littlewood Bases To Power Sums
+// ----------------------------------------------------------------------------
+
+ring_elem
+SymmetricEngineRing::completeToPowerSumsViaNewtonIdentities(
+    const BasisConversionInput& input) const
+{
+    return linearlyExtendToPowerSums(
+        input.expansion,
+        BasisKind::Complete,
+        [&](const Partition& index) {
+          ring_elem result = one();
+          for (int part : index)
+            result = mult(
+                result,
+                completePartToPowerSumsViaNewtonIdentities(part));
+          return result;
+        });
+  }
+
+ring_elem
+SymmetricEngineRing::elementaryToPowerSumsViaNewtonIdentities(
+    const BasisConversionInput& input) const
+{
+    return linearlyExtendToPowerSums(
+        input.expansion,
+        BasisKind::Elementary,
+        [&](const Partition& index) {
+          ring_elem result = one();
+          for (int part : index)
+            result = mult(
+                result,
+                elementaryPartToPowerSumsViaNewtonIdentities(part));
+          return result;
+        });
+  }
+
+ring_elem
+SymmetricEngineRing::schurToPowerSumsViaFrobeniusCharacterFormula(
+    const BasisConversionInput& input) const
+{
+    return linearlyExtendToPowerSums(
+        input.expansion,
+        BasisKind::Schur,
+        [&](const Partition& index) {
+          return schurLikeToPowerSumsViaFrobeniusCharacterFormula(index, false);
+        });
+  }
+
+ring_elem
+SymmetricEngineRing::schurOmegaToPowerSumsViaFrobeniusCharacterFormula(
+    const BasisConversionInput& input) const
+{
+    return linearlyExtendToPowerSums(
+        input.expansion,
+        BasisKind::SchurOmega,
+        [&](const Partition& index) {
+          return schurLikeToPowerSumsViaFrobeniusCharacterFormula(index, true);
+        });
+  }
+
+ring_elem
+SymmetricEngineRing::monomialToPowerSumsViaTransitionMatrix(
+    const BasisConversionInput& input) const
+{
+    return linearlyExtendToPowerSums(
+        input.expansion,
+        BasisKind::Monomial,
+        [&](const Partition& index) {
+          return monomialToPowerSumsViaTransitionMatrix(
+              index, false);
+        });
+  }
+
+ring_elem
+SymmetricEngineRing::forgottenToPowerSumsViaTransitionMatrix(
+    const BasisConversionInput& input) const
+{
+    return linearlyExtendToPowerSums(
+        input.expansion,
+        BasisKind::Forgotten,
+        [&](const Partition& index) {
+          return monomialToPowerSumsViaTransitionMatrix(
+              index, true);
+        });
+  }
+
+ring_elem
+SymmetricEngineRing::
+    hallLittlewoodQGeneratorsToPowerSumsViaGeneratingFunction(
+        const BasisConversionInput& input) const
+{
+    return linearlyExtendToPowerSums(
+        input.expansion,
+        BasisKind::HallLittlewoodQGenerator,
+        [&](const Partition& index) {
+          ring_elem result = one();
+          for (int part : index)
+            result = mult(
+                result,
+                hallLittlewoodGeneratorPartToPowerSumsViaGeneratingFunction(
+                    part, false));
+          return result;
+        });
+  }
+
+ring_elem
+SymmetricEngineRing::
+    hallLittlewoodBGeneratorsToPowerSumsViaGeneratingFunction(
+        const BasisConversionInput& input) const
+{
+    return linearlyExtendToPowerSums(
+        input.expansion,
+        BasisKind::HallLittlewoodBGenerator,
+        [&](const Partition& index) {
+          ring_elem result = one();
+          for (int part : index)
+            result = mult(
+                result,
+                hallLittlewoodGeneratorPartToPowerSumsViaGeneratingFunction(
+                    part, true));
+          return result;
+        });
+  }
+
+ring_elem
+SymmetricEngineRing::hallLittlewoodQToPowerSumsViaRaisingOperators(
+    const BasisConversionInput& input) const
+{
+    return linearlyExtendToPowerSums(
+        input.expansion,
+        BasisKind::HallLittlewoodQ,
+        [&](const Partition& index) {
+          return hallLittlewoodCapitalToPowerSumsViaRaisingOperators(
+              index, false);
+        });
+  }
+
+ring_elem
+SymmetricEngineRing::hallLittlewoodBToPowerSumsViaRaisingOperators(
+    const BasisConversionInput& input) const
+{
+    return linearlyExtendToPowerSums(
+        input.expansion,
+        BasisKind::HallLittlewoodB,
+        [&](const Partition& index) {
+          return hallLittlewoodCapitalToPowerSumsViaRaisingOperators(
+              index, true);
+        });
+  }
+
+ring_elem
+SymmetricEngineRing::
+    hallLittlewoodPToPowerSumsViaQNormalization(
+        const BasisConversionInput& input) const
+{
+    return linearlyExtendToPowerSums(
+        input.expansion,
+        BasisKind::HallLittlewoodP,
+        [&](const Partition& index) {
+          return hallLittlewoodNormalizedToPowerSumsViaPairedBasisNormalization(
+              index, false);
+        });
+  }
+
+ring_elem
+SymmetricEngineRing::
+    hallLittlewoodPOmegaToPowerSumsViaBNormalization(
+        const BasisConversionInput& input) const
+{
+    return linearlyExtendToPowerSums(
+        input.expansion,
+        BasisKind::HallLittlewoodPOmega,
+        [&](const Partition& index) {
+          return hallLittlewoodNormalizedToPowerSumsViaPairedBasisNormalization(
+              index, true);
+        });
+  }
+
+// ----------------------------------------------------------------------------
+// Power Sums To Classical Bases
+// ----------------------------------------------------------------------------
+
+ring_elem
+SymmetricEngineRing::powerSumsToCompleteViaLogarithmFormula(
+    const BasisConversionInput& input) const
+{
+    return powerSumsToCompleteViaLogarithmFormula(
+        input.expansion, input.target.id, input.target.order);
+  }
+
+ring_elem
+SymmetricEngineRing::powerSumsToElementaryViaLogarithmFormula(
+    const BasisConversionInput& input) const
+{
+    return powerSumsToElementaryViaLogarithmFormula(
+        input.expansion, input.target.id, input.target.order);
+  }
+
+ring_elem
+SymmetricEngineRing::powerSumsToSchurViaMurnaghanNakayama(
+    const BasisConversionInput& input) const
+{
+    return powerSumsToSchurViaMurnaghanNakayama(
+        input.expansion,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order);
+  }
+
+ring_elem
+SymmetricEngineRing::powerSumsToSchurViaAbacusRimHooks(
+    const BasisConversionInput& input) const
+{
+    return powerSumsToSchurViaAbacusRimHooks(
+        input.expansion,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order);
+  }
+
+ring_elem
+SymmetricEngineRing::powerSumsToSchurViaFrobeniusCharacterFormula(
+    const BasisConversionInput& input) const
+{
+    return powerSumsToSchurLikeViaFrobeniusCharacterFormula(
+        input.expansion,
+        input.target.id,
+        input.target.order,
+        input.target.displayName(),
+        false);
+  }
+
+ring_elem
+SymmetricEngineRing::powerSumsToSchurOmegaViaMurnaghanNakayama(
+    const BasisConversionInput& input) const
+{
+    ring_elem omegaInput = omegaPowerSums(input.expansion);
+    if (error()) return zero();
+    const int schurId = requiredBasisIdForKind(BasisKind::Schur);
+    if (error()) return zero();
+    ring_elem inSchur = powerSumsToSchurViaMurnaghanNakayama(
+        omegaInput,
+        schurId,
+        displayForBasis(schurId),
+        basisOrderForId(schurId));
+    if (error()) return zero();
+    return replaceSingleBasis(inSchur, schurId, input.target.id);
+  }
+
+ring_elem
+SymmetricEngineRing::powerSumsToSchurOmegaViaAbacusRimHooks(
+    const BasisConversionInput& input) const
+{
+    ring_elem omegaInput = omegaPowerSums(input.expansion);
+    if (error()) return zero();
+    const int schurId = requiredBasisIdForKind(BasisKind::Schur);
+    if (error()) return zero();
+    ring_elem inSchur = powerSumsToSchurViaAbacusRimHooks(
+        omegaInput,
+        schurId,
+        displayForBasis(schurId),
+        basisOrderForId(schurId));
+    if (error()) return zero();
+    return replaceSingleBasis(inSchur, schurId, input.target.id);
+  }
+
+ring_elem
+SymmetricEngineRing::powerSumsToSchurOmegaViaFrobeniusCharacterFormula(
+    const BasisConversionInput& input) const
+{
+    ring_elem omegaInput = omegaPowerSums(input.expansion);
+    if (error()) return zero();
+    const int schurId = requiredBasisIdForKind(BasisKind::Schur);
+    if (error()) return zero();
+    const std::string schurDisplay = displayForBasis(schurId);
+    ring_elem inSchur = powerSumsToSchurLikeViaFrobeniusCharacterFormula(
+        omegaInput,
+        schurId,
+        basisOrderForId(schurId),
+        schurDisplay,
+        false);
+    if (error()) return zero();
+    return replaceSingleBasis(inSchur, schurId, input.target.id);
+  }
+
+// ----------------------------------------------------------------------------
+// Power Sums To Hall--Littlewood Bases
+// ----------------------------------------------------------------------------
+
+ring_elem
+SymmetricEngineRing::
+    powerSumsToHallLittlewoodGeneratorsViaLogarithmFormula(
+        const BasisConversionInput& input) const
+{
+    // The Q- and B-generator identities are exchanged by omega; the target
+    // basis fixes that sign convention within this one formula family.
+    const bool omega =
+        input.target.kind ==
+        BasisKind::HallLittlewoodBGenerator;
+    CoeffMap generators =
+        powerSumsToHallGeneratorMapViaLogarithmFormula(
+            input.expansion, omega);
+    if (error()) return zero();
+    return coeffMapToElement(
+        generators,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order,
+        true);
+  }
+
+ring_elem
+SymmetricEngineRing::
+    powerSumSingleCycleTermsToHallLittlewoodViaGreenPolynomials(
+        const BasisConversionInput& input) const
+{
+    return powerSumSingleCycleTermsToHallLittlewoodViaGreenPolynomials(
+        input.expansion,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order);
+  }
+
+ring_elem
+SymmetricEngineRing::
+    powerSumBasisElementToHallLittlewoodViaGreenPolynomialsAndDuality(
+        const BasisConversionInput& input) const
+{
+    return powerSumIndexToHallLittlewoodViaGreenPolynomialsAndDuality(
+        input.expansion,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order);
+  }
+
+ring_elem
+SymmetricEngineRing::
+    powerSumsToHallLittlewoodViaTriangularReduction(
+        const BasisConversionInput& input) const
+{
+    return powerSumsToHallLittlewoodViaTriangularReduction(
+        input.expansion,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order);
+  }
+
+ring_elem
+SymmetricEngineRing::
+    powerSumsToMonomialOrForgottenViaTransitionMatrix(
+        const BasisConversionInput& input) const
+{
+    // Monomial and forgotten functions are the omega-paired forms of the same
+    // transition-matrix construction.
+    const bool forgotten =
+        input.target.kind == BasisKind::Forgotten;
+    if (!forgotten &&
+        input.target.kind != BasisKind::Monomial)
+      {
+        ERROR("the monomial transition formula received an "
+              "incompatible target basis");
+        return zero();
+      }
+    ring_elem result = zero();
+    for (const auto& term :
+         polyValue(input.expansion)->terms)
+      {
+        Partition index;
+        if (!powerSumIndexFromMonomial(
+                term.monomial, index))
+          {
+            ERROR("the monomial transition formula expected a "
+                  "canonical power-sum expansion");
+            return zero();
+          }
+        ring_elem converted =
+            powerSumIndexToMonomialViaTransitionMatrix(
+                index,
+                input.target.id,
+                input.target.displayName(),
+                input.target.order,
+                forgotten);
+        if (error()) return zero();
+        result = add(
+            result, scaled(term.coeff, converted));
+      }
+    return result;
+  }
+
+// ----------------------------------------------------------------------------
+// Direct Involutions, Normalizations, And Triangular Transitions
+// ----------------------------------------------------------------------------
+
+ring_elem
+SymmetricEngineRing::
+    hallLittlewoodPairedBasesViaDiagonalScaling(
+        const BasisConversionInput& input) const
+{
+    // Hall--Littlewood Q <-> P and B <-> P Omega use the same diagonal
+    // normalization identity; the source basis determines which direction
+    // the factor is applied.
+    const bool capitalToNormalized =
+        input.source.kind == BasisKind::HallLittlewoodQ ||
+        input.source.kind == BasisKind::HallLittlewoodB;
+    return hallLittlewoodCapitalNormalizedConversionViaDiagonalScaling(
+        input.expansion,
+        input.source.id,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order,
+        capitalToNormalized);
+  }
+
+ring_elem
+SymmetricEngineRing::schurAndSchurOmegaViaPartitionConjugation(
+    const BasisConversionInput& input) const
+{
+    // Conjugating partitions realizes omega in either direction.
+    return schurOmegaConversionViaPartitionConjugation(
+        input.expansion,
+        input.source.id,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order);
+  }
+
+ring_elem
+SymmetricEngineRing::schurAndSchurOmegaToGeneratorsViaJacobiTrudi(
+    const BasisConversionInput& input) const
+{
+    // Jacobi--Trudi gives Schur in complete generators and Schur Omega in
+    // elementary generators.
+    return canonicalSchurLikeExpressionToGeneratorsViaJacobiTrudi(
+        input.expansion,
+        input.source.id,
+        input.target.id);
+  }
+
+ring_elem
+SymmetricEngineRing::completeToSchurViaHorizontalPieri(
+    const BasisConversionInput& input) const
+{
+    return completeToSchurViaHorizontalPieri(
+        input.expansion,
+        input.source.id,
+        input.source.displayName(),
+        input.source.order,
+        isMultiplicativeBasis(input.source.id),
+        input.target.id,
+        input.target.displayName(),
+        input.target.order);
+  }
+
+ring_elem
+SymmetricEngineRing::
+    hallLittlewoodGeneratorsToCapitalBasesViaTriangularReduction(
+        const BasisConversionInput& input) const
+{
+    return hallLittlewoodGeneratorsToCapitalViaTriangularReduction(
+        input.expansion,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order);
+  }
+
+// ============================================================================
 // Shared Conversion Utilities
 // ============================================================================
-// Coefficient maps, basis metadata, stored basis-element inspection, and the
-// policy-free assembler for canonical built-in expansions to power sums.
+// Coefficient maps, basis metadata, stored basis-element inspection, and
+// linear extension of basis-element formulas.
 
 bool SymmetricEngineRing::singleBasisIndexFromMonomial(
     const SymmetricMonomial& monomial,
@@ -360,15 +835,17 @@ ring_elem SymmetricEngineRing::powerSumElementFromIndex(const Partition& index) 
   }
 
 ring_elem
-SymmetricEngineRing::canonicalExpressionToPowerSumsViaBasisFormulas(
-    ring_elem f,
-    BasisKind sourceKind) const
+SymmetricEngineRing::linearlyExtendToPowerSums(
+    ring_elem expansion,
+    BasisKind sourceKind,
+    const std::function<ring_elem(const Partition&)>&
+        basisElementFormula) const
 {
-    // This is deterministic mathematical dispatch by basis family, not
-    // performance policy. Callers must already guarantee one canonical source
-    // basis element per nonscalar term.
+    // If K(X_lambda) is the supplied basis-element formula, this function
+    // computes sum_lambda c_lambda K(X_lambda). It contains no basis-family
+    // or plan choice.
     ring_elem result = zero();
-    for (const auto& term : polyValue(f)->terms)
+    for (const auto& term : polyValue(expansion)->terms)
       {
         if (term.monomial.data.empty())
           {
@@ -385,68 +862,8 @@ SymmetricEngineRing::canonicalExpressionToPowerSumsViaBasisFormulas(
           }
 
         Partition index = basisElementIndex(term.monomial, 0);
-        ring_elem convertedElement;
-        switch (sourceKind)
-          {
-            case BasisKind::PowerSum:
-              convertedElement = basisElementFromIndex(
-                  atomBasisIdAt(term.monomial, 0), index);
-              break;
-            case BasisKind::Complete:
-            case BasisKind::Elementary:
-              convertedElement = one();
-              for (int part : index)
-                {
-                  ring_elem factor =
-                      sourceKind == BasisKind::Complete
-                          ? completePartToPowerSumsViaClassicalFormula(part)
-                          : elementaryPartToPowerSumsViaClassicalFormula(part);
-                  convertedElement = mult(convertedElement, factor);
-                }
-              break;
-            case BasisKind::HallLittlewoodQGenerator:
-            case BasisKind::HallLittlewoodBGenerator:
-              convertedElement = one();
-              for (int part : index)
-                convertedElement = mult(
-                    convertedElement,
-                    hallLittlewoodGeneratorPartToPowerSumsViaClassicalFormula(
-                        part,
-                        sourceKind ==
-                            BasisKind::HallLittlewoodBGenerator));
-              break;
-            case BasisKind::Schur:
-              convertedElement =
-                  schurLikeToPowerSumsViaCharacters(index, false);
-              break;
-            case BasisKind::SchurOmega:
-              convertedElement =
-                  schurLikeToPowerSumsViaCharacters(index, true);
-              break;
-            case BasisKind::Monomial:
-            case BasisKind::Forgotten:
-              convertedElement =
-                  monomialToPowerSumsViaTransitionMatrix(
-                      index, sourceKind == BasisKind::Forgotten);
-              break;
-            case BasisKind::HallLittlewoodQ:
-            case BasisKind::HallLittlewoodB:
-              convertedElement =
-                  hallLittlewoodCapitalToPowerSumsViaRaisingOperators(
-                      index, sourceKind == BasisKind::HallLittlewoodB);
-              break;
-            case BasisKind::HallLittlewoodP:
-            case BasisKind::HallLittlewoodPOmega:
-              convertedElement =
-                  hallLittlewoodNormalizedToPowerSumsViaCapitalNormalization(
-                      index,
-                      sourceKind == BasisKind::HallLittlewoodPOmega);
-              break;
-            case BasisKind::Custom:
-              ERROR("a source-to-power-sums basis formula does not support "
-                    "custom bases");
-              return zero();
-          }
+        ring_elem convertedElement =
+            basisElementFormula(index);
         if (error()) return zero();
         result = add(
             result, scaled(term.coeff, convertedElement));
@@ -606,7 +1023,7 @@ ring_elem SymmetricEngineRing::jacobiTrudiBasis(int basisId,
 // ============================================================================
 // Classical h/e-to-p formulas, logarithmic inverse formulas, and h-to-S transition.
 
-ring_elem SymmetricEngineRing::completePartToPowerSumsViaClassicalFormula(int n) const
+ring_elem SymmetricEngineRing::completePartToPowerSumsViaNewtonIdentities(int n) const
 {
     if (n == 0) return one();
     auto cached = completeToPowerSumsCache.find(n);
@@ -629,7 +1046,7 @@ ring_elem SymmetricEngineRing::completePartToPowerSumsViaClassicalFormula(int n)
     return copyPolyValue(polyValue(result));
   }
 
-ring_elem SymmetricEngineRing::elementaryPartToPowerSumsViaClassicalFormula(int n) const
+ring_elem SymmetricEngineRing::elementaryPartToPowerSumsViaNewtonIdentities(int n) const
 {
     if (n == 0) return one();
     auto cached = elementaryToPowerSumsCache.find(n);
@@ -882,7 +1299,7 @@ CoeffMap SymmetricEngineRing::multiplySchurExpansionViaRowPieri(
     return result;
   }
 
-CoeffMap SymmetricEngineRing::completeToSchurCoefficientsViaRecursiveTransition(
+CoeffMap SymmetricEngineRing::completeToSchurCoefficientsViaHorizontalPieri(
     const CoeffMap& hCoeffs) const
 {
     int lead = 0;
@@ -930,7 +1347,7 @@ CoeffMap SymmetricEngineRing::completeToSchurCoefficientsViaRecursiveTransition(
         if (found != grouped.end())
           {
             CoeffMap summand =
-                completeToSchurCoefficientsViaRecursiveTransition(found->second);
+                completeToSchurCoefficientsViaHorizontalPieri(found->second);
             for (const auto& item : summand)
               addNormalizedCoeff(result, item.first, item.second);
           }
@@ -939,7 +1356,7 @@ CoeffMap SymmetricEngineRing::completeToSchurCoefficientsViaRecursiveTransition(
     return result;
   }
 
-ring_elem SymmetricEngineRing::completeToSchurViaRecursiveTransition(ring_elem f,
+ring_elem SymmetricEngineRing::completeToSchurViaHorizontalPieri(ring_elem f,
                                 int hBasisId,
                                 const std::string& hDisplay,
                                 int hOrder,
@@ -953,7 +1370,7 @@ ring_elem SymmetricEngineRing::completeToSchurViaRecursiveTransition(ring_elem f
 
     CoeffMap hCoeffs = coefficientsInBasis(f, hBasisId);
     if (error()) return zero();
-    CoeffMap result = completeToSchurCoefficientsViaRecursiveTransition(hCoeffs);
+    CoeffMap result = completeToSchurCoefficientsViaHorizontalPieri(hCoeffs);
     if (error()) return zero();
     return coeffMapToElement(result, schurId, schurDisplay, schurOrder, false);
   }
@@ -979,7 +1396,7 @@ ring_elem SymmetricEngineRing::schurOmegaConversionViaPartitionConjugation(
         result, targetBasisId, targetDisplay, targetOrder, false);
   }
 
-ring_elem SymmetricEngineRing::schurLikeToPowerSumsViaCharacters(
+ring_elem SymmetricEngineRing::schurLikeToPowerSumsViaFrobeniusCharacterFormula(
     const Partition& lambda,
     bool omegaStyle) const
 {
@@ -1038,11 +1455,14 @@ ring_elem SymmetricEngineRing::schurLikeToPowerSumsViaCharacters(
                              true);
   }
 
-ring_elem SymmetricEngineRing::powerSumIndexToSchurLikeViaCharacters(const Partition& mu,
-                                int schurId,
-                                int schurOrder,
-                                const std::string& display,
-                                long sign) const
+ring_elem
+SymmetricEngineRing::
+    powerSumIndexToSchurLikeViaFrobeniusCharacterFormula(
+        const Partition& mu,
+        int schurId,
+        int schurOrder,
+        const std::string& display,
+        long sign) const
 {
     int n = 0;
     for (int part : mu) n += part;
@@ -1082,16 +1502,16 @@ ring_elem SymmetricEngineRing::powerSumIndexToSchurLikeViaCharacters(const Parti
     return result;
   }
 
-ring_elem SymmetricEngineRing::powerSumIndexToSchurViaCharacters(
+ring_elem SymmetricEngineRing::powerSumIndexToSchurViaFrobeniusCharacterFormula(
     const Partition& mu,
     int schurId,
     int schurOrder) const
 {
-    return powerSumIndexToSchurLikeViaCharacters(
+    return powerSumIndexToSchurLikeViaFrobeniusCharacterFormula(
         mu, schurId, schurOrder, displayForBasis(schurId), 1);
   }
 
-ring_elem SymmetricEngineRing::powerSumsToSchurLikeViaCharacters(ring_elem f,
+ring_elem SymmetricEngineRing::powerSumsToSchurLikeViaFrobeniusCharacterFormula(ring_elem f,
                                  int schurId,
                                  int schurOrder,
                                  const std::string& display,
@@ -1148,85 +1568,11 @@ ring_elem SymmetricEngineRing::powerSumsToSchurLikeViaCharacters(ring_elem f,
     return coeffMapToElement(schurCoeffs, schurId, display, schurOrder, false);
   }
 
-ring_elem SymmetricEngineRing::powerSumsToSchurViaCharacters(
+ring_elem SymmetricEngineRing::powerSumsToSchurViaFrobeniusCharacterFormula(
     ring_elem f, int schurId, int schurOrder) const
 {
-    return powerSumsToSchurLikeViaCharacters(
+    return powerSumsToSchurLikeViaFrobeniusCharacterFormula(
         f, schurId, schurOrder, displayForBasis(schurId), false);
-  }
-
-CoeffMap SymmetricEngineRing::schurGeneratorMap(const Partition& lambda,
-                             bool omegaStyle,
-                             int generatorId,
-                             const std::string& generatorDisplay) const
-{
-    ring_elem expansion = jacobiTrudi(lambda, Partition{}, generatorId);
-    if (error()) return CoeffMap{};
-    return coefficientsInBasis(expansion, generatorId);
-  }
-
-CoeffMap SymmetricEngineRing::triangularReduceSchur(const CoeffMap& generatorMap,
-                                 bool omegaStyle,
-                                 int generatorId,
-                                 const std::string& generatorDisplay) const
-{
-    CoeffMap current = generatorMap;
-    CoeffMap result;
-    while (!current.empty())
-      {
-        Partition lambda = leadingPartition(current);
-        CoeffMap expansion =
-            schurGeneratorMap(lambda, omegaStyle, generatorId, generatorDisplay);
-        if (error()) return CoeffMap{};
-        auto lead = expansion.find(lambda);
-        if (lead == expansion.end() || coefficientRing->is_zero(lead->second))
-          {
-            ERROR("triangular expansion has zero leading coefficient");
-            return CoeffMap{};
-          }
-        ring_elem c = coefficientQuotient(current[lambda], lead->second);
-        addCoeff(result, lambda, c);
-        addScaledCoeffMap(current, coefficientRing->negate(c), expansion);
-      }
-    return result;
-  }
-
-bool SymmetricEngineRing::tryExpressionToSchurViaTriangularReduction(ring_elem f,
-                                       int targetBasisId,
-                                       const std::string& targetDisplay,
-                                       int targetDisplayOrder,
-                                       ring_elem& result) const
-{
-    const BasisKind targetKind = basisKindForId(targetBasisId);
-    BasisKind generatorKind;
-    switch (targetKind)
-      {
-      case BasisKind::Schur:
-        generatorKind = BasisKind::Complete;
-        break;
-      case BasisKind::SchurOmega:
-        generatorKind = BasisKind::Elementary;
-        break;
-      default:
-        return false;
-      }
-    int generatorId = requiredBasisIdForKind(generatorKind);
-    if (error()) return false;
-    const std::string generatorDisplay = displayForBasis(generatorId);
-    CoeffMap generatorCoeffs;
-    if (!coefficientsInBasisIfPossible(f, generatorId, generatorCoeffs))
-      return false;
-    CoeffMap targetCoeffs = triangularReduceSchur(generatorCoeffs,
-                                                  targetKind == BasisKind::SchurOmega,
-                                                  generatorId,
-                                                  generatorDisplay);
-    if (error()) return false;
-    result = coeffMapToElement(targetCoeffs,
-                               targetBasisId,
-                               targetDisplay,
-                               targetDisplayOrder,
-                               false);
-    return true;
   }
 
 std::string SymmetricEngineRing::powerSumsToSchurRecipeKey(int degree,
@@ -1406,7 +1752,7 @@ ring_elem SymmetricEngineRing::powerSumIndexToMonomialViaTransitionMatrix(const 
 // Classical and logarithmic conversions for the multiplicative q and b bases.
 
 ring_elem
-SymmetricEngineRing::hallLittlewoodGeneratorPartToPowerSumsViaClassicalFormula(
+SymmetricEngineRing::hallLittlewoodGeneratorPartToPowerSumsViaGeneratingFunction(
     int n,
     bool omega) const
 {
@@ -1436,9 +1782,11 @@ SymmetricEngineRing::hallLittlewoodGeneratorPartToPowerSumsViaClassicalFormula(
     return copyPolyValue(polyValue(result));
   }
 
-CoeffMap SymmetricEngineRing::hallLittlewoodGeneratorPartToPowerSumsQuotientMapViaClassicalFormula(
-    int n,
-    bool omega) const
+CoeffMap
+SymmetricEngineRing::
+    hallLittlewoodGeneratorPartToPowerSumsQuotientMapViaGeneratingFunction(
+        int n,
+        bool omega) const
 {
     if (n == 0) return oneCoeffMap();
     auto& cache = omega ? hallLittlewoodBGeneratorToPowerSumsQuotientMapCache
@@ -1692,7 +2040,7 @@ SymmetricEngineRing::hallLittlewoodCapitalToPowerSumsViaRaisingOperators(
         for (int part : item.first)
           term = multiplyCoeffMaps(
               term,
-              hallLittlewoodGeneratorPartToPowerSumsQuotientMapViaClassicalFormula(part,
+              hallLittlewoodGeneratorPartToPowerSumsQuotientMapViaGeneratingFunction(part,
                                                                                     omega));
         addScaledCoeffMap(result, item.second, term);
       }
@@ -1708,7 +2056,7 @@ SymmetricEngineRing::hallLittlewoodCapitalToPowerSumsViaRaisingOperators(
   }
 
 ring_elem
-SymmetricEngineRing::hallLittlewoodNormalizedToPowerSumsViaCapitalNormalization(
+SymmetricEngineRing::hallLittlewoodNormalizedToPowerSumsViaPairedBasisNormalization(
     const Partition& lambda,
     bool omega) const
 {
@@ -1792,29 +2140,21 @@ ring_elem SymmetricEngineRing::skewPOrPOmegaToPowerSums(
     const Partition& mu,
     bool omega) const
 {
-    // Skew expansion is part of normalization: the input is not a canonical
-    // single-source expansion and therefore cannot enter the X -> Y plan
-    // registry yet. The named formulas below are policy-free normalization
-    // helpers; ordinary conversion resumes through the shared registry after
-    // the skew atom has been eliminated.
+    // The skew atom itself cannot enter the plan database. The pairing formula
+    // first expands it canonically in monomial or forgotten coordinates; each
+    // conversion after that point uses the ordinary X -> Y workflow.
     ring_elem skewCapital = skewQOrBFunction(lambda, mu, omega);
     if (error()) return zero();
-    const BasisKind coordinateKind =
-        omega ? BasisKind::Forgotten : BasisKind::Monomial;
-    ring_elem inPowerSums =
-        canonicalExpressionToPowerSumsViaBasisFormulas(
-            skewCapital, coordinateKind);
+    const int powerSumId =
+        requiredBasisIdForKind(BasisKind::PowerSum);
+    if (error()) return zero();
+    ring_elem inPowerSums = toBasis(skewCapital, powerSumId);
     if (error()) return zero();
     const BasisKind capitalKind = omega ? BasisKind::HallLittlewoodB
                                         : BasisKind::HallLittlewoodQ;
     int capitalId = requiredBasisIdForKind(capitalKind);
     if (error()) return zero();
-    ring_elem inCapital =
-        powerSumsToHallLittlewoodViaTriangularReduction(
-            inPowerSums,
-            capitalId,
-            displayForBasis(capitalId),
-            basisOrderForId(capitalId));
+    ring_elem inCapital = toBasis(inPowerSums, capitalId);
     if (error()) return zero();
     const BasisKind normalizedKind = omega ? BasisKind::HallLittlewoodPOmega
                                            : BasisKind::HallLittlewoodP;
@@ -1822,8 +2162,7 @@ ring_elem SymmetricEngineRing::skewPOrPOmegaToPowerSums(
     if (error()) return zero();
     ring_elem normalized = replaceSingleBasis(inCapital, capitalId, normalizedId);
     if (error()) return zero();
-    return canonicalExpressionToPowerSumsViaBasisFormulas(
-        normalized, normalizedKind);
+    return toBasis(normalized, powerSumId);
   }
 
 ring_elem SymmetricEngineRing::skewHallLittlewoodToPowerSums(
@@ -1840,9 +2179,10 @@ ring_elem SymmetricEngineRing::skewHallLittlewoodToPowerSums(
           ring_elem skewCapital =
               skewQOrBFunction(lambda, mu, omega);
           if (error()) return zero();
-          return canonicalExpressionToPowerSumsViaBasisFormulas(
-              skewCapital,
-              omega ? BasisKind::Forgotten : BasisKind::Monomial);
+          const int powerSumId =
+              requiredBasisIdForKind(BasisKind::PowerSum);
+          if (error()) return zero();
+          return toBasis(skewCapital, powerSumId);
         }
       case BasisKind::HallLittlewoodP:
       case BasisKind::HallLittlewoodPOmega:
@@ -2122,45 +2462,46 @@ ring_elem SymmetricEngineRing::powerSumsToHallLittlewoodViaTriangularReduction(
                                         targetDisplayOrder);
   }
 
-bool SymmetricEngineRing::tryExpressionToHallLittlewoodViaTriangularReduction(ring_elem f,
-                                      int targetBasisId,
-                                      const std::string& targetDisplay,
-                                      int targetDisplayOrder,
-                                      ring_elem& result) const
+ring_elem SymmetricEngineRing::
+hallLittlewoodGeneratorsToCapitalViaTriangularReduction(
+    ring_elem f,
+    int targetBasisId,
+    const std::string& targetDisplay,
+    int targetDisplayOrder) const
 {
-    BasisKind generatorKind;
-    bool omega = false;
-    bool normalized = false;
-    switch (basisKindForId(targetBasisId))
+    const BasisKind targetKind =
+        basisKindForId(targetBasisId);
+    const bool qFamily =
+        targetKind == BasisKind::HallLittlewoodQ ||
+        targetKind == BasisKind::HallLittlewoodP;
+    const bool bFamily =
+        targetKind == BasisKind::HallLittlewoodB ||
+        targetKind == BasisKind::HallLittlewoodPOmega;
+    if (!qFamily && !bFamily)
       {
-      case BasisKind::HallLittlewoodQ:
-        generatorKind = BasisKind::HallLittlewoodQGenerator;
-        break;
-      case BasisKind::HallLittlewoodP:
-        generatorKind = BasisKind::HallLittlewoodQGenerator;
-        normalized = true;
-        break;
-      case BasisKind::HallLittlewoodB:
-        generatorKind = BasisKind::HallLittlewoodBGenerator;
-        omega = true;
-        break;
-      case BasisKind::HallLittlewoodPOmega:
-        generatorKind = BasisKind::HallLittlewoodBGenerator;
-        omega = true;
-        normalized = true;
-        break;
-      default:
-        return false;
+        ERROR("the Hall-Littlewood triangular formula received an "
+              "incompatible target basis");
+        return zero();
       }
-
+    const BasisKind generatorKind =
+        qFamily
+            ? BasisKind::HallLittlewoodQGenerator
+            : BasisKind::HallLittlewoodBGenerator;
+    const bool omega = bFamily;
+    const bool normalized =
+        targetKind == BasisKind::HallLittlewoodP ||
+        targetKind == BasisKind::HallLittlewoodPOmega;
     int generatorId = requiredBasisIdForKind(generatorKind);
-    if (error()) return false;
-    const std::string generatorDisplay = displayForBasis(generatorId);
+    if (error()) return zero();
     CoeffMap generatorCoeffs;
     if (!coefficientsInBasisIfPossible(f, generatorId, generatorCoeffs))
-      return false;
+      {
+        ERROR("the Hall-Littlewood triangular formula expected a "
+              "canonical generator-basis expansion");
+        return zero();
+      }
     CoeffMap capitals = triangularReduceHallCapital(generatorCoeffs, omega);
-    if (error()) return false;
+    if (error()) return zero();
     if (normalized)
       {
         CoeffMap adjusted;
@@ -2170,99 +2511,12 @@ bool SymmetricEngineRing::tryExpressionToHallLittlewoodViaTriangularReduction(ri
                    coefficientRing->mult(item.second, hallLittlewoodCFactor(item.first)));
         capitals = adjusted;
       }
-    result = coeffMapToElement(capitals,
-                               targetBasisId,
-                               targetDisplay,
-                               targetDisplayOrder,
-                               false);
-    return true;
-  }
-
-// ============================================================================
-// Termwise Conversion Kernels
-// ============================================================================
-// Per-index formulas used by the general conversion fallback.
-
-ring_elem SymmetricEngineRing::powerSumIndexToTargetViaTermwiseKernel(const Partition& index,
-                                     const std::string& targetDisplay,
-                                     int targetBasisId,
-                                     int targetDisplayOrder,
-                                     bool targetIsMultiplicative) const
-{
-    BasisKind targetKind = basisKindForId(targetBasisId);
-    switch (targetKind)
-      {
-        case BasisKind::PowerSum:
-          return basisElementFromIndex(targetBasisId, index);
-        case BasisKind::Complete:
-          return coeffMapToElement(
-              powerSumIndexToCompleteMapViaLogarithmFormula(index),
-              targetBasisId, targetDisplay, targetDisplayOrder, true);
-        case BasisKind::Elementary:
-          return coeffMapToElement(
-              powerSumIndexToElementaryMapViaLogarithmFormula(index),
-              targetBasisId, targetDisplay, targetDisplayOrder, true);
-        case BasisKind::HallLittlewoodQGenerator:
-        case BasisKind::HallLittlewoodBGenerator:
-          return coeffMapToElement(
-              powerSumIndexToHallGeneratorMapViaLogarithmFormula(
-                  index,
-                  targetKind == BasisKind::HallLittlewoodBGenerator),
-              targetBasisId, targetDisplay, targetDisplayOrder, true);
-        case BasisKind::Monomial:
-        case BasisKind::Forgotten:
-          return powerSumIndexToMonomialViaTransitionMatrix(
-              index, targetBasisId, targetDisplay, targetDisplayOrder,
-              targetKind == BasisKind::Forgotten);
-        case BasisKind::Schur:
-          return powerSumIndexToSchurLikeViaCharacters(
-              index, targetBasisId, targetDisplayOrder, targetDisplay, 1);
-        case BasisKind::SchurOmega:
-          {
-            long sign =
-                ((partitionWeight(index) - partitionLength(index)) % 2 == 0)
-                ? 1 : -1;
-            return powerSumIndexToSchurLikeViaCharacters(
-                index, targetBasisId, targetDisplayOrder, targetDisplay, sign);
-          }
-        case BasisKind::Custom:
-        case BasisKind::HallLittlewoodQ:
-        case BasisKind::HallLittlewoodB:
-        case BasisKind::HallLittlewoodP:
-        case BasisKind::HallLittlewoodPOmega:
-          ERROR("basis conversion from power sums is not implemented for basis ",
-                targetDisplay.c_str());
-          return zero();
-      }
-    ERROR("unknown target basis kind");
-    return zero();
-  }
-
-ring_elem SymmetricEngineRing::powerSumsToTargetViaTermwiseConversion(ring_elem f,
-                                      int targetBasisId,
-                                      const std::string& targetDisplay,
-                                      int targetDisplayOrder,
-                                      bool targetIsMultiplicative) const
-{
-    const auto *poly = polyValue(f);
-    ring_elem result = zero();
-    for (const auto& term : poly->terms)
-      {
-        Partition index;
-        if (!powerSumIndexFromMonomial(term.monomial, index))
-          {
-            ERROR("expected a pure power-sum expression during basis conversion");
-            return zero();
-          }
-        ring_elem converted = powerSumIndexToTargetViaTermwiseKernel(index,
-                                                       targetDisplay,
-                                                       targetBasisId,
-                                                       targetDisplayOrder,
-                                                       targetIsMultiplicative);
-        if (error()) return zero();
-        result = add(result, scaled(term.coeff, converted));
-      }
-    return result;
+    return coeffMapToElement(
+        capitals,
+        targetBasisId,
+        targetDisplay,
+        targetDisplayOrder,
+        false);
   }
 
 // ============================================================================
@@ -2343,7 +2597,6 @@ ring_elem SymmetricEngineRing::straightenBasisElement(
 {
     const int basisId = atomBasisIdAt(monomial, pos);
     const BasisKind basisKind = basisKindForId(basisId);
-    std::string display = displayForBasis(basisId);
     if (atomIsSkewAt(monomial, pos))
       {
         auto *poly = new SymmetricRingPoly;
@@ -2364,10 +2617,9 @@ ring_elem SymmetricEngineRing::straightenBasisElement(
       case BasisKind::HallLittlewoodP:
       case BasisKind::HallLittlewoodPOmega:
         {
-        // Straightening precedes conversion-plan selection. A nonpartition
-        // index violates the registry's canonical-input contract, so this
-        // normalization formula may pass through power sums directly without
-        // creating a competing public conversion workflow.
+        // A nonpartition index cannot enter the plan database. Once the
+        // corresponding capital-basis expansion has been straightened, it is
+        // canonical and returns to the ordinary conversion workflow.
         if (isPartitionIndex(index))
           return basisElementFromIndex(basisId, index);
         const BasisKind capitalKind = basisKind == BasisKind::HallLittlewoodP
@@ -2375,7 +2627,6 @@ ring_elem SymmetricEngineRing::straightenBasisElement(
                                           : BasisKind::HallLittlewoodB;
         const int capitalId = requiredBasisIdForKind(capitalKind);
         if (error()) return zero();
-        const std::string capitalDisplay = displayForBasis(capitalId);
         ring_elem straightCapital =
             straightenHallCapitalBasisElement(index, capitalId);
         if (error()) return zero();
@@ -2384,15 +2635,7 @@ ring_elem SymmetricEngineRing::straightenBasisElement(
                                 hallLittlewoodCFactor(index)),
             straightCapital);
         if (error()) return zero();
-        ring_elem capitalPowerSums =
-            canonicalExpressionToPowerSumsViaBasisFormulas(normalizedCapital,
-                                                           capitalKind);
-        if (error()) return zero();
-        return powerSumsToHallLittlewoodCapitalViaTriangularReduction(
-            capitalPowerSums,
-            basisId,
-            display,
-            basisOrderForId(basisId));
+        return toBasis(normalizedCapital, basisId);
         }
       default:
         break;

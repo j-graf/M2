@@ -27,7 +27,7 @@ conv-p30-e	2026-07-23 16:23:58 EDT	0.028926	FracQQt	3	20260723-162357-postlazy-n
 extra-inner-Somega-h	2026-07-23 09:17:03 EDT	0.000294207	QQ	3	20260723-091703-full-initial	wsl-9950x3d
 pieri-three-r2-vertical	2026-07-24 10:07:03 EDT	0.000207045	FracQQt	5	20260724-100703-dispatch-facts-final-pieri	wsl-9950x3d
 conv-m-generic-p	2026-07-24 10:03:32 EDT	0.000247556	FracQQt	5	20260724-100332-dispatch-facts-preindexed-conversion-small	wsl-9950x3d
-conv-S-hook-p	2026-07-24 10:03:32 EDT	0.000935783	FracQQt	5	20260724-100332-dispatch-facts-preindexed-conversion-small	wsl-9950x3d
+conv-S-hook-p	2026-07-24 14:34:57 EDT	0.000904402	FracQQt	5	20260724-143457-callable-plan-simplification	wsl-9950x3d
 conv-p30-h	2026-07-23 09:23:06 EDT	0.0283548	FracQQt	3	20260723-092306-followup-basis-conversion	wsl-9950x3d
 prod-three-three-to-p	2026-07-24 10:07:29 EDT	0.00106491	FracQQt	5	20260724-100729-dispatch-facts-final-schur-product-small	wsl-9950x3d
 cross-L2-r3-split-to-S	2026-07-23 09:17:03 EDT	0.0111556	QQ	3	20260723-091703-full-initial	wsl-9950x3d
@@ -79,7 +79,7 @@ pleth-two-multirow-split-to-S	2026-07-23 09:17:03 EDT	0.838629	FracQQt	3	2026072
 pieri-four-r3-horizontal	2026-07-24 10:07:03 EDT	0.000288977	FracQQt	5	20260724-100703-dispatch-facts-final-pieri	wsl-9950x3d
 pleth-repeated-row-combined	2026-07-23 09:17:03 EDT	0.00376539	FracQQt	3	20260723-091703-full-initial	wsl-9950x3d
 pleth-four-row2-combined	2026-07-23 09:17:03 EDT	0.369262	FracQQt	3	20260723-091703-full-initial	wsl-9950x3d
-prod-small-balanced-p-to-S	2026-07-24 10:07:29 EDT	0.00122752	FracQQt	5	20260724-100729-dispatch-facts-final-schur-product-small	wsl-9950x3d
+prod-small-balanced-p-to-S	2026-07-24 14:35:42 EDT	0.00122671	FracQQt	5	20260724-143542-callable-plan-simplification	wsl-9950x3d
 cross-L3-r4-split-to-S	2026-07-24 12:13:24 EDT	0.0828419	QQ	5	20260724-121324-applicability-routing-standard	wsl-9950x3d
 hl-small-retained	2026-07-23 15:48:19 EDT	0.00526253	FracQQt	3	20260723-154819-postopt-current-hl-small	wsl-9950x3d
 hl-small-ordinary	2026-07-24 10:05:35 EDT	0.00540798	FracQQt	5	20260724-100534-dispatch-facts-hall-product-small	wsl-9950x3d
@@ -115,7 +115,7 @@ pleth-row-row-combined	2026-07-23 09:17:03 EDT	0.175549	FracQQt	3	20260723-09170
 conv-h16-p	2026-07-24 10:03:32 EDT	0.00109433	QQ	5	20260724-100332-dispatch-facts-preindexed-conversion-small	wsl-9950x3d
 roundtrip-S-hook	2026-07-23 09:24:03 EDT	0.00317067	QQ	3	20260723-092403-followup-roundtrip	wsl-9950x3d
 pleth-hook-row-split-to-S	2026-07-23 09:17:03 EDT	0.00787883	FracQQt	3	20260723-091703-full-initial	wsl-9950x3d
-prod-three-three-product	2026-07-23 15:52:11 EDT	7.7601e-05	FracQQt	5	20260723-155210-postopt5-current-schur-small	wsl-9950x3d
+prod-three-three-product	2026-07-24 14:35:42 EDT	7.3731e-05	FracQQt	5	20260724-143542-callable-plan-simplification	wsl-9950x3d
 pleth-three-row2-to-p	2026-07-23 09:17:03 EDT	0.0234539	FracQQt	3	20260723-091703-full-initial	wsl-9950x3d
 pieri-hook-r1-border	2026-07-24 10:07:03 EDT	0.000193634	FracQQt	5	20260724-100703-dispatch-facts-final-pieri	wsl-9950x3d
 conv-p8-P	2026-07-23 09:17:03 EDT	0.000494892	FracQQt	3	20260723-091703-full-initial	wsl-9950x3d
@@ -136,7 +136,7 @@ pleth-four-row2-split-to-S	2026-07-23 09:17:03 EDT	0.401376	FracQQt	3	20260723-0
 conv-e30-p	2026-07-23 23:14:51 EDT	0.0533724	FracQQt	3	20260723-231451-fixes-conversion	wsl-9950x3d
 prod-large-three-to-p	2026-07-23 23:15:47 EDT	0.0248325	FracQQt	3	20260723-231547-fixes-schur-product	wsl-9950x3d
 prod-small-balanced-to-p	2026-07-24 10:07:29 EDT	0.000480931	FracQQt	5	20260724-100729-dispatch-facts-final-schur-product-small	wsl-9950x3d
-conv-p-four-Somega	2026-07-23 09:17:03 EDT	0.196701	FracQQt	3	20260723-091703-full-initial	wsl-9950x3d
+conv-p-four-Somega	2026-07-24 14:34:57 EDT	0.195328	FracQQt	5	20260724-143457-callable-plan-simplification	wsl-9950x3d
 pieri-hook-r1-horizontal	2026-07-23 09:17:03 EDT	0.000195895	FracQQt	3	20260723-091703-full-initial	wsl-9950x3d
 conv-p-ones-m	2026-07-24 10:03:32 EDT	0.000622765	FracQQt	5	20260724-100332-dispatch-facts-preindexed-conversion-small	wsl-9950x3d
 pieri-four-r3-vertical	2026-07-23 22:39:47 EDT	0.000248366	FracQQt	3	20260723-223947-plans-final-pieri	wsl-9950x3d

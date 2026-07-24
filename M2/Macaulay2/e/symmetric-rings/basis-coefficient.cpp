@@ -16,7 +16,7 @@ namespace symmetric_rings {
 // Basis-Coefficient Selection
 // ============================================================================
 // Targeted scalar transitions avoid constructing complete target expansions.
-// When no scalar kernel applies, the broad route delegates the complete
+// When no scalar kernel applies, the broad route uses the complete
 // conversion to the shared basis-conversion workflow.
 
 SymmetricEngineRing::BasisCoefficientRoute
@@ -92,9 +92,9 @@ const char *SymmetricEngineRing::basisCoefficientRouteName(
             ViaHallLittlewoodCapitalGreenPolynomialDuality:
           return "p->Q/P/B/Pomega:Green-polynomial-duality";
         case BasisCoefficientRoute::ViaMonomialTransition:
-          return "p->m:transition";
+          return "p->m:transition-matrix";
         case BasisCoefficientRoute::ViaForgottenTransition:
-          return "p->ff:transition";
+          return "p->ff:transition-matrix";
         case BasisCoefficientRoute::ViaFullBasisConversion:
           return "full-basis-conversion";
       }

@@ -17,7 +17,7 @@ namespace symmetric_rings {
 
 size_t partitionCountForConversionSelection(int weight);
 
-bool completeFriendlyPowerSumIndexForConversionSelection(
+bool powerSumIndexHasMostlyShortCycles(
     const Partition& index,
     int weight);
 

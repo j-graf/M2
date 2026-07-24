@@ -66,7 +66,7 @@
   schurTimesPowerSumViaBorderStrips(
       const Partition& lambda,
       int part) const;
-  ring_elem powerSumsToSchurViaBorderStrips(
+  ring_elem powerSumsToSchurViaMurnaghanNakayama(
           ring_elem f,
           int targetBasisId,
           const std::string& targetDisplay,

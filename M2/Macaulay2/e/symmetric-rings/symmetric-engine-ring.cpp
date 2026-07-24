@@ -141,9 +141,10 @@ void SymmetricEngineRing::rememberBasesFrom(const SymmetricEngineRing *R) const
       }
     if (changed)
       {
-        multiplicationPlanRegistryCache.clear();
-        resolvedBasisConversionEndpointCache.clear();
-        resolvedBasisConversionPlanCache.clear();
+        multiplicationPlansCache.clear();
+        basisConversionEndpointsForRingCache.clear();
+        ringBasisConversionPlanCache.clear();
+        powerSumFallbackPlanCache.clear();
       }
   }
 
@@ -521,7 +522,7 @@ SymmetricEngineRing::SymmetricEngineRing(const Ring *A)
     // and validate them while the ring itself is being created, before a
     // user's first timed conversion pays that one-time initialization cost.
     validateBasisConversionPlanDatabase();
-    (void) basisConversionPlansByEndpoints();
+    (void) basisConversionPlansBySourceAndTarget();
   }
 
 SymmetricEngineRing *SymmetricEngineRing::create(const Ring *A)
@@ -564,8 +565,9 @@ void SymmetricEngineRing::rememberBasisMetadata(int basisId,
     else
       {
         basisDescriptors.emplace(basisId, std::move(descriptor));
-        multiplicationPlanRegistryCache.clear();
-        resolvedBasisConversionPlanCache.clear();
+        multiplicationPlansCache.clear();
+        ringBasisConversionPlanCache.clear();
+        powerSumFallbackPlanCache.clear();
       }
     if (kind != BasisKind::Custom)
       {
@@ -574,8 +576,9 @@ void SymmetricEngineRing::rememberBasisMetadata(int basisId,
             foundKind->second != basisId)
           {
             basisIdsByKind[kind] = basisId;
-            resolvedBasisConversionEndpointCache.clear();
-            resolvedBasisConversionPlanCache.clear();
+            basisConversionEndpointsForRingCache.clear();
+            ringBasisConversionPlanCache.clear();
+            powerSumFallbackPlanCache.clear();
           }
       }
   }

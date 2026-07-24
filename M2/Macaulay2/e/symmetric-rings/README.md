@@ -18,10 +18,10 @@ The engine separates three questions:
 2. **Which available algorithm is appropriate for this input?**
 3. **How does that algorithm carry out the mathematics?**
 
-The public raw interface answers the first question, plan registries and
+The public raw interface answers the first question, plan databases and
 pickers answer the second, and kernels answer the third. Keeping those roles
 separate is important. A new mathematical algorithm normally needs a kernel
-and a plan in an existing registry; it normally does not need a new public raw
+and a plan in an existing database; it normally does not need a new public raw
 function.
 
 The same distinction applies to metadata.  Combinatorial tags describe the
@@ -48,7 +48,9 @@ The principal files are:
 | `expression-inspection.cpp` | Shared expression-shape and coefficient-map inspection |
 | `expression-conditions.*` | Inspectable plan conditions and ordered expression-piece partitioning |
 | `basis-conversion-policy.*` | Reusable performance-only selection facts |
-| `basis-conversion.*` | Expression facts, shared conversion-plan registry, and conversion/multiplication workflows |
+| `basis-conversion-plans.cpp` | Policy-free complete conversion plans using kernels, named plans, and compositions |
+| `basis-conversion-picker.cpp` | Ordered performance policy for choosing among complete plans |
+| `basis-conversion.*` | Expression facts, plan validation and execution, and conversion/multiplication workflows |
 | `basis-coefficient.*` | Targeted scalar transitions and default full-conversion fallback |
 | `basis-conversion-kernels.*` | Basis-family formulas, Jacobi--Trudi, characters, Hall--Littlewood transitions, and straightening |
 | `basis-conversion-products.*` | Littlewood--Richardson, Pieri, border-strip, and monomial-like product mathematics |
@@ -117,7 +119,7 @@ Raw functions should be small.  They should not contain route-selection
 heuristics or substantial symmetric-function mathematics.  For example, all
 ordinary basis conversions pass through the general
 `rawSymmetricRingsToBasis` entry point. Adding another way to convert power
-sums to Schur functions should extend the conversion plan registry, not add a
+sums to Schur functions should extend the conversion plan database, not add a
 parallel raw API.
 
 `rawSymmetricRingsToBasis` and `rawSymmetricRingsMultiplyToBasis` expose the
@@ -134,11 +136,11 @@ Three levels of responsibility are used throughout the engine:
 
 - A **workflow** owns a public calculation from input preparation through
   result validation.
-- A **plan** is one applicable mathematical path selected from a registry.
+- A **plan** is one applicable mathematical path selected from a plan database.
 - A **kernel** performs the algebra or combinatorics for a selected plan and
   contains no selection policy.
 
-Workflows share plan registries and kernels when their contracts apply. They
+Workflows share plan databases and kernels when their contracts apply. They
 differ in their operands, the facts available at entry, and the structure that
 must remain visible during the calculation.
 
@@ -177,7 +179,7 @@ explicit pairing.
 
 | Operation | Preserved request structure | High-level decision | Broad fallback |
 |---|---|---|---|
-| Basis conversion | Expression, exact source/target facts, and tags | Select one complete source-to-target plan from the shared registry | Convert general terms through named source-to-power-sum and power-sum-to-target child plans |
+| Basis conversion | Expression, exact source/target facts, and tags | Select one complete source-to-target plan from the shared plan database | Convert general terms through named source-to-power-sum and power-sum-to-target child plans |
 | Multiplication to a basis | Left operand, right operand, and output basis | Select one multiplication plan, including operand conversions and a product kernel | Convert through power sums and multiply there |
 | Plethysm to a basis | Outer operand, inner operand, and target basis | Choose a specialized combined route or materialize in power sums | Adams-operation plethysm followed by general conversion |
 | Inner product | Two operand profiles, pairing context, and registered metadata | Choose a diagonal, single-element, or structured-coordinate workflow | Convert both operands to power sums and apply the pairing |
@@ -222,9 +224,9 @@ Plan identifiers printed by the conversion trace can be forced in a
 fresh process with:
 
 ```sh
-M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN='PowerSum->Schur:grouped-characters'
-M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN='Complete->Schur:recursive-transition'
-M2_SYMMETRIC_RINGS_FORCE_MULTIPLICATION_PLAN='product:power-sums'
+M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN='PowerSum->Schur:Frobenius-character-formula'
+M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN='Complete->Schur:horizontal-Pieri'
+M2_SYMMETRIC_RINGS_FORCE_MULTIPLICATION_PLAN='product:via-power-sums'
 ```
 
 An unknown conversion plan, a plan with the wrong endpoints, or an
@@ -241,7 +243,7 @@ multiplication plans.
 
 For development-only differential validation, defining
 `M2_SYMMETRIC_RINGS_CHECK_ALL_CONVERSION_PLANS` executes every applicable
-registered plan for each requested source/target group and checks that all
+available plan for each requested source/target group and checks that all
 canonical results agree. This mode is intended for small test inputs, not
 benchmarks.
 
@@ -286,7 +288,7 @@ components and can use the abacus formula, conversion through complete
 functions, or a fixed term-level hybrid. Every case computes the same Schur
 expansion.
 
-The picker chooses only among complete registered plans with the requested
+The picker chooses only among complete available plans with the requested
 endpoints. It does not construct new intermediate-basis paths, and the generic
 executor never calls the picker. See the
 [basis-conversion diagram and contract](README-pipelines.md#basis-conversion)
@@ -309,22 +311,35 @@ answer or silently approximate coefficients.
 
 ## Extending basis conversion
 
-A new conversion algorithm normally fits into the existing structure:
+A new conversion path has three production edit locations:
 
-1. Implement one mathematically named kernel in
-   `basis-conversion-kernels.*`, with its domain and assumptions documented.
-2. Add its contract and stable plan identifier to the default registry in
-   `basis-conversion.*`.
-3. Put mathematical applicability in the plan contract. Put piecewise
-   performance conditions owned by one default plan in that plan, and
-   top-level competition policy in the picker; add reusable policy facts to
-   `basis-conversion-policy.*`.
-4. Add an executor case that calls the kernel without selecting another route.
-5. Retain an independent broad plan and add forced and automatic differential
-   tests across boundary cases and coefficient rings.
-6. Benchmark varied inputs before making the picker select the plan
-   automatically, and check whether the corresponding omega target should
-   reuse it.
+1. Implement one mathematically named callable kernel in
+   `basis-conversion-kernels.*`. State the defining identity, domain
+   assumptions, and canonical target guarantee beside the implementation.
+2. Add one complete named `X -> Y` entry in
+   `basis-conversion-plans.cpp`. Its applicability and ordered cases contain
+   all mathematical routing. A one-kernel plan is simply
+   `otherwise() -> kernel`; named plans and compositions name fixed child
+   plans.
+3. Add one ordered performance rule in the matching endpoint block of
+   `basis-conversion-picker.cpp`. If no specific plan is preferred, the
+   parameterized generic `X -> PowerSum -> Y` composition is the automatic
+   broad fallback.
+
+The kernel needs a declaration in `basis-conversion-kernels.hpp` because
+callable kernels are `SymmetricEngineRing` members. Tests and documentation
+are also required, but no edit to `toBasis`, the generic executor, a kernel
+enum, an endpoint-contract switch, or an execution switch is permitted.
+One callable kernel represents one named mathematical formula or formula family;
+it must not switch among unrelated source-to-target formulas. Shared helpers
+such as `linearlyExtendToPowerSums` perform only formula-independent
+operations.
+
+Mathematical applicability belongs to the plan. Picker conditions say only
+when one complete applicable plan is expected to outperform another. Compare
+new specific plans against the generic power-sum composition, add forced and
+automatic differential tests across boundary cases and coefficient rings, and
+benchmark varied inputs before changing automatic policy.
 
 No new raw entry point is normally needed.  Conversion kernels do not attach
 combinatorial tags, and a plan executor must not hide another selection step.

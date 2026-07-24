@@ -95,7 +95,7 @@ const T& requiredValue(
 }
 
 void requirePieceKind(
-    const ExpressionConditionContext& piece,
+    const ExpressionPieceFacts& piece,
     ExpressionPieceKind expected,
     const ExpressionCondition& condition)
 {
@@ -188,38 +188,41 @@ ExpressionCondition componentDensityAtLeast(
       denominator);
 }
 
-ExpressionCondition componentSupportSquareFavorsComplete()
+ExpressionCondition componentSupportSquareRatioAtLeast(
+    size_t numerator,
+    size_t denominator)
+{
+  return rationalCondition(
+      ExpressionConditionKind::
+          ComponentSupportSquareRatioAtLeast,
+      numerator,
+      denominator);
+}
+
+ExpressionCondition componentAllPowerSumIndicesHaveMostlyShortCycles()
 {
   return integerCondition(
       ExpressionConditionKind::
-          ComponentSupportSquareFavorsComplete,
+          ComponentAllPowerSumIndicesHaveMostlyShortCycles,
       0);
 }
 
-ExpressionCondition componentAllPowerSumTermsCompleteFriendly()
+ExpressionCondition componentHasBothMostlyShortCycleAndOtherTerms()
 {
   return integerCondition(
       ExpressionConditionKind::
-          ComponentAllPowerSumTermsCompleteFriendly,
+          ComponentHasBothMostlyShortCycleAndOtherTerms,
       0);
 }
 
-ExpressionCondition componentHasMixedCompleteFriendlyPowerSumTerms()
-{
-  return integerCondition(
-      ExpressionConditionKind::
-          ComponentHasMixedCompleteFriendlyPowerSumTerms,
-      0);
-}
-
-ExpressionCondition componentCompleteFriendlyFractionAtLeast(
+ExpressionCondition componentMostlyShortCycleFractionAtLeast(
     size_t numerator,
     size_t denominator,
     size_t minimumCount)
 {
   return fractionWithMinimumCondition(
       ExpressionConditionKind::
-          ComponentCompleteFriendlyFractionAtLeast,
+          ComponentMostlyShortCycleFractionAtLeast,
       numerator,
       denominator,
       minimumCount);
@@ -233,7 +236,7 @@ ExpressionCondition componentHasCommonPowerSumPartOne()
       0);
 }
 
-ExpressionCondition componentHasCommonPowerSumPartAtMostPercent(
+ExpressionCondition componentHasCommonPowerSumPartAtMostPercentOfWeight(
     int percent)
 {
   if (percent < 0)
@@ -241,7 +244,7 @@ ExpressionCondition componentHasCommonPowerSumPartAtMostPercent(
         "a common-part percentage cannot be negative");
   return integerCondition(
       ExpressionConditionKind::
-          ComponentHasCommonPowerSumPartAtMostPercent,
+          ComponentHasCommonPowerSumPartAtMostPercentOfWeight,
       percent);
 }
 
@@ -279,16 +282,16 @@ ExpressionCondition allPowerSumTermsAreSingleCycles()
       ExpressionConditionKind::AllPowerSumTermsAreSingleCycles, 0);
 }
 
-ExpressionCondition mixedCompleteFriendlyPowerSumExpansion()
+ExpressionCondition mixedShortCyclePowerSumExpansion()
 {
   return integerCondition(
-      ExpressionConditionKind::MixedCompleteFriendlyPowerSumExpansion, 0);
+      ExpressionConditionKind::MixedShortCyclePowerSumExpansion, 0);
 }
 
-ExpressionCondition powerSumIndexIsCompleteFriendly()
+ExpressionCondition powerSumIndexHasMostlyShortCycles()
 {
   return integerCondition(
-      ExpressionConditionKind::PowerSumIndexIsCompleteFriendly, 0);
+      ExpressionConditionKind::PowerSumIndexHasMostlyShortCycles, 0);
 }
 
 ExpressionCondition combinatorialTagsEqual(uint32_t tags)
@@ -337,7 +340,7 @@ ExpressionCondition operator!(ExpressionCondition condition)
 
 bool expressionConditionHolds(
     const ExpressionCondition& condition,
-    const ExpressionConditionContext& piece)
+    const ExpressionPieceFacts& piece)
 {
   switch (condition.kind)
     {
@@ -346,13 +349,13 @@ bool expressionConditionHolds(
         return true;
       case ExpressionConditionKind::TermWeightAtMost:
         requirePieceKind(
-            piece, ExpressionPieceKind::Terms, condition);
+            piece, ExpressionPieceKind::IndividualTerms, condition);
         return requiredValue(
                    piece.weight, "term weight", condition) <=
                condition.firstInteger;
       case ExpressionConditionKind::TermWeightGreaterThan:
         requirePieceKind(
-            piece, ExpressionPieceKind::Terms, condition);
+            piece, ExpressionPieceKind::IndividualTerms, condition);
         return requiredValue(
                    piece.weight, "term weight", condition) >
                condition.firstInteger;
@@ -398,7 +401,7 @@ bool expressionConditionHolds(
                      condition.firstInteger;
         }
       case ExpressionConditionKind::
-          ComponentSupportSquareFavorsComplete:
+          ComponentSupportSquareRatioAtLeast:
         {
           requirePieceKind(
               piece,
@@ -413,54 +416,55 @@ bool expressionConditionHolds(
           const long double termsSquared =
               static_cast<long double>(terms) *
               static_cast<long double>(terms);
-          return 2.0L * termsSquared >=
-                 35.0L * static_cast<long double>(possible);
+          return termsSquared * condition.secondInteger >=
+                 static_cast<long double>(possible) *
+                     condition.firstInteger;
         }
       case ExpressionConditionKind::
-          ComponentAllPowerSumTermsCompleteFriendly:
+          ComponentAllPowerSumIndicesHaveMostlyShortCycles:
         {
           requirePieceKind(
               piece,
               ExpressionPieceKind::HomogeneousComponents,
               condition);
-          const size_t friendly = requiredValue(
-              piece.completeFriendlyPowerSumTermCount,
-              "complete-friendly power-sum count",
+          const size_t shortCycleTerms = requiredValue(
+              piece.mostlyShortCyclePowerSumTermCount,
+              "mostly-short-cycle power-sum count",
               condition);
-          return friendly == requiredValue(
+          return shortCycleTerms == requiredValue(
               piece.termCount, "component term count", condition);
         }
       case ExpressionConditionKind::
-          ComponentHasMixedCompleteFriendlyPowerSumTerms:
+          ComponentHasBothMostlyShortCycleAndOtherTerms:
         {
           requirePieceKind(
               piece,
               ExpressionPieceKind::HomogeneousComponents,
               condition);
-          const size_t friendly = requiredValue(
-              piece.completeFriendlyPowerSumTermCount,
-              "complete-friendly power-sum count",
+          const size_t shortCycleTerms = requiredValue(
+              piece.mostlyShortCyclePowerSumTermCount,
+              "mostly-short-cycle power-sum count",
               condition);
           const size_t terms = requiredValue(
               piece.termCount, "component term count", condition);
-          return friendly > 0 && friendly < terms;
+          return shortCycleTerms > 0 && shortCycleTerms < terms;
         }
       case ExpressionConditionKind::
-          ComponentCompleteFriendlyFractionAtLeast:
+          ComponentMostlyShortCycleFractionAtLeast:
         {
           requirePieceKind(
               piece,
               ExpressionPieceKind::HomogeneousComponents,
               condition);
-          const size_t friendly = requiredValue(
-              piece.completeFriendlyPowerSumTermCount,
-              "complete-friendly power-sum count",
+          const size_t shortCycleTerms = requiredValue(
+              piece.mostlyShortCyclePowerSumTermCount,
+              "mostly-short-cycle power-sum count",
               condition);
           const size_t terms = requiredValue(
               piece.termCount, "component term count", condition);
-          return friendly >=
+          return shortCycleTerms >=
                      static_cast<size_t>(condition.thirdInteger) &&
-                 static_cast<long double>(friendly) *
+                 static_cast<long double>(shortCycleTerms) *
                          condition.secondInteger >=
                      static_cast<long double>(terms) *
                          condition.firstInteger;
@@ -480,7 +484,7 @@ bool expressionConditionHolds(
                  parts.end();
         }
       case ExpressionConditionKind::
-          ComponentHasCommonPowerSumPartAtMostPercent:
+          ComponentHasCommonPowerSumPartAtMostPercentOfWeight:
         {
           requirePieceKind(
               piece,
@@ -502,17 +506,17 @@ bool expressionConditionHolds(
         }
       case ExpressionConditionKind::IndexIsHook:
         requirePieceKind(
-            piece, ExpressionPieceKind::Terms, condition);
+            piece, ExpressionPieceKind::IndividualTerms, condition);
         return isHookPartition(requiredValue(
             piece.index, "term index", condition));
       case ExpressionConditionKind::IndexIsRectangle:
         requirePieceKind(
-            piece, ExpressionPieceKind::Terms, condition);
+            piece, ExpressionPieceKind::IndividualTerms, condition);
         return isRectanglePartition(requiredValue(
             piece.index, "term index", condition));
       case ExpressionConditionKind::IndexIsSelfConjugate:
         requirePieceKind(
-            piece, ExpressionPieceKind::Terms, condition);
+            piece, ExpressionPieceKind::IndividualTerms, condition);
         return isSelfConjugatePartition(requiredValue(
             piece.index, "term index", condition));
       case ExpressionConditionKind::ExpressionHasMultipleWeights:
@@ -543,26 +547,26 @@ bool expressionConditionHolds(
             "single-cycle power-sum fact",
             condition);
       case ExpressionConditionKind::
-          MixedCompleteFriendlyPowerSumExpansion:
+          MixedShortCyclePowerSumExpansion:
         {
           requirePieceKind(
               piece,
               ExpressionPieceKind::WholeExpression,
               condition);
-          const size_t friendly = requiredValue(
-              piece.completeFriendlyPowerSumTermCount,
-              "complete-friendly power-sum count",
+          const size_t shortCycleTerms = requiredValue(
+              piece.mostlyShortCyclePowerSumTermCount,
+              "mostly-short-cycle power-sum count",
               condition);
           const size_t terms = requiredValue(
               piece.termCount, "expression term count", condition);
-          return friendly > 0 && friendly < terms;
+          return shortCycleTerms > 0 && shortCycleTerms < terms;
         }
-      case ExpressionConditionKind::PowerSumIndexIsCompleteFriendly:
+      case ExpressionConditionKind::PowerSumIndexHasMostlyShortCycles:
         requirePieceKind(
-            piece, ExpressionPieceKind::Terms, condition);
+            piece, ExpressionPieceKind::IndividualTerms, condition);
         return requiredValue(
-            piece.powerSumIndexCompleteFriendly,
-            "complete-friendly power-sum index fact",
+            piece.powerSumIndexHasMostlyShortCycles,
+            "mostly-short-cycle power-sum index fact",
             condition);
       case ExpressionConditionKind::CombinatorialTagsEqual:
         return requiredValue(
@@ -646,25 +650,25 @@ void validateExpressionCondition(
       case ExpressionConditionKind::IndexIsHook:
       case ExpressionConditionKind::IndexIsRectangle:
       case ExpressionConditionKind::IndexIsSelfConjugate:
-      case ExpressionConditionKind::PowerSumIndexIsCompleteFriendly:
-        requireKind(ExpressionPieceKind::Terms);
+      case ExpressionConditionKind::PowerSumIndexHasMostlyShortCycles:
+        requireKind(ExpressionPieceKind::IndividualTerms);
         break;
       case ExpressionConditionKind::ComponentWeightAtMost:
       case ExpressionConditionKind::ComponentWeightGreaterThan:
       case ExpressionConditionKind::ComponentTermCountAtLeast:
       case ExpressionConditionKind::ComponentDensityAtLeast:
       case ExpressionConditionKind::
-          ComponentSupportSquareFavorsComplete:
+          ComponentSupportSquareRatioAtLeast:
       case ExpressionConditionKind::
-          ComponentAllPowerSumTermsCompleteFriendly:
+          ComponentAllPowerSumIndicesHaveMostlyShortCycles:
       case ExpressionConditionKind::
-          ComponentHasMixedCompleteFriendlyPowerSumTerms:
+          ComponentHasBothMostlyShortCycleAndOtherTerms:
       case ExpressionConditionKind::
-          ComponentCompleteFriendlyFractionAtLeast:
+          ComponentMostlyShortCycleFractionAtLeast:
       case ExpressionConditionKind::
           ComponentHasCommonPowerSumPartOne:
       case ExpressionConditionKind::
-          ComponentHasCommonPowerSumPartAtMostPercent:
+          ComponentHasCommonPowerSumPartAtMostPercentOfWeight:
         requireKind(
             ExpressionPieceKind::HomogeneousComponents);
         break;
@@ -673,7 +677,7 @@ void validateExpressionCondition(
       case ExpressionConditionKind::
           AllPowerSumTermsAreSingleCycles:
       case ExpressionConditionKind::
-          MixedCompleteFriendlyPowerSumExpansion:
+          MixedShortCyclePowerSumExpansion:
         requireKind(ExpressionPieceKind::WholeExpression);
         break;
       case ExpressionConditionKind::CombinatorialTagsEqual:
@@ -810,8 +814,8 @@ bool expressionConditionImplies(
 // Ordered Piece Partitioning
 // ============================================================================
 
-ExpressionConditionPartition partitionExpressionConditionContexts(
-    const std::vector<ExpressionConditionContext>& pieces,
+PlanCaseAssignments assignExpressionPiecesToCases(
+    const std::vector<ExpressionPieceFacts>& pieces,
     const std::vector<ExpressionCondition>& orderedConditions,
     size_t expectedTermCount)
 {
@@ -831,8 +835,8 @@ ExpressionConditionPartition partitionExpressionConditionContexts(
             "otherwise() cannot appear inside a logical condition");
     }
 
-  ExpressionConditionPartition result;
-  result.termPositionsByCase.resize(orderedConditions.size());
+  PlanCaseAssignments result;
+  result.termPositionsForCase.resize(orderedConditions.size());
   std::vector<bool> assigned(pieces.size(), false);
   std::vector<bool> coveredTerms(expectedTermCount, false);
   size_t assignedPieces = 0;
@@ -859,7 +863,7 @@ ExpressionConditionPartition partitionExpressionConditionContexts(
                   "expression pieces overlap in their term positions");
             coveredTerms[termPosition] = true;
             ++coveredTermCount;
-            result.termPositionsByCase[caseIndex].push_back(termPosition);
+            result.termPositionsForCase[caseIndex].push_back(termPosition);
           }
       }
 
@@ -903,18 +907,19 @@ std::string expressionConditionToString(
                std::to_string(condition.firstInteger) + "/" +
                std::to_string(condition.secondInteger);
       case ExpressionConditionKind::
-          ComponentSupportSquareFavorsComplete:
-        return "2 * component-terms^2 >= "
-               "35 * component-possible-terms";
+          ComponentSupportSquareRatioAtLeast:
+        return "component-terms^2 / component-possible-terms >= " +
+               std::to_string(condition.firstInteger) + "/" +
+               std::to_string(condition.secondInteger);
       case ExpressionConditionKind::
-          ComponentAllPowerSumTermsCompleteFriendly:
-        return "all-component-power-sum-terms-are-complete-friendly";
+          ComponentAllPowerSumIndicesHaveMostlyShortCycles:
+        return "all-component-power-sum-indices-have-mostly-short-cycles";
       case ExpressionConditionKind::
-          ComponentHasMixedCompleteFriendlyPowerSumTerms:
-        return "component-has-mixed-complete-friendly-power-sum-terms";
+          ComponentHasBothMostlyShortCycleAndOtherTerms:
+        return "component-has-both-mostly-short-cycle-and-other-terms";
       case ExpressionConditionKind::
-          ComponentCompleteFriendlyFractionAtLeast:
-        return "component-complete-friendly-terms >= max(" +
+          ComponentMostlyShortCycleFractionAtLeast:
+        return "component-mostly-short-cycle-terms >= max(" +
                std::to_string(condition.thirdInteger) + ", " +
                std::to_string(condition.firstInteger) + "/" +
                std::to_string(condition.secondInteger) +
@@ -923,7 +928,7 @@ std::string expressionConditionToString(
           ComponentHasCommonPowerSumPartOne:
         return "component-common-power-sum-parts-contain-1";
       case ExpressionConditionKind::
-          ComponentHasCommonPowerSumPartAtMostPercent:
+          ComponentHasCommonPowerSumPartAtMostPercentOfWeight:
         return "component-has-common-power-sum-part <= " +
                std::to_string(condition.firstInteger) +
                "% of component-weight";
@@ -940,10 +945,10 @@ std::string expressionConditionToString(
       case ExpressionConditionKind::AllPowerSumTermsAreSingleCycles:
         return "all-power-sum-terms-are-single-cycles";
       case ExpressionConditionKind::
-          MixedCompleteFriendlyPowerSumExpansion:
-        return "mixed-complete-friendly-power-sum-expansion";
-      case ExpressionConditionKind::PowerSumIndexIsCompleteFriendly:
-        return "power-sum-index-is-complete-friendly";
+          MixedShortCyclePowerSumExpansion:
+        return "mixed-short-cycle-power-sum-expansion";
+      case ExpressionConditionKind::PowerSumIndexHasMostlyShortCycles:
+        return "power-sum-index-has-mostly-short-cycles";
       case ExpressionConditionKind::CombinatorialTagsEqual:
         return "combinatorial-tags == " +
                std::to_string(condition.tagMask);
@@ -971,7 +976,7 @@ const char *expressionPieceKindName(ExpressionPieceKind kind)
     {
       case ExpressionPieceKind::WholeExpression:
         return "whole-expression pieces";
-      case ExpressionPieceKind::Terms:
+      case ExpressionPieceKind::IndividualTerms:
         return "term pieces";
       case ExpressionPieceKind::HomogeneousComponents:
         return "homogeneous-component pieces";

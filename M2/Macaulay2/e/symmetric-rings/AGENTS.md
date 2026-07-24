@@ -15,7 +15,7 @@ both the mathematical operation and the programmatic role clear.
 - Name functions for what they compute, not for a relative performance claim.
   Do not use `fast`, `efficient`, `optimized`, or `legacy` in identifiers.
 - Avoid `direct` when the actual algorithm can be named. For example, prefer
-  `powerSumsToSchurViaCharacters` to `directPowerSumsToSchur`.
+  `powerSumsToSchurViaFrobeniusCharacterFormula` to `directPowerSumsToSchur`.
 - Use `Via`, never `By`, to introduce an algorithm or intermediate route.
 - Keep one implementation function per algorithm. Do not add one-line
   `fast...` or `efficient...` wrappers around a descriptively named kernel.
@@ -26,9 +26,9 @@ both the mathematical operation and the programmatic role clear.
 
 Use these forms consistently:
 
-- `<operation>PlanDatabase` returns the policy-free declarative catalog when
-  plan definitions are static. `build<Operation>Plans` is reserved for
-  operation catalogs that genuinely depend on runtime context.
+- `<operation>PlanDatabase` returns policy-free declarative definitions when
+  plans are static. `build<Operation>Plans` is reserved for plan collections
+  that genuinely depend on runtime context.
 - `select<Operation>Plan` examines exact facts and returns one complete
   top-level plan without performing algebra.
 - `trace<Operation>Selection` reports a selection without performing algebra.
@@ -42,20 +42,25 @@ Use these forms consistently:
 - `try<Operation>` checks whether a route applies and, on success, produces its
   result. Add `Via<Algorithm>` when the probe is specific to one algorithm.
   Example: `tryProductToSchurViaCompatibleFactors`.
-- `<source>To<target>Via<Algorithm>` executes one named atomic conversion
-  algorithm. Declarative compositions belong in the plan database and must
+- `<source>To<target>Via<Algorithm>` executes one named conversion kernel.
+  Declarative compositions belong in the plan database and must
   not make a hidden method choice.
+- One plan-callable kernel must denote one mathematical formula or one clearly
+  named formula family. Do not hide unrelated source- or target-basis
+  formulas behind a switch in a generic callable. Shared linear-extension and
+  coefficient-assembly helpers may use a fixed basis kind supplied by the
+  named formula.
 
-Registries and pickers for important source-target pairs should live in an
+Plan databases and pickers for important source-target pairs should live in an
 obvious place. A general conversion picker should use one plan contract rather
 than nested target-specific route enums. Its conditions should make it possible
 to read when the selected power-sum-to-target plan executes each of:
 
-- `powerSumsToSchurViaBorderStrips`
+- `powerSumsToSchurViaMurnaghanNakayama`
 - `powerSumsToSchurViaAbacusRimHooks`
-- `powerSumsToSchurViaCharacters`
-- the homogeneous-component `PowerSum->Schur:default-policy`
-- the term-level `PowerSum->Schur:complete-friendly-hybrid-plan`
+- `powerSumsToSchurViaFrobeniusCharacterFormula`
+- the homogeneous-component `PowerSum->Schur:homogeneous-component-formulas`
+- the term-level `PowerSum->Schur:short-cycle-hybrid`
 - `powerSumSingleCycleTermsToHallLittlewoodViaGreenPolynomials`
 - `powerSumIndexToHallLittlewoodViaGreenPolynomialsAndDuality`
 
@@ -66,12 +71,19 @@ Every substantial conversion family should therefore have the same visible
 structure:
 
 ```text
-<operation>PlanDatabase
-<operation>PlanApplicable
-<operation>PlanCost
-select<Operation>Plan
-execute<Operation>Plan
+basis-conversion-kernels.cpp
+    mathematical conversion kernels
+basis-conversion-plans.cpp
+    complete mathematically valid plans
+basis-conversion-picker.cpp
+    ordered performance choices among those plans
 ```
+
+An ordinary new `X -> Y` conversion path changes only those three production
+topics, plus a mechanical declaration in `basis-conversion-kernels.hpp`.
+Tests and documentation are additional deliverables. Never add a kernel enum,
+endpoint-contract switch, executor case, `toBasis` branch, or stable plan ID
+to workflow infrastructure.
 
 ## Products And Other Operations
 
@@ -99,8 +111,10 @@ raw dispatch entry points.
 - `basis-conversion-policy.*`: reusable performance-only selector facts.
 - `expression-conditions.*`: inspectable mathematical conditions, their
   evaluator, and ordered expression-piece partitioning.
-- `basis-conversion.*`: expression facts, plan registries, selectors, executors,
-  and conversion/multiplication workflows.
+- `basis-conversion-plans.cpp`: policy-free complete conversion plans.
+- `basis-conversion-picker.cpp`: endpoint-specific ordered performance policy.
+- `basis-conversion.*`: expression facts, plan validation and generic
+  execution, and conversion/multiplication workflows.
 - `basis-coefficient.*`: targeted coefficient routes and their default
   full-conversion fallback.
 - `basis-conversion-kernels.*`: conversion formulas and straightening.
@@ -115,13 +129,13 @@ raw dispatch entry points.
   kernels.
 
 Within each conversion file, keep the `.cpp` and `.hpp` sections in the same
-order. Group plan code by decision flow, keeping the registry, applicability,
-cost, picker, and executor in that order. Group kernels by basis family, with
-conversions to and from that family adjacent. Group product code by
-combinatorial rule, such as Littlewood-Richardson, Pieri, border strips, or
-Hall-Littlewood multiplication. Use descriptive comment-block headers to make
-these groups visible when scanning either file.
+order. Group plan and picker entries by source and target family in matching
+orders. Group kernels by basis family, with conversions to and from that
+family adjacent. Group product code by combinatorial rule, such as
+Littlewood-Richardson, Pieri, border strips, or Hall-Littlewood multiplication.
+Use descriptive comment-block headers to make these groups visible when
+scanning any file.
 
 Do not place stray basis-conversion decisions in plethysm, inner-product, or
-other unrelated files. Those operations should use the shared conversion
-registry and executor or a named policy-free kernel as appropriate.
+other unrelated files. Those operations should use the shared conversion plan
+database and executor or a named policy-free kernel as appropriate.

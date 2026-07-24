@@ -15,12 +15,16 @@
 #include "rings/ringelem.hpp"
 
 #include <array>
+#include <functional>
 #include <initializer_list>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <utility>
+#include <variant>
 #include <vector>
 
 namespace symmetric_rings {
@@ -75,7 +79,7 @@ class SymmetricEngineRing : public Ring
   // Stable declarative plan IDs are process-wide, while their numeric basis
   // endpoints are ring-local. Cache that final resolution per ring.
   mutable std::map<std::string, std::pair<int, int>>
-      resolvedBasisConversionEndpointCache;
+      basisConversionEndpointsForRingCache;
 
   // Classical and Hall-Littlewood conversion state.
   mutable GCMap<int, ring_elem> completeToPowerSumsCache;

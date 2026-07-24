@@ -8,8 +8,8 @@ using namespace symmetric_rings;
 
 TEST(ExpressionConditions, LogicalValuesPreserveShortCircuitEvaluation)
 {
-  ExpressionConditionContext term;
-  term.pieceKind = ExpressionPieceKind::Terms;
+  ExpressionPieceFacts term;
+  term.pieceKind = ExpressionPieceKind::IndividualTerms;
   term.weight = 12;
 
   EXPECT_TRUE(expressionConditionHolds(
@@ -29,57 +29,57 @@ TEST(ExpressionConditions, LogicalValuesPreserveShortCircuitEvaluation)
 
 TEST(ExpressionConditions, PartitionCasesAreOrderedAndComplete)
 {
-  ExpressionConditionContext first;
-  first.pieceKind = ExpressionPieceKind::Terms;
+  ExpressionPieceFacts first;
+  first.pieceKind = ExpressionPieceKind::IndividualTerms;
   first.termPositions = {0};
   first.weight = 4;
   first.index = Partition{3, 1};
 
-  ExpressionConditionContext second;
-  second.pieceKind = ExpressionPieceKind::Terms;
+  ExpressionPieceFacts second;
+  second.pieceKind = ExpressionPieceKind::IndividualTerms;
   second.termPositions = {1};
   second.weight = 4;
   second.index = Partition{2, 2};
 
-  ExpressionConditionContext third;
-  third.pieceKind = ExpressionPieceKind::Terms;
+  ExpressionPieceFacts third;
+  third.pieceKind = ExpressionPieceKind::IndividualTerms;
   third.termPositions = {2};
   third.weight = 5;
   third.index = Partition{2, 2, 1};
 
-  const auto partition = partitionExpressionConditionContexts(
+  const auto assignments = assignExpressionPiecesToCases(
       {first, second, third},
       {indexIsHook(), indexIsRectangle(), otherwise()},
       3);
 
   EXPECT_EQ(
       (std::vector<size_t>{0}),
-      partition.termPositionsByCase[0]);
+      assignments.termPositionsForCase[0]);
   EXPECT_EQ(
       (std::vector<size_t>{1}),
-      partition.termPositionsByCase[1]);
+      assignments.termPositionsForCase[1]);
   EXPECT_EQ(
       (std::vector<size_t>{2}),
-      partition.termPositionsByCase[2]);
+      assignments.termPositionsForCase[2]);
 }
 
 TEST(ExpressionConditions, PartitionRejectsInvalidCaseDefinitions)
 {
-  ExpressionConditionContext term;
-  term.pieceKind = ExpressionPieceKind::Terms;
+  ExpressionPieceFacts term;
+  term.pieceKind = ExpressionPieceKind::IndividualTerms;
   term.termPositions = {0};
   term.weight = 1;
 
   EXPECT_THROW(
-      partitionExpressionConditionContexts(
+      assignExpressionPiecesToCases(
           {term}, {otherwise(), termWeightAtMost(2)}, 1),
       std::invalid_argument);
   EXPECT_THROW(
-      partitionExpressionConditionContexts(
+      assignExpressionPiecesToCases(
           {term}, {termWeightAtMost(2)}, 1),
       std::invalid_argument);
   EXPECT_THROW(
-      partitionExpressionConditionContexts(
+      assignExpressionPiecesToCases(
           {term},
           {termWeightAtMost(2) || otherwise(), otherwise()},
           1),
@@ -90,7 +90,7 @@ TEST(ExpressionConditions, StaticValidationChecksPieceKindsAndArity)
 {
   EXPECT_NO_THROW(validateExpressionCondition(
       indexIsHook() && termWeightGreaterThan(3),
-      ExpressionPieceKind::Terms));
+      ExpressionPieceKind::IndividualTerms));
   EXPECT_THROW(
       validateExpressionCondition(
           indexIsHook(),
@@ -99,7 +99,7 @@ TEST(ExpressionConditions, StaticValidationChecksPieceKindsAndArity)
   EXPECT_THROW(
       validateExpressionCondition(
           otherwise(),
-          ExpressionPieceKind::Terms),
+          ExpressionPieceKind::IndividualTerms),
       std::invalid_argument);
 
   ExpressionCondition invalidAnd;
@@ -108,7 +108,7 @@ TEST(ExpressionConditions, StaticValidationChecksPieceKindsAndArity)
   EXPECT_THROW(
       validateExpressionCondition(
           invalidAnd,
-          ExpressionPieceKind::Terms),
+          ExpressionPieceKind::IndividualTerms),
       std::invalid_argument);
 }
 
@@ -143,7 +143,7 @@ TEST(ExpressionConditions, ContractImplicationIsConservative)
 
 TEST(ExpressionConditions, ComponentDensityUsesExactCrossMultiplication)
 {
-  ExpressionConditionContext component;
+  ExpressionPieceFacts component;
   component.pieceKind =
       ExpressionPieceKind::HomogeneousComponents;
   component.termCount = 3;
@@ -157,15 +157,15 @@ TEST(ExpressionConditions, ComponentDensityUsesExactCrossMultiplication)
 
 TEST(ExpressionConditions, ComponentProfilesAndFullTagMasksArePreserved)
 {
-  ExpressionConditionContext component;
+  ExpressionPieceFacts component;
   component.pieceKind =
       ExpressionPieceKind::HomogeneousComponents;
   component.termCount = 40;
-  component.completeFriendlyPowerSumTermCount = 10;
+  component.mostlyShortCyclePowerSumTermCount = 10;
   component.combinatorialTags = uint32_t{1} << 31;
 
   EXPECT_TRUE(expressionConditionHolds(
-      componentCompleteFriendlyFractionAtLeast(1, 4, 8),
+      componentMostlyShortCycleFractionAtLeast(1, 4, 8),
       component));
   EXPECT_TRUE(expressionConditionHolds(
       combinatorialTagsEqual(uint32_t{1} << 31),
@@ -177,8 +177,8 @@ TEST(ExpressionConditions, ComponentProfilesAndFullTagMasksArePreserved)
 
 TEST(ExpressionConditions, PartitionShapePrimitivesAreInspectable)
 {
-  ExpressionConditionContext term;
-  term.pieceKind = ExpressionPieceKind::Terms;
+  ExpressionPieceFacts term;
+  term.pieceKind = ExpressionPieceKind::IndividualTerms;
 
   term.index = Partition{5, 1, 1};
   EXPECT_TRUE(expressionConditionHolds(indexIsHook(), term));

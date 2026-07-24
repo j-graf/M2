@@ -154,6 +154,8 @@ set(CPPONLYFILES
   interface/symmetric-rings.h
   rings/ring-vecs.cpp
   symmetric-rings/arithmetic.cpp
+  symmetric-rings/basis-conversion-picker.cpp
+  symmetric-rings/basis-conversion-plans.cpp
   )
 
 # these files all have .hpp and .cpp files
