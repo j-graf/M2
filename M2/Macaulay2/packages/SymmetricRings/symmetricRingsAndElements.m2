@@ -298,25 +298,25 @@ basis SymmetricBasis := SymmetricBasis => opts -> B -> (
 -- active ring rather than a stale one.
 installBasisAlias = (R0, B0) -> (
     symbolString := basisSymbolForRing(R0, B0);
-    X := getSymbol symbolString;
+    basisTableSymbol := getSymbol symbolString;
     B1 := basisOnRing(B0, R0);
-    t := new SymmetricRingIndexedVariableTable from X;
+    t := new SymmetricRingIndexedVariableTable from basisTableSymbol;
     t.SymmetricRing = R0;
     t.SymmetricBasis = B1;
     t#symbol _ = a -> B1 _ a;
-    globalAssign(X, t);
+    globalAssign(basisTableSymbol, t);
     t
     )
 
 -- Installs an alternate input symbol that constructs the canonical basis.
 installRegisteredBasisAlias = (R0, aliasSymbol, targetKey) -> (
-    X := getSymbol aliasSymbol;
+    basisTableSymbol := getSymbol aliasSymbol;
     B1 := basis(R0, targetKey);
-    t := new SymmetricRingIndexedVariableTable from X;
+    t := new SymmetricRingIndexedVariableTable from basisTableSymbol;
     t.SymmetricRing = R0;
     t.SymmetricBasis = B1;
     t#symbol _ = a -> B1 _ a;
-    globalAssign(X, t);
+    globalAssign(basisTableSymbol, t);
     t
     )
 
@@ -325,23 +325,23 @@ installRegisteredBasisAlias = (R0, aliasSymbol, targetKey) -> (
 -- error from Q_2 instead of accidentally using a table left by an older ring.
 installUnavailableBasisAlias = (R0, B0) -> (
     symbolString := basisSymbolForRing(R0, B0);
-    X := getSymbol symbolString;
-    t := new SymmetricRingIndexedVariableTable from X;
+    basisTableSymbol := getSymbol symbolString;
+    t := new SymmetricRingIndexedVariableTable from basisTableSymbol;
     t.SymmetricRing = R0;
     t.SymmetricBasis = null;
     t#symbol _ = a -> error("basis ", symbolString, " is not available for this symmetric ring");
-    globalAssign(X, t);
+    globalAssign(basisTableSymbol, t);
     t
     )
 
 -- Installs a registered alias whose canonical basis is unavailable on this ring.
 installUnavailableRegisteredBasisAlias = (R0, aliasSymbol) -> (
-    X := getSymbol aliasSymbol;
-    t := new SymmetricRingIndexedVariableTable from X;
+    basisTableSymbol := getSymbol aliasSymbol;
+    t := new SymmetricRingIndexedVariableTable from basisTableSymbol;
     t.SymmetricRing = R0;
     t.SymmetricBasis = null;
     t#symbol _ = a -> error("basis alias ", aliasSymbol, " is not available for this symmetric ring");
-    globalAssign(X, t);
+    globalAssign(basisTableSymbol, t);
     t
     )
 

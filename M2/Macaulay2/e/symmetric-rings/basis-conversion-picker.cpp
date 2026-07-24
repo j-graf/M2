@@ -14,7 +14,7 @@ namespace symmetric_rings {
 // valid complete plans are listed explicitly as non-automatic alternatives.
 //
 // If an endpoint has no specific automatic plan, selection uses the single
-// parameterized X -> p -> Y plan. Its two named plans are designated in the
+// parameterized u -> p -> v plan. Its two named plans are designated in the
 // plan file and identified before execution. Endpoint pickers below therefore
 // describe only genuine choices among specific mathematical formulas.
 

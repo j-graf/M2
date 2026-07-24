@@ -10,8 +10,8 @@ namespace symmetric_rings {
 // Complete Basis-Conversion Plans
 // ============================================================================
 // This is the single contributor-facing list of mathematically complete
-// formulas. A plan uses one kernel, uses one named plan, composes named
-// plans, or assigns fixed formulas to ordered expression pieces.
+// formulas. Each ordered expression piece uses either one kernel or a fixed
+// composition of one or more named plans.
 
 // ============================================================================
 // Plan-Formula Constructors
@@ -23,29 +23,21 @@ SymmetricEngineRing::useKernel(
     BasisConversionKernel kernel,
     ExpressionCondition outputGuarantee)
 {
-    return KernelPlanFormula{
+    return KernelPlan{
         std::move(name),
         kernel,
         std::move(outputGuarantee)};
   }
 
 SymmetricEngineRing::BasisConversionPlanFormula
-SymmetricEngineRing::usePlan(
-    BasisConversionPlanId plan)
-{
-    return NamedPlanFormula{
-        std::move(plan)};
-  }
-
-SymmetricEngineRing::BasisConversionPlanFormula
 SymmetricEngineRing::composePlans(
     std::initializer_list<BasisConversionPlanId> plans)
 {
-    if (plans.size() < 2)
+    if (plans.size() == 0)
       throw exc::engine_error(
-          "a basis-conversion plan composition requires at least two "
-          "named child plans");
-    ComposedPlansFormula result;
+          "a basis-conversion plan composition requires at least one "
+          "named plan");
+    CompositionPlan result;
     result.plans.assign(
         plans.begin(), plans.end());
     return result;
@@ -54,9 +46,9 @@ SymmetricEngineRing::composePlans(
 // ============================================================================
 // Canonical Power-Sum Fallback Plans
 // ============================================================================
-// The generic fallback P_{X,Y}^{(p)} needs one mathematically complete
-// X -> p child and one p -> Y child. This table designates those children;
-// it does not choose among them at runtime.
+// The generic fallback P_{u,v}^{(p)} needs one mathematically complete
+// u -> p component and one p -> v component. This table designates those
+// plans; it does not choose among them at runtime.
 
 const std::vector<SymmetricEngineRing::PowerSumFallbackPlanPair>&
 SymmetricEngineRing::powerSumFallbackPlanDatabase()
@@ -117,7 +109,7 @@ const SymmetricEngineRing::BasisConversionPlanId&
 SymmetricEngineRing::genericPowerSumFallbackPlanIdentifier()
 {
     static const BasisConversionPlanId id{
-        "X->Y:via-power-sums"};
+        "u->v:via-power-sums"};
     return id;
   }
 
@@ -437,9 +429,9 @@ SymmetricEngineRing::basisConversionPlanDatabase()
                     &SymmetricEngineRing::
                         powerSumsToSchurViaAbacusRimHooks);
             const auto shortCycleHybrid =
-                usePlan({
-                    "PowerSum->Schur:"
-                    "short-cycle-hybrid"});
+                composePlans({
+                    {"PowerSum->Schur:"
+                     "short-cycle-hybrid"}});
             const uint32_t plethysmTag =
                 combinatorialTagMask(
                     CombinatorialTag::Plethysm);
@@ -613,7 +605,7 @@ SymmetricEngineRing::basisConversionPlanDatabase()
 // ============================================================================
 // For non-power-sum endpoints this instantiates the single mathematical plan
 //
-//             P_{X,Y}^{(p)} = P_{p,Y} o P_{X,p}.
+//             P_{u,v}^{(p)} = P_{p,v} o P_{u,p}.
 //
 // The result is an ordinary immutable plan definition with both named plans
 // identified. The generic executor therefore treats it exactly like a
@@ -684,7 +676,7 @@ SymmetricEngineRing::basisConversionViaPowerSumsPlan(
             sourceFallback->toPowerSums,
             targetFallback->fromPowerSums});
     auto& composition =
-        std::get<ComposedPlansFormula>(
+        std::get<CompositionPlan>(
             formula);
     composition.planDefinitions = {
         toPowerSums, fromPowerSums};

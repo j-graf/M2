@@ -52,14 +52,14 @@ status.
       make it total over its accepted domain.
 - [x] Keep helper dependencies explicit and acyclic; prefer the direction
       `toBasis -> multiplyTermToBasis -> multiplyToBasis`, with no reverse calls.
-- [x] Use one shared `X -> Y` plan database from `toBasis`,
+- [x] Use one shared `u -> v` plan database from `toBasis`,
       `multiplyTermToBasis`, `multiplyToBasis`, and any other calculation needing
       basis conversion.
 - [x] Select one complete source-to-target plan before execution. That plan
-      fixes every kernel and named composition it may use. Evaluating a fixed
-      child plan's conditions after its intermediate expression exists is not
-      another performance selection; do not begin one formula, decline, and
-      select another.
+      fixes every kernel and composition it may use. Evaluating a fixed
+      component plan's conditions after its intermediate expression exists is
+      not another performance selection; do not begin one formula, decline,
+      and select another.
 - [x] Keep kernels small, reusable, policy-free, and unable to call public
       workflow entry points.
 - [x] Use one shared facts representation, compute each fact at most once when
@@ -94,7 +94,7 @@ status.
 - [x] Confirm that broad stage calculations remain independent correctness
       references for optimized plans and bypasses.
 - [x] Confirm that `toBasis`, `multiplyTermToBasis`, and `multiplyToBasis` use the
-      same independent `X -> Y` plan database.
+      same independent `u -> v` plan database.
 - [x] Demonstrate adding at least one new conversion kernel using the intended
       contributor workflow.
 - [x] Update `README-pipelines.md` so its decision trees reflect the completed
@@ -276,7 +276,7 @@ benchmarks justify it.
       leading unknown-weight block for all other terms.
 - [ ] Make operations propagate block weights instead of rescanning terms.
 
-## Shared `X -> Y` plan database
+## Shared `u -> v` plan database
 
 Basis conversion plans must live in a separate database rather than inside any
 one workflow.  `toBasis`, `multiplyTermToBasis`, and `multiplyToBasis` all
@@ -286,10 +286,10 @@ between callers.
 
 There are three parts: the plan database, the plan picker, and the plan
 executor. An available plan describes one complete conversion from a canonical
-expression in basis `X` to a canonical expression in basis `Y`. **A plan
+expression in basis `u` to a canonical expression in basis `v`. **A plan
 answers exactly one question: which parts of this expression are sent to which
-conversion formulas?** A conversion formula is an `X -> Y` kernel, one fixed
-named plan, or a fixed composition of named plans with compatible endpoints.
+conversion formulas?** A conversion formula is a `u -> v` kernel or a
+nonempty fixed composition of named plans with compatible endpoints.
 Accordingly, the same plan representation supports direct plans, compositions,
 and hybrids that use kernels for some parts and compositions for others.
 The precise mathematical model appears in the Updated plans subsection below.
@@ -297,12 +297,12 @@ The precise mathematical model appears in the Updated plans subsection below.
 The plan database is the policy-free collection of these plans. A basis pair `(A, B)`
 may have several competing plans. Each available plan has a stable identifier,
 declares its mathematical applicability requirements, and explicitly names
-every kernel or child plan it may use. The database does not know which
+every kernel or component plan it may use. The database does not know which
 applicable plan is expected to perform best.
 
-The picker owns all performance policy. Given source `X`, target `Y`, and the
+The picker owns all performance policy. Given source `u`, target `v`, and the
 available expression facts, it chooses the expected best applicable
-`X -> Y` plan and returns that plan without executing it. For example, it may
+`u -> v` plan and returns that plan without executing it. For example, it may
 choose a direct plan at low weights, a plan consisting of a composition at
 higher weights, or a hybrid plan for a particular support shape. It does not
 separately construct a basis composition: every composition is already a
@@ -317,50 +317,51 @@ request is an explicit error and must not silently fall back.
 
 The executor receives the selected plan, partitions its input according to the
 plan's ordered conditions, and evaluates each associated conversion formula.
-For a composition, it passes each named child plan's canonical output to the
-next child plan. A later child plan evaluates its fixed mathematical conditions
+For a composition, it passes each component plan's canonical output to the
+next component plan. A later plan evaluates its fixed mathematical conditions
 only after its intermediate expression exists. That condition evaluation is
 not another performance selection: the parent plan already fixed the exact
-composition and child plan identifiers. The executor never calls the picker or
+composition and component plan identifiers. The executor never calls the picker or
 substitutes another plan.
 
-An `X -> Y` plan has a strict input contract: its expression is a linear
-combination entirely in basis `X`, and every nonscalar term consists of a
-coefficient times exactly one already-normalized, non-skew `X`-basis element in
+An `u -> v` plan has a strict input contract: its expression is a linear
+combination entirely in basis `u`, and every nonscalar term consists of a
+coefficient times exactly one already-normalized, non-skew `u`-basis element in
 the mathematical sense.  The input has no unresolved products, mixed source
 bases, skew elements, or indices requiring straightening.  Its output is a
-canonical, collected linear combination entirely in basis `Y`, with exactly one
-normalized `Y`-basis element per nonscalar term.  Normalization, multiplication,
+canonical, collected linear combination entirely in basis `v`, with exactly one
+normalized `v`-basis element per nonscalar term.  Normalization, multiplication,
 and separation of mixed-basis expressions therefore happen before an
-expression is given to an `X -> Y` plan.
+expression is given to a `u -> v` plan.
 
 Each plan can have additional requirements. For example, a plan can require
 that its input expression be homogeneous or contain one term. The picker
 checks the selected top-level plan's requirements. A composition must
-guarantee the preconditions of every named child plan for the subexpression
+guarantee the preconditions of every component plan for the subexpression
 that reaches it. The executor may validate those preconditions and report a
 contract error, but it must never respond by choosing another plan.
 
 - [x] Create one independent database for basis-conversion plans.
-- [x] Allow any `(X, Y)` pair to register multiple competing plans under stable
+- [x] Allow any `(u, v)` pair to register multiple competing plans under stable
       identifiers.
 - [x] Define every plan as an ordered association from parts of one canonical
       source-basis expression to complete source-to-target conversion formulas.
-- [x] Represent each conversion formula uniformly as a kernel, one fixed
-      named plan, or an ordered composition of named plans.
+- [x] Represent each conversion formula uniformly as a kernel or a nonempty
+      ordered composition of named plans. A one-plan composition delegates to
+      that exact, possibly piecewise plan.
 - [x] Support direct plans, compositions, and hybrid plans in the same database
       and executor.
 - [x] Let available plans compose named plans with compatible endpoints, but
       never call the picker.
 - [x] Keep mathematical plan definitions and applicability requirements in the
       database, but keep performance-selection policy out of it.
-- [x] Make the picker choose one complete `X -> Y` plan without
+- [x] Make the picker choose one complete `u -> v` plan without
       executing it or separately constructing an intermediate-basis route.
 - [x] Let callers prescribe one stable top-level plan identifier as a
       benchmarking bypass; plans containing compositions already fix their
-      child identifiers.
+      component identifiers.
 - [x] Validate every automatic or requested plan's endpoints, mathematical
-      preconditions, child references, composition endpoints, and acyclic
+      preconditions, component references, composition endpoints, and acyclic
       dependencies, returning an explicit error rather than silently falling
       back.
 - [x] Return the selected plan to one generic executor without executing it in
@@ -369,10 +370,11 @@ contract error, but it must never respond by choosing another plan.
       without making performance decisions.
 - [x] Enforce the exact normalized, product-free, single-source-basis input
       contract at every plan-database call site.
-- [x] Key plan selection by source basis `X`, target basis `Y`, and the relevant
+- [x] Key plan selection by source basis `u`, target basis `v`, and the relevant
       expression facts.
 - [x] Require every selected plan to be complete for the facts used to select
-      it and every child plan to be complete for the subexpression it receives.
+      it and every component plan to be complete for the subexpression it
+      receives.
 - [x] Keep plan selection side-effect-free and separate from plan execution.
 - [x] Make `toBasis` use the plan database for every source-basis group.
 - [x] Make `multiplyTermToBasis` use the same plan database directly for one-factor
@@ -382,7 +384,7 @@ contract error, but it must never respond by choosing another plan.
       its binary product plans.
 - [x] Allow other calculations to use the plan database without depending on
       `toBasis`.
-- [x] Do not duplicate `X -> Y` selection logic inside multiplication code.
+- [x] Do not duplicate `u -> v` selection logic inside multiplication code.
 - [x] Do not let database plans call `toBasis`, `multiplyTermToBasis`, or
       `multiplyToBasis`.
 - [x] Register a new conversion plan or competing kernel in one obvious
@@ -390,52 +392,50 @@ contract error, but it must never respond by choosing another plan.
 
 ### Updated plans
 
-A plan from $X$ to $Y$ is a piecewise mathematical formula. Let
+A plan from $u$ to $v$ is a piecewise mathematical formula. Let
 
 $$
-f=\sum_\alpha c_\alpha X_\alpha
+f=\sum_\alpha c_\alpha u_\alpha
 $$
 
-be a canonical expansion in basis $X$. A plan is an ordered list of
+be a canonical expansion in basis $u$. A plan is an ordered list of
 associations
 
 $$
 (\text{condition on a part of }f)
 \longmapsto
-(\text{conversion formula from }X\text{ to }Y).
+(\text{conversion formula from }u\text{ to }v).
 $$
 
 Each association selects a subexpression of $f$. The selected subexpressions
 are converted by their associated formulas, and the resulting canonical
-$Y$-expansions are added.
+$v$-expansions are added.
 
 #### Conversion formulas
 
 A conversion formula is built from these mathematical constructions:
 
-1. A kernel, such as $K_{X,Y}$.
-2. A fixed named plan with the same endpoints, which may use a different
-   piece kind without invoking the picker.
-3. An ordered composition of two or more plans, such as
-   $P_{Z,Y}\circ P_{X,Z}$.
+1. A kernel, such as $K_{u,v}$.
+2. A nonempty ordered composition of named plans, such as
+   $P_{w,v}\circ P_{u,w}$. A one-plan composition delegates to that exact,
+   possibly piecewise plan without invoking the picker.
 
 Both constructions have fixed endpoints: they accept a canonical
-$X$-expansion and return a canonical $Y$-expansion. A composition may contain
-two or more plans.
+$u$-expansion and return a canonical $v$-expansion.
 
 This gives one consistent terminology:
 
 - A **kernel** is one conversion formula.
-- A **named plan** applies one fixed child plan.
-- A **composition** is an ordered mathematical composition of two or more
-  fixed named child plans.
+- A **composition** is a nonempty ordered mathematical composition of fixed
+  named plans. With one component it delegates to that plan; with several
+  components it passes through intermediate bases.
 - A **plan** is an ordered piecewise association of expression conditions with
   conversion formulas.
 - A **direct plan** is a plan in which every conversion formula is an
-  $X\to Y$ kernel.
+  $u\to v$ kernel.
 - A complete conversion may consist only of a **composition**. Its common
   single-case plan form is
-  $\text{otherwise}\longmapsto P_{Z,Y}\circ P_{X,Z}$.
+  $\text{otherwise}\longmapsto P_{w,v}\circ P_{u,w}$.
 - A **hybrid plan** associates some pieces with direct kernels and other
   pieces with compositions.
 
@@ -444,7 +444,7 @@ representation and execution rules.
 
 #### Piecewise definition
 
-An $X\to Y$ plan consists of ordered associations
+An $u\to v$ plan consists of ordered associations
 
 $$
 C_1\longmapsto F_1,\qquad
@@ -457,11 +457,11 @@ Here:
 
 - $C_i$ is a mathematical condition on terms or components of the source
   expression.
-- $F_i$ is an $X\to Y$ conversion formula: a kernel, one named plan, or a
+- $F_i$ is a $u\to v$ conversion formula: a kernel or a nonempty
   composition.
 - A condition receives only portions not already assigned by an earlier case.
 - “Otherwise” receives the remaining portion.
-- Every conversion formula returns a canonical $Y$-expansion.
+- Every conversion formula returns a canonical $v$-expansion.
 - The plan's result is the sum of those expansions.
 
 Thus the cases form a partition of the source expression.
@@ -471,17 +471,17 @@ Thus the cases form a partition of the source expression.
 For
 
 $$
-f=\sum_\alpha c_\alpha X_\alpha,
+f=\sum_\alpha c_\alpha u_\alpha,
 $$
 
 define
 
 $$
 f_{\leq 10}
-  =\sum_{|\alpha|\leq 10}c_\alpha X_\alpha,
+  =\sum_{|\alpha|\leq 10}c_\alpha u_\alpha,
 \qquad
 f_{>10}
-  =\sum_{|\alpha|>10}c_\alpha X_\alpha.
+  =\sum_{|\alpha|>10}c_\alpha u_\alpha.
 $$
 
 The direct plan
@@ -499,7 +499,7 @@ $$
 P(f)=K_1(f_{\leq 10})+K_2(f_{>10}).
 $$
 
-This is one direct $X\to Y$ plan, even though it uses two kernels.
+This is one direct $u\to v$ plan, even though it uses two kernels.
 
 #### Direct-plan shape example with a default case
 
@@ -554,32 +554,32 @@ components, and each component is assigned according to the cases.
 
 #### Composition example
 
-A conversion entirely through an intermediate basis $Z$ is the one-case plan
+A conversion entirely through an intermediate basis $w$ is the one-case plan
 
 $$
 \text{otherwise}
 \longmapsto
-P_{Z,Y}\circ P_{X,Z}.
+P_{w,v}\circ P_{u,w}.
 $$
 
 Equivalently,
 
 $$
-P_{X,Y}(f)=(P_{Z,Y}\circ P_{X,Z})(f).
+P_{u,v}(f)=(P_{w,v}\circ P_{u,w})(f).
 $$
 
 #### Hybrid-plan example
 
 Using the subexpressions $f_{\leq 10}$ and $f_{>10}$ defined above, one
-$X\to Y$ plan may use a direct kernel at small weights and a composition
-through $Z$ at larger weights:
+$u\to v$ plan may use a direct kernel at small weights and a composition
+through $w$ at larger weights:
 
 $$
-P_{X,Y}(f)
+P_{u,v}(f)
 =
 K_1(f_{\leq 10})
 +
-(P_{Z,Y}\circ P_{X,Z})(f_{>10}).
+(P_{w,v}\circ P_{u,w})(f_{>10}).
 $$
 
 In association form, this is
@@ -589,7 +589,7 @@ $$
 \text{term weight}\leq 10
     &\longmapsto K_1,\\
 \text{otherwise}
-    &\longmapsto P_{Z,Y}\circ P_{X,Z}.
+    &\longmapsto P_{w,v}\circ P_{u,w}.
 \end{aligned}
 $$
 
@@ -599,7 +599,7 @@ A plan can also have a condition on the entire expression:
 
 $$
 A(f):\quad
-f\text{ is canonical, product-free, and entirely in basis }X.
+f\text{ is canonical, product-free, and entirely in basis }u.
 $$
 
 That is different from the routing cases:
@@ -613,8 +613,8 @@ A complete plan therefore has the mathematical form:
 $$
 \boxed{
 \begin{array}{ll}
-\textbf{Source:} & X\\
-\textbf{Target:} & Y\\
+\textbf{Source:} & u\\
+\textbf{Target:} & v\\
 \textbf{Applicability:} & A(f)\\[2pt]
 \textbf{Output guarantee:} & G(P(f))\\[2pt]
 \textbf{Cases:} & C_1\longmapsto F_1\\
@@ -628,65 +628,65 @@ $$
 
 The engine should contain one declarative plan database, and contributors add
 entries directly to it. For brevity, the examples below use only the common
-$X\to Y$ applicability contract; a plan with stricter requirements stores an
+$u\to v$ applicability contract; a plan with stricter requirements stores an
 additional applicability condition in its entry.
 
 ```cpp
 static const std::vector<BasisConversionPlanDefinition>
 basisConversionPlanDatabase = {
     {
-        {"X->Y:weight-split"},
-        BasisKind::X,
-        BasisKind::Y,
+        {"u->v:weight-split"},
+        BasisKind::U,
+        BasisKind::V,
         always(),
         ExpressionPieceKind::IndividualTerms,
         {
             {termWeightAtMost(10),
              useKernel("formula 1",
-                       &SymmetricEngineRing::xToYViaFormula1)},
+                       &SymmetricEngineRing::uToVViaFormula1)},
             {otherwise(),
              useKernel("formula 2",
-                       &SymmetricEngineRing::xToYViaFormula2)}
+                       &SymmetricEngineRing::uToVViaFormula2)}
         }
     },
     {
-        {"X->Y:shape-split"},
-        BasisKind::X,
-        BasisKind::Y,
+        {"u->v:shape-split"},
+        BasisKind::U,
+        BasisKind::V,
         always(),
         ExpressionPieceKind::IndividualTerms,
         {
             {indexIsHook(),
              useKernel("hook formula",
-                       &SymmetricEngineRing::xToYForHooks)},
+                       &SymmetricEngineRing::uToVForHooks)},
             {indexIsRectangle(),
              useKernel("rectangle formula",
-                       &SymmetricEngineRing::xToYForRectangles)},
+                       &SymmetricEngineRing::uToVForRectangles)},
             {otherwise(),
              useKernel("general formula",
-                       &SymmetricEngineRing::xToYViaGeneralFormula)}
+                       &SymmetricEngineRing::uToVViaGeneralFormula)}
         }
     },
     {
-        {"X->Y:via-Z"},
-        BasisKind::X,
-        BasisKind::Y,
+        {"u->v:via-w"},
+        BasisKind::U,
+        BasisKind::V,
         always(),
         ExpressionPieceKind::WholeExpression,
         {
             {
                 otherwise(),
                 composePlans({
-                    {"X->Z:formula"},
-                    {"Z->Y:formula"}
+                    {"u->w:formula"},
+                    {"w->v:formula"}
                 })
             }
         }
     },
     {
-        {"X->Y:weight-dependent"},
-        BasisKind::X,
-        BasisKind::Y,
+        {"u->v:weight-dependent"},
+        BasisKind::U,
+        BasisKind::V,
         always(),
         ExpressionPieceKind::IndividualTerms,
         {
@@ -694,13 +694,13 @@ basisConversionPlanDatabase = {
                 termWeightAtMost(10),
                 useKernel(
                     "small-weight formula",
-                    &SymmetricEngineRing::xToYForSmallWeight)
+                    &SymmetricEngineRing::uToVForSmallWeight)
             },
             {
                 otherwise(),
                 composePlans({
-                    {"X->Z:formula"},
-                    {"Z->Y:formula"}
+                    {"u->w:formula"},
+                    {"w->v:formula"}
                 })
             }
         }
@@ -708,11 +708,10 @@ basisConversionPlanDatabase = {
 };
 ```
 
-Here `useKernel(...)`, `usePlan(...)`, and
-`composePlans(...)` are declarative constructors for the same
-`BasisConversionPlanFormula` value. They record one kernel, one fixed named child, or
-an ordered list of named children. None registers, selects, or executes
-anything.
+Here `useKernel(...)` and `composePlans(...)` are declarative constructors for
+the same `BasisConversionPlanFormula` value. They record one kernel or a
+nonempty ordered composition of named plans. Neither registers, selects, or
+executes anything.
 
 There is no registration function. “Registering a plan” simply means
 hard-coding another mathematical entry into this database.
@@ -720,20 +719,20 @@ hard-coding another mathematical entry into this database.
 The database must be validated so that:
 
 - Every kernel has the endpoints required by its case.
-- Every named child plan exists.
-- Adjacent child-plan endpoints agree and the entire composition has the
+- Every component plan exists.
+- Adjacent component-plan endpoints agree and the entire composition has the
   endpoints required by its case.
 - Plan dependencies are acyclic.
 - A composition's surrounding conditions and applicability contract guarantee
-  every child plan's preconditions.
+  every component plan's preconditions.
 - Every case formula proves the plan's declared output guarantee.
 
 The picker searches the database for plans with the requested source and
 target bases. The executor interprets the selected plan's ordered
 condition-to-conversion-formula associations.
 
-Applying $P_{X,Z}$ produces the actual $Z$-expression. The already-defined
-piecewise plan $P_{Z,Y}$ then evaluates its own mathematical conditions on
+Applying $P_{u,w}$ produces the actual $w$-expression. The already-defined
+piecewise plan $P_{w,v}$ then evaluates its own mathematical conditions on
 that expression. This is not a new performance decision made by the executor;
 it is the evaluation of the conversion formula that was fixed in the plan
 database. Consequently, a composition should be stored as an ordered
@@ -795,9 +794,9 @@ A plan database entry can then use logical combinations directly:
 
 ```cpp
 {
-    {"X->Y:shape-and-weight"},
-    BasisKind::X,
-    BasisKind::Y,
+    {"u->v:shape-and-weight"},
+    BasisKind::U,
+    BasisKind::V,
     always(),
     ExpressionPieceKind::IndividualTerms,
     {
@@ -805,25 +804,25 @@ A plan database entry can then use logical combinations directly:
             indexIsHook() && termWeightGreaterThan(10),
             useKernel(
                 "large-hook formula",
-                &SymmetricEngineRing::xToYForLargeHooks)
+                &SymmetricEngineRing::uToVForLargeHooks)
         },
         {
             indexIsHook() || indexIsRectangle(),
             useKernel(
                 "hook-or-rectangle formula",
-                &SymmetricEngineRing::xToYForHooksOrRectangles)
+                &SymmetricEngineRing::uToVForHooksOrRectangles)
         },
         {
             !indexIsSelfConjugate(),
             useKernel(
                 "non-self-conjugate formula",
-                &SymmetricEngineRing::xToYForNonSelfConjugateIndices)
+                &SymmetricEngineRing::uToVForNonSelfConjugateIndices)
         },
         {
             otherwise(),
             useKernel(
                 "general formula",
-                &SymmetricEngineRing::xToYViaGeneralFormula)
+                &SymmetricEngineRing::uToVViaGeneralFormula)
         }
     }
 }
@@ -907,7 +906,7 @@ or a complete source-to-target plan selected after preparation.
 ```mermaid
 %%{init: {"theme": "dark", "themeVariables": {"background": "#111827", "primaryColor": "#1f2937", "primaryTextColor": "#ffffff", "primaryBorderColor": "#9ca3af", "secondaryColor": "#1f2937", "secondaryTextColor": "#ffffff", "tertiaryColor": "#1f2937", "tertiaryTextColor": "#ffffff", "lineColor": "#d1d5db", "textColor": "#ffffff", "nodeTextColor": "#ffffff", "edgeLabelBackground": "#1f2937"}}}%%
 flowchart TD
-    A["toBasis request<br/>Expression f and target basis Y"]
+    A["toBasis request<br/>Expression f and target basis v"]
 
     A --> B["Normalize all basis elements<br/>Straighten indices<br/>Expand skew elements<br/>Canonicalize factors"]
 
@@ -915,7 +914,7 @@ flowchart TD
 
     A -. "Canonical non-skew form guaranteed" .-> C
 
-    C --> D["Resolve every term with multiple factors<br/>Call multiplyTermToBasis for that term and target Y"]
+    C --> D["Resolve every term with multiple factors<br/>Call multiplyTermToBasis for that term and target v"]
 
     D --> E["Linear combination of single-basis terms<br/>The basis may differ between terms"]
 
@@ -925,78 +924,78 @@ flowchart TD
 
     F --> G["Pick one complete source-to-target plan<br/>for each remaining source-basis group"]
 
-    A -. "Known canonical product-free expansion in one basis X" .-> G
+    A -. "Known canonical product-free expansion in one basis u" .-> G
 
     G --> H["Execute each group's selected plan"]
 
-    H --> I["Combine and collect results<br/>Canonical linear combination in basis Y"]
+    H --> I["Combine and collect results<br/>Canonical linear combination in basis v"]
 ```
 
 ## Proposed `multiplyTermToBasis` design
 
 `multiplyTermToBasis` accepts one coefficient times any number of normalized
-mathematical basis elements and a target basis `Y`.  It owns that product until
-it has produced a canonical, collected linear combination entirely in `Y`, with
-one normalized `Y`-basis element per nonscalar term.  It first removes scalar
+mathematical basis elements and a target basis `v`.  It owns that product until
+it has produced a canonical, collected linear combination entirely in `v`, with
+one normalized `v`-basis element per nonscalar term.  It first removes scalar
 and identity factors while preserving the coefficient.  Zero, unit, and
-one-factor inputs then take the corresponding trivial or `X -> Y` branch.
+one-factor inputs then take the corresponding trivial or `u -> v` branch.
 
-For multiple factors, the target basis determines the calculation.  If `Y` is
-multiplicative, one helper converts the factors to `Y`, combines them using the
+For multiple factors, the target basis determines the calculation.  If `v` is
+multiplicative, one helper converts the factors to `v`, combines them using the
 multiplicative rule, and collects the result; this branch never calls
-`multiplyToBasis`.  If `Y` is not multiplicative, `multiplyTermToBasis`
+`multiplyToBasis`.  If `v` is not multiplicative, `multiplyTermToBasis`
 repeatedly calls binary `multiplyToBasis` for the next pair and combines and
-collects the returned `Y` expansion until no unmultiplied factors remain.  All
+collects the returned `v` expansion until no unmultiplied factors remain.  All
 branches meet at one final stage, which applies the preserved coefficient once
-and returns the canonical collected `Y` expansion.
+and returns the canonical collected `v` expansion.
 
-The strict binary helper used by `multiplyToBasis(F, G, Y)` accepts exactly two
+The strict binary helper used by `multiplyToBasis(F, G, v)` accepts exactly two
 already-normalized mathematical basis elements `F` and `G`, which need not
 belong to the same basis. The public method also accepts product-free linear
 combinations and distributes them into strict binary calls. Each strict call
 chooses and executes one complete multiplication plan for `F * G`. The selected kernel
-declares the basis `X` of its output, but its output is not assumed to be
+declares the basis `u` of its output, but its output is not assumed to be
 canonical: it may, for example, contain skew elements or indices requiring
 straightening.  The binary plan must first normalize that output into a
-canonical `X` expansion satisfying the `X -> Y` input contract, and only then
-request and execute one complete `X -> Y` plan. A proven canonical kernel
+canonical `u` expansion satisfying the `u -> v` input contract, and only then
+request and execute one complete `u -> v` plan. A proven canonical kernel
 output may bypass normalization; after
-normalization, `X = Y` may bypass conversion.
-`multiplyToBasis` returns the same canonical pure-`Y` format as
+normalization, `u = v` may bypass conversion.
+`multiplyToBasis` returns the same canonical pure-`v` format as
 `multiplyTermToBasis`.
 
 - [x] Remove scalar and identity factors, preserve the scalar coefficient, and
       apply it once in the common final stage.
 - [x] Represent a zero coefficient as the zero expansion and an empty factor
       list as the unit expansion before entering the common final stage.
-- [x] For one remaining factor in basis `X`, request the same complete
-      `X -> Y` plan used by `toBasis` from the shared picker and plan database.
-- [x] For multiple factors and a multiplicative target `Y`, use one helper that
-      converts the factors to `Y`, combines them multiplicatively, and collects
+- [x] For one remaining factor in basis `u`, request the same complete
+      `u -> v` plan used by `toBasis` from the shared picker and plan database.
+- [x] For multiple factors and a multiplicative target `v`, use one helper that
+      converts the factors to `v`, combines them multiplicatively, and collects
       the result without calling `multiplyToBasis`.
-- [x] For multiple factors and a nonmultiplicative target `Y`, repeatedly call
+- [x] For multiple factors and a nonmultiplicative target `v`, repeatedly call
       `multiplyToBasis` for the next pair and combine and collect each returned
-      `Y` expansion until no multiplication remains.
+      `v` expansion until no multiplication remains.
 - [x] Require `multiplyToBasis` to select and complete one binary
-      product-to-`Y` plan.
-- [x] Require every product kernel to declare the source basis `X` of its
+      product-to-`v` plan.
+- [x] Require every product kernel to declare the source basis `u` of its
       output without assuming that the output is already canonical.
 - [x] Require binary product plans to normalize the product, including
       straightening indices and expanding skew elements, before requesting a
       complete conversion plan from the shared picker and plan database.
-- [x] Bypass product normalization or `X -> Y` conversion only when known
+- [x] Bypass product normalization or `u -> v` conversion only when known
       facts guarantee the corresponding postcondition.
 - [x] Collect like terms and canonicalize target indices after every pairwise
       step to control intermediate growth.
 - [x] Never respond to a failed pair-product calculation by selecting another
       plan or calling `toBasis`.
-- [x] Return a canonical, collected linear combination with one `Y`-basis
+- [x] Return a canonical, collected linear combination with one `v`-basis
       element per nonscalar term.
 
 ```mermaid
 %%{init: {"theme": "dark", "themeVariables": {"background": "#111827", "primaryColor": "#1f2937", "primaryTextColor": "#ffffff", "primaryBorderColor": "#9ca3af", "secondaryColor": "#1f2937", "secondaryTextColor": "#ffffff", "tertiaryColor": "#1f2937", "tertiaryTextColor": "#ffffff", "lineColor": "#d1d5db", "textColor": "#ffffff", "nodeTextColor": "#ffffff", "edgeLabelBackground": "#1f2937"}}}%%
 flowchart TD
-    A["multiplyTermToBasis request<br/>Coefficient c, normalized basis elements f1 through fn,<br/>and target basis Y"]
+    A["multiplyTermToBasis request<br/>Coefficient c, normalized basis elements f1 through fn,<br/>and target basis v"]
 
     A --> B["Remove scalar and identity factors<br/>Preserve coefficient c"]
 
@@ -1006,19 +1005,19 @@ flowchart TD
 
     C -->|"No basis factors"| S["Unit expansion"]
 
-    C -->|"One basis factor X"| O["Execute the selected complete X-to-Y plan"]
+    C -->|"One basis factor u"| O["Execute the selected complete u-to-v plan"]
 
-    C -->|"Multiple basis factors"| D{"Is target basis Y multiplicative?"}
+    C -->|"Multiple basis factors"| D{"Is target basis v multiplicative?"}
 
-    D -->|"Yes"| E["Multiply in the target basis<br/>Convert factors to Y, combine multiplicatively,<br/>and collect"]
+    D -->|"Yes"| E["Multiply in the target basis<br/>Convert factors to v, combine multiplicatively,<br/>and collect"]
 
     D -->|"No"| H{"Do unmultiplied factors remain?"}
 
-    H -->|"Yes"| I["Call multiplyToBasis for the next pair<br/>Combine and collect the resulting Y expansion"]
+    H -->|"Yes"| I["Call multiplyToBasis for the next pair<br/>Combine and collect the resulting v expansion"]
 
     I --> H
 
-    Z --> R["Apply coefficient c<br/>Return a canonical collected expansion in Y"]
+    Z --> R["Apply coefficient c<br/>Return a canonical collected expansion in v"]
     S --> R
     O --> R
     E --> R
@@ -1059,7 +1058,7 @@ selection.
 - [ ] Bypass canonicalization only when metadata guarantees its complete
       postcondition.
 - [ ] Within each equal-weight pair, group each side by basis and form every
-      required pair consisting of an `X` expression and a `Y` expression.
+      required pair consisting of a `u` expression and a `v` expression.
 - [ ] Bypass basis grouping when metadata guarantees that each side already has
       one pure basis.
 - [ ] Go directly from the public request to plan selection when metadata
@@ -1088,7 +1087,7 @@ flowchart TD
 
     D -. "Yes; metadata guarantees canonical terms" .-> F
 
-    F --> G["Group each side by basis<br/>Form canonical pairs F in X and G in Y"]
+    F --> G["Group each side by basis<br/>Form canonical pairs F in u and G in v"]
 
     G --> H["Pick one complete inner-product plan<br/>for every canonical expression pair<br/>using the context and metadata"]
 
@@ -1109,10 +1108,10 @@ An inner-product plan accepts a resolved pairing context and two homogeneous
 canonical basis expansions of the same weight:
 
 ```text
-F = sum of a_lambda X_lambda,    G = sum of b_mu Y_mu.
+F = sum of a_lambda u_lambda,    G = sum of b_mu v_mu.
 ```
 
-`F` is entirely in one basis `X`, and `G` is entirely in one basis `Y`; the two
+`F` is entirely in one basis `u`, and `G` is entirely in one basis `v`; the two
 bases may differ.  Every nonscalar term has one already-normalized, non-skew
 basis element in the mathematical sense.  The inputs are collected and contain
 no unresolved products, mixed bases, skew elements, or indices requiring
@@ -1120,7 +1119,7 @@ straightening.  A plan returns one coefficient-ring scalar, is complete over
 its declared domain, and cannot decline after execution begins.
 
 The plan database is policy-free and may hold several competing plans for
-the same pairing context and basis pair `(X, Y)`.  Each plan has a stable
+the same pairing context and basis pair `(u, v)`.  Each plan has a stable
 identifier and explicit mathematical preconditions.  A separate picker uses
 the common weight, expression metadata, and the expressions themselves when
 necessary to return the expected best applicable plan without executing it.
@@ -1133,13 +1132,14 @@ pairing, coefficient extraction with a chosen operand orientation, direct
 Kostka or conjugate-Kostka formulas, weighted Schur-character formulas, and
 power-sum diagonal pairing.  Conversion of both inputs to power sums is the
 broad always-applicable plan, not a fallback entered after another plan
-declines.  Plans may use the shared `X -> Y` picker, plan database, and executor for
-required conversions, but they may not call the public inner-product workflow.
+declines. Plans may use the shared `u -> v` picker, plan database, and
+executor for required conversions, but they may not call the public
+inner-product workflow.
 
 - [ ] Create one independent inner-product plan database with stable plan
       identifiers and explicit applicability requirements.
 - [ ] Allow multiple competing plans for the same pairing context and basis
-      pair `(X, Y)`.
+      pair `(u, v)`.
 - [ ] Create a separate picker supporting automatic and specifically requested
       plan selection without execution.
 - [ ] Enforce the canonical, pure-basis, equal-weight input contract at every
@@ -1147,8 +1147,8 @@ required conversions, but they may not call the public inner-product workflow.
 - [ ] Keep the power-sum diagonal plan broad and always applicable.
 - [ ] Require every selected plan to complete without declining or selecting a
       replacement plan during execution.
-- [ ] Let plans reuse the shared `X -> Y` picker, plan database, and executor without
-      calling the public inner-product workflow.
+- [ ] Let plans reuse the shared `u -> v` picker, plan database, and executor
+      without calling the public inner-product workflow.
 - [ ] Test optimized plans against the power-sum diagonal plan at applicability
       and picker-selection boundaries.
 
@@ -1164,7 +1164,7 @@ The combined `plethysmToBasis` operation makes one decision before calculation
 begins.  A benchmark-proven fused calculation may be selected when its complete
 preconditions are known; otherwise the operation simply calls `plethysm(f, g)`
 and then `toBasis`.  The power-sum result's metadata should let `toBasis` bypass
-normalization and grouping and proceed directly to the `p -> Y` plan picker.
+normalization and grouping and proceed directly to the `p -> v` plan picker.
 Thus the main work is to clarify ownership and remove unnecessary forwarding
 pipeline machinery, not to redesign the mathematical plethysm kernels.
 
@@ -1175,9 +1175,9 @@ pipeline machinery, not to redesign the mathematical plethysm kernels.
 - [x] Make `plethysmToBasis` choose a complete fused calculation, when one is
       justified, before any calculation begins.
 - [x] Make the ordinary `plethysmToBasis` path call `plethysm(f, g)` and then
-      call the shared `toBasis` workflow with target basis `Y`.
+      call the shared `toBasis` workflow with target basis `v`.
 - [x] Use the returned metadata to enter the canonical pure-power-sum bypass in
-      `toBasis` and proceed directly to the `p -> Y` plan picker.
+      `toBasis` and proceed directly to the `p -> v` plan picker.
 - [x] Remove or collapse forwarding-only post-plethysm pipeline stages that do
       not perform an independent mathematical calculation.
 - [x] Retain a fused calculation only while benchmarks demonstrate a useful
@@ -1188,7 +1188,7 @@ pipeline machinery, not to redesign the mathematical plethysm kernels.
 ```mermaid
 %%{init: {"theme": "dark", "themeVariables": {"background": "#111827", "primaryColor": "#1f2937", "primaryTextColor": "#ffffff", "primaryBorderColor": "#9ca3af", "secondaryColor": "#1f2937", "secondaryTextColor": "#ffffff", "tertiaryColor": "#1f2937", "tertiaryTextColor": "#ffffff", "lineColor": "#d1d5db", "textColor": "#ffffff", "nodeTextColor": "#ffffff", "edgeLabelBackground": "#1f2937"}}}%%
 flowchart TD
-    A["plethysmToBasis request<br/>Expressions f and g, target basis Y,<br/>and available metadata"]
+    A["plethysmToBasis request<br/>Expressions f and g, target basis v,<br/>and available metadata"]
 
     A --> B{"Do the facts select a<br/>benchmark-proven fused calculation?"}
 
@@ -1196,9 +1196,9 @@ flowchart TD
 
     B -->|"No"| C["Call plethysm(f, g)<br/>Returns a canonical power-sum expression<br/>with useful metadata"]
 
-    C --> D["Call toBasis with the result<br/>and target basis Y"]
+    C --> D["Call toBasis with the result<br/>and target basis v"]
 
-    S --> R["Return a canonical expression in basis Y"]
+    S --> R["Return a canonical expression in basis v"]
 
     D --> R
 ```

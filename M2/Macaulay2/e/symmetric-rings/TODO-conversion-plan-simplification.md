@@ -11,21 +11,21 @@ three objects:
 
 ### 1. Kernels
 
-Let $\Lambda_X$ denote finite canonical expansions in a basis $X$. A
-conversion kernel from $X$ to $Y$ is a mathematical map
+Let $\Lambda_u$ denote finite canonical expansions in a basis $u$. A
+conversion kernel from $u$ to $v$ is a mathematical map
 
 $$
-K_{X,Y}\colon \Lambda_X\longrightarrow\Lambda_Y.
+K_{u,v}\colon \Lambda_u\longrightarrow\Lambda_v.
 $$
 
 It may have a stated domain condition $A_K(f)$. For every input satisfying
-that condition, the kernel must finish and return the canonical $Y$-expansion
+that condition, the kernel must finish and return the canonical $v$-expansion
 of the same symmetric function:
 
 $$
 A_K(f)
 \quad\Longrightarrow\quad
-K_{X,Y}(f)=f
+K_{u,v}(f)=f
 \quad\text{as symmetric functions.}
 $$
 
@@ -41,18 +41,18 @@ than another formula.
 
 ### 2. Complete piecewise plans
 
-A plan $P_{X,Y}$ is a complete mathematical formula from $X$ to $Y$.
+A plan $P_{u,v}$ is a complete mathematical formula from $u$ to $v$.
 Its input is a canonical, product-free expansion
 
 $$
-f=\sum_\alpha c_\alpha X_\alpha.
+f=\sum_\alpha c_\alpha u_\alpha.
 $$
 
 The plan first specifies how $f$ is viewed as pieces. The allowed piece
 kinds are:
 
 - the whole expression $\{f\}$;
-- its individual terms $\{c_\alpha X_\alpha\}$;
+- its individual terms $\{c_\alpha u_\alpha\}$;
 - its homogeneous components $\{f^{(n)}\}$, where
   $f=\sum_n f^{(n)}$.
 
@@ -72,7 +72,7 @@ pieces and there are $r$ explicit conditions, define
 $$
 \begin{aligned}
 R_1&=\mathcal P(f),\\
-E_i&=\{u\in R_i:C_i(u)\},\\
+E_i&=\{g\in R_i:C_i(g)\},\\
 R_{i+1}&=R_i\setminus E_i
 \qquad(1\leq i\leq r),\\
 E_0&=R_{r+1}.
@@ -84,29 +84,30 @@ $E_0,E_1,\ldots,E_r$ are disjoint and cover the complete input. If $f_i$
 denotes the sum of the pieces in $E_i$, then
 
 $$
-P_{X,Y}(f)=\sum_{i=0}^{r}F_i(f_i).
+P_{u,v}(f)=\sum_{i=0}^{r}F_i(f_i).
 $$
 
-Every $F_i$ has endpoints $X\to Y$ and is exactly one of:
+Every $F_i$ has endpoints $u\to v$ and is exactly one of:
 
-1. a kernel $K_{X,Y}$;
-2. one fixed named $X\to Y$ plan;
-3. a fixed ordered composition of two or more named plans,
+1. a kernel $K_{u,v}$;
+2. a nonempty fixed ordered composition of named plans,
 
    $$
-   P_{Z_{r-1},Y}\circ\cdots\circ P_{Z_1,Z_2}\circ P_{X,Z_1}.
+   P_{w_{m-1},v}\circ\cdots\circ
+   P_{w_1,w_2}\circ P_{u,w_1}.
    $$
 
-The named children are part of the formula. They are not chosen while the
-plan is being evaluated. In a composition, each child receives the actual
-canonical intermediate produced by the preceding child and evaluates its own
-fixed piecewise cases on that intermediate.
+The composition may contain one plan, in which case it delegates to that
+exact, possibly piecewise plan. Every component plan is part of the formula
+and is not chosen while the parent plan is being evaluated. Each component
+receives the actual canonical intermediate produced by the preceding
+component and evaluates its own fixed piecewise cases on that intermediate.
 
-A **direct plan** uses only $X\to Y$ kernels. A
+A **direct plan** uses only $u\to v$ kernels. A
 **composition-only plan** has the single case
-$\operatorname{otherwise}\mapsto P_{Z,Y}\circ P_{X,Z}$ (or a longer fixed
+$\operatorname{otherwise}\mapsto P_{w,v}\circ P_{u,w}$ (or a longer fixed
 composition). A **hybrid plan**
-uses direct kernels for some pieces and named plans or compositions for others.
+uses direct kernels for some pieces and compositions for others.
 These are names for three forms of the same piecewise object, not three
 different mechanisms.
 
@@ -120,21 +121,21 @@ A valid plan therefore proves:
 $$
 A_P(f)
 \quad\Longrightarrow\quad
-P_{X,Y}(f)=f
+P_{u,v}(f)=f
 \quad\text{as symmetric functions,}
 $$
 
-with a canonical $Y$-expansion as output. A selected plan is complete: it
-already names every kernel and child plan that its evaluation can reach.
+with a canonical $v$-expansion as output. A selected plan is complete: it
+already names every kernel and component plan that its evaluation can reach.
 
 ### 3. Performance pickers
 
-For fixed endpoints $X\to Y$ and input $f$, let
+For fixed endpoints $u\to v$ and input $f$, let
 
 $$
-\mathcal A_{X,Y}(f)
+\mathcal A_{u,v}(f)
 =
-\{P_{X,Y}:A_P(f)\text{ holds}\}
+\{P_{u,v}:A_P(f)\text{ holds}\}
 $$
 
 be the set of applicable complete plans. A picker chooses one member of this
@@ -151,14 +152,14 @@ D_2(f)\longmapsto P_2,\quad
 $$
 
 The first rule whose performance condition $D_i(f)$ holds and whose named
-plan is in $\mathcal A_{X,Y}(f)$ wins. The final rule must provide a broad
+plan is in $\mathcal A_{u,v}(f)$ wins. The final rule must provide a broad
 applicable plan, normally an explicitly named composition through power sums.
 
 Picker conditions express expected cost, not mathematical correctness.
 Changing the picker may change running time, but it must not change the
 symmetric function returned. Once a plan has been chosen, no further picking
 occurs: evaluation follows only that plan's already-fixed cases, kernels, and
-child plans.
+compositions.
 
 This separation is the central design:
 
@@ -173,13 +174,13 @@ $$
 The plans form a finite named collection
 
 $$
-\mathcal R=\{P_{X,Y}^{(j)}\}.
+\mathcal R=\{P_{u,v}^{(j)}\}.
 $$
 
 There are then three separate mathematical operations: define the members of
 $\mathcal R$, choose one applicable member, and evaluate the chosen member.
 Evaluation means only forming the ordered case partition, applying each fixed
-$F_i$, recursively evaluating named children, and adding the target
+$F_i$, recursively evaluating component plans, and adding the target
 expansions. It has no freedom to improve, complete, or reselect the chosen
 plan.
 
@@ -282,11 +283,11 @@ symmetric functions rather than C++ dispatcher implementation. It also means
 that the declarative plan database is not yet the single source of truth it
 appears to be.
 
-The implemented architecture makes an ordinary new `X -> Y` conversion path
+The implemented architecture makes an ordinary new `u -> v` conversion path
 require edits in exactly three conceptual places:
 
 1. **Kernel:** implement the mathematical formula.
-2. **Plan:** declare the complete named `X -> Y` plan using that kernel.
+2. **Plan:** declare the complete named `u -> v` plan using that kernel.
 3. **Picker:** state when that plan should be selected.
 
 A declaration in the corresponding `.hpp` file is allowed as a mechanical
@@ -306,7 +307,7 @@ identifiers from leaking back into workflow infrastructure.
 The primary contributor-facing question is not “how does the dispatcher work?”
 but:
 
-> I have proved or implemented a formula from basis `X` to basis `Y`. Where do
+> I have proved or implemented a formula from basis `u` to basis `v`. Where do
 > I put the formula, how do I name the resulting plan, and how do I say when it
 > is preferable?
 
@@ -332,9 +333,9 @@ The translation from mathematics to source should be literal:
 
 | Mathematical contribution | Production edit |
 |---|---|
-| The formula $K_{X,Y}$ | Implement one kernel in the kernel file |
-| A complete $P_{X,Y}$, including applicability and ordered cases | Add one entry in the plan file |
-| A performance claim about when $P_{X,Y}$ is preferable | Add one ordered rule in the picker file |
+| The formula $K_{u,v}$ | Implement one kernel in the kernel file |
+| A complete $P_{u,v}$, including applicability and ordered cases | Add one entry in the plan file |
+| A performance claim about when $P_{u,v}$ is preferable | Add one ordered rule in the picker file |
 
 Tests explain why the formula is correct and when the preference is expected
 to help. They do not require another dispatch registration. A contributor who
@@ -434,7 +435,7 @@ the safety properties established by the current redesign.
 ### Complete-plan invariant
 
 A selected top-level plan completely determines every kernel and named
-child plan that execution can reach. The executor never calls the picker and
+component plan that execution can reach. The executor never calls the picker and
 never substitutes another path after execution has begun.
 
 ### Canonical input and output
@@ -512,11 +513,11 @@ Every supported pair of non-power-sum built-in endpoints has the single
 parameterized broad plan
 
 $$
-P_{X,Y}^{(p)}=P_{p,Y}^{\mathrm{broad}}\circ
-P_{X,p}^{\mathrm{broad}}.
+P_{u,v}^{(p)}=P_{p,v}^{\mathrm{broad}}\circ
+P_{u,p}^{\mathrm{broad}}.
 $$
 
-Its two designated child plans are identified before execution, so this is a
+Its two designated component plans are identified before execution, so this is a
 complete ordinary composition rather than hidden graph search or nested
 selection. It is the sole broad plan for non-power-sum endpoints; no
 endpoint-specific power-sum compositions are materialized.
@@ -686,8 +687,8 @@ using BasisConversionKernel =
         const BasisConversionInput&) const;
 ```
 
-This is the programming form of $K_{X,Y}(f)$: `expansion` is $f$, and
-`source` and `target` are $X$ and $Y$. Ring-local identifiers and
+This is the programming form of $K_{u,v}(f)$: `expansion` is $f$, and
+`source` and `target` are $u$ and $v$. Ring-local identifiers and
 presentation data are nested inside the endpoints because they are
 construction details, not additional mathematical arguments. The input
 intentionally omits picker policy and mutable workflow state.
@@ -695,7 +696,7 @@ intentionally omits picker policy and mutable workflow state.
 The kernel returns only its mathematical result. The generic executor owns:
 
 - propagating semantic tags;
-- inferring exact intermediate facts when a child needs them;
+- inferring exact intermediate facts when a component plan needs them;
 - validating canonical target output;
 - attaching final metadata;
 - reporting plan-level contract failures.
@@ -729,20 +730,14 @@ The formula representation stores kernel callables and named plans directly:
 ```cpp
 struct BasisConversionPlanDefinition;
 
-struct KernelPlanFormula
+struct KernelPlan
 {
   std::string name;
   BasisConversionKernel kernel = nullptr;
   ExpressionCondition outputGuarantee = always();
 };
 
-struct NamedPlanFormula
-{
-  BasisConversionPlanId plan;
-  mutable const BasisConversionPlanDefinition *planDefinition = nullptr;
-};
-
-struct ComposedPlansFormula
+struct CompositionPlan
 {
   std::vector<BasisConversionPlanId> plans;
   mutable std::vector<
@@ -751,9 +746,8 @@ struct ComposedPlansFormula
 
 using BasisConversionPlanFormula =
     std::variant<
-        KernelPlanFormula,
-        NamedPlanFormula,
-        ComposedPlansFormula>;
+        KernelPlan,
+        CompositionPlan>;
 ```
 
 If the engine's surrounding coding conventions favor an explicit tagged
@@ -768,7 +762,9 @@ useKernel(
     "grouped character expansion",
     &SymmetricEngineRing::powerSumsToSchurViaFrobeniusCharacterFormula)
 
-usePlan({"PowerSum->Schur:Frobenius-character-formula"})
+composePlans({
+    {"PowerSum->Schur:Frobenius-character-formula"}
+})
 
 composePlans({
     {"PowerSum->Complete:logarithm-formula"},
@@ -776,11 +772,10 @@ composePlans({
 })
 ```
 
-`usePlan(...)` constructs a `NamedPlanFormula`.
-`composePlans(...)` requires at least two children and constructs a
-`ComposedPlansFormula`. Keeping the alternatives distinct makes the source
-match the mathematical terminology in the opening section and lets validation
-report an accidental empty or one-child “composition” directly.
+`useKernel(...)` constructs a `KernelPlan`. `composePlans(...)` requires at
+least one named plan and constructs a `CompositionPlan`. A one-plan
+composition delegates to that exact plan; a longer composition passes through
+intermediate bases.
 
 The diagnostic name is for contract errors involving a case inside a hybrid
 plan. Stable forcing and tracing continue to use the containing plan ID.
@@ -850,9 +845,11 @@ plans.push_back({
     always(),
     ExpressionPieceKind::HomogeneousComponents,
     {{componentAllPowerSumIndicesHaveMostlyShortCycles(),
-      usePlan({"PowerSum->Schur:via-complete-basis"})},
+      composePlans({
+          {"PowerSum->Schur:via-complete-basis"}})},
      {otherwise(),
-      usePlan({"PowerSum->Schur:abacus-rim-hooks"})}}});
+      composePlans({
+          {"PowerSum->Schur:abacus-rim-hooks"}})}}});
 ```
 
 The plan database may trust the declared kernel endpoint instead of checking it
@@ -952,10 +949,10 @@ There are two valid patterns:
 1. The picker chooses a one-kernel whole-expression plan when one algorithm is
    best for the complete input.
 2. The picker chooses an available component plan whose fixed cases name every
-   child plan it may execute.
+   composition it may execute.
 
-The component plan remains complete because its condition-to-child mapping is
-fixed before execution. Evaluating those mathematical cases on realized
+The component plan remains complete because its condition-to-formula mapping
+is fixed before execution. Evaluating those mathematical cases on realized
 components is not performance reselection.
 
 When a new kernel should participate inside an existing component policy, its
@@ -982,12 +979,11 @@ Validate once, before first selection:
 - every plan has at least one case;
 - only the final case is `otherwise()`;
 - conditions are valid for the plan's piece kind;
-- every named child exists and has the same endpoints as its case;
-- every composition contains at least two named children;
-- composition children exist, their endpoints join, and the full composition
+- every composition is nonempty;
+- component plans exist, their endpoints join, and the full composition
   has the endpoints required by its case;
 - dependency graphs are acyclic;
-- surrounding conditions prove child mathematical applicability;
+- surrounding conditions prove component-plan mathematical applicability;
 - formula guarantees imply declared stronger plan guarantees.
 
 Kernel formulas promise the universal canonical-target contract by
@@ -1033,7 +1029,7 @@ policy change.
 - Retained forced execution/rejection coverage for every top-level plan.
 - Recorded the small conversion and multiplication benchmark suites.
 - Added focused tests for nonhomogeneous `PowerSum -> Schur`, Hall--Littlewood
-  single-cycle selection, compositions, and hybrid child execution.
+  single-cycle selection, compositions, and hybrid component execution.
 
 ### Phase 2: add the callable representation
 
@@ -1141,7 +1137,7 @@ The production database validators reject:
 
 - null kernel callable rejection;
 - duplicate plan IDs;
-- bad child IDs;
+- bad component-plan IDs;
 - incompatible composition endpoints;
 - cycles;
 - missing final `otherwise`;
@@ -1156,8 +1152,8 @@ The production database validators reject:
 The executor and forcing checks verify:
 
 - a kernel callable is invoked exactly once for a one-case plan;
-- a composition invokes children in declared order;
-- a child plan evaluates its cases only after its intermediate exists;
+- a composition invokes its component plans in declared order;
+- a component plan evaluates its cases only after its intermediate exists;
 - execution cannot enter the picker;
 - bad canonical output is rejected;
 - semantic tags and known weight facts survive execution.
@@ -1221,11 +1217,11 @@ conversion plan database for operand and result conversion.
 
 The completed simplification satisfies all of the following:
 
-- [x] An ordinary new `X -> Y` path needs production edits only in the
+- [x] An ordinary new `u -> v` path needs production edits only in the
       kernel, plan, and picker locations, plus an optional header declaration.
 - [x] Kernel formulas store typed callables rather than enum values.
-- [x] The source representation distinguishes a kernel formula, one named
-      plan, and a composition of two or more named plans.
+- [x] The source representation distinguishes a kernel from a nonempty
+      composition of named plans.
 - [x] The plan entry is the single source of truth for kernel endpoints and
       stronger guarantees.
 - [x] Plan entries are direct transcriptions of the kernel/plan/picker
@@ -1235,7 +1231,7 @@ The completed simplification satisfies all of the following:
 - [x] Multiple-plan endpoints have explicit, readable picker definitions.
 - [x] `PowerSum -> Schur` no longer requires a special return branch in the
       generic picker.
-- [x] Stable plan IDs, forcing, tracing, and complete child compositions remain.
+- [x] Stable plan IDs, forcing, tracing, and complete compositions remain.
 - [x] Plan and picker databases receive full structural validation.
 - [x] Execution still cannot call selection.
 - [x] Every existing forced plan agrees with its independent fallback.

@@ -79,7 +79,7 @@ basis-conversion-picker.cpp
     ordered performance choices among those plans
 ```
 
-An ordinary new `X -> Y` conversion path changes only those three production
+An ordinary new `u -> v` conversion path changes only those three production
 topics, plus a mechanical declaration in `basis-conversion-kernels.hpp`.
 Tests and documentation are additional deliverables. Never add a kernel enum,
 endpoint-contract switch, executor case, `toBasis` branch, or stable plan ID

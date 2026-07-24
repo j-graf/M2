@@ -179,7 +179,7 @@ explicit pairing.
 
 | Operation | Preserved request structure | High-level decision | Broad fallback |
 |---|---|---|---|
-| Basis conversion | Expression, exact source/target facts, and tags | Select one complete source-to-target plan from the shared plan database | Convert general terms through named source-to-power-sum and power-sum-to-target child plans |
+| Basis conversion | Expression, exact source/target facts, and tags | Select one complete source-to-target plan from the shared plan database | Convert general terms through a fixed composition of source-to-power-sum and power-sum-to-target plans |
 | Multiplication to a basis | Left operand, right operand, and output basis | Select one multiplication plan, including operand conversions and a product kernel | Convert through power sums and multiply there |
 | Plethysm to a basis | Outer operand, inner operand, and target basis | Choose a specialized combined route or materialize in power sums | Adams-operation plethysm followed by general conversion |
 | Inner product | Two operand profiles, pairing context, and registered metadata | Choose a diagonal, single-element, or structured-coordinate workflow | Convert both operands to power sums and apply the pairing |
@@ -201,7 +201,7 @@ M2_SYMMETRIC_RINGS_TRACE_CONVERSION=1 \
 ```
 
 Trace messages are written to standard error. The conversion trace reports
-metadata bypasses, selected complete conversion plans and their fixed child
+metadata bypasses, selected complete conversion plans and their fixed component
 plans, and multiplication plans. Some kernels additionally emit lower-level
 diagnostic lines, such as the method selected for individual Schur factors.
 
@@ -232,9 +232,9 @@ M2_SYMMETRIC_RINGS_FORCE_MULTIPLICATION_PLAN='product:via-power-sums'
 An unknown conversion plan, a plan with the wrong endpoints, or an
 inapplicable forced plan is an explicit error. Conversion forcing names exactly
 one complete top-level plan. If that plan is a composition, its definition
-already fixes all child plan identifiers; neither forcing nor execution makes
-another choice. Multiplication forcing likewise applies to the complete binary
-product plan.
+already fixes all component-plan identifiers; neither forcing nor execution
+makes another choice. Multiplication forcing likewise applies to the complete
+binary product plan.
 The development check
 `Macaulay2/packages/SymmetricRings/extras/benchmarks/test-plan-forcing.sh`
 asserts both forced and automatic selections, including direct, composition,
@@ -282,7 +282,7 @@ already complete, but it never changes the mathematical contract.
 A conversion plan should read like a named casewise identity. Its endpoints
 name the two bases; its ordered conditions may refer to the whole expression,
 individual terms, or homogeneous components; and each formula is either one
-kernel or a fixed composition of named child plans. For example, the default
+kernel or a nonempty fixed composition of named plans. For example, the default
 `PowerSum -> Schur` plan applies its policy separately to homogeneous
 components and can use the abacus formula, conversion through complete
 functions, or a fixed term-level hybrid. Every case computes the same Schur
@@ -316,14 +316,14 @@ A new conversion path has three production edit locations:
 1. Implement one mathematically named callable kernel in
    `basis-conversion-kernels.*`. State the defining identity, domain
    assumptions, and canonical target guarantee beside the implementation.
-2. Add one complete named `X -> Y` entry in
+2. Add one complete named `u -> v` entry in
    `basis-conversion-plans.cpp`. Its applicability and ordered cases contain
    all mathematical routing. A one-kernel plan is simply
-   `otherwise() -> kernel`; named plans and compositions name fixed child
+   `otherwise() -> kernel`; a nonempty composition names its fixed component
    plans.
 3. Add one ordered performance rule in the matching endpoint block of
    `basis-conversion-picker.cpp`. If no specific plan is preferred, the
-   parameterized generic `X -> PowerSum -> Y` composition is the automatic
+   parameterized generic `u -> PowerSum -> v` composition is the automatic
    broad fallback.
 
 The kernel needs a declaration in `basis-conversion-kernels.hpp` because

@@ -100,7 +100,7 @@ assert_trace \
     'conversion-plan: source=PowerSum target=Schur plan=PowerSum->Schur:homogeneous-component-formulas' \
     'needsPackage "SymmetricRings"; R=symmetricRing QQ; A=toBasis(p_3+2*p_2+3*p_1,S); exit 0'
 assert_trace \
-    'conversion-plan: source=Elementary target=Schur plan=X->Y:via-power-sums' \
+    'conversion-plan: source=Elementary target=Schur plan=u->v:via-power-sums' \
     'needsPackage "SymmetricRings"; R=symmetricRing QQ; A=toBasis(e_3+2*e_2+3*e_1,S); exit 0'
 assert_trace \
     'conversion-plan: source=Schur target=Complete plan=Schur->Complete:Jacobi-Trudi' \
@@ -168,12 +168,12 @@ assert_forced_conversion_agrees \
     'PowerSum->HallLittlewoodQ:single-cycles-via-Green-polynomials' \
     'needsPackage "SymmetricRings"; E=frac(QQ[t]); R=symmetricRing E; print toExternalString rawTerms toBasis(p_3+2*p_2+3*p_1,Q); exit 0'
 assert_forced_conversion_agrees \
-    'X->Y:via-power-sums' \
+    'u->v:via-power-sums' \
     'needsPackage "SymmetricRings"; R=symmetricRing QQ; print toExternalString rawTerms toBasis(h_{3,1}+h_2,S); exit 0'
 
 # Exercise every applicable available conversion plan, rather than only the
 # automatically selected one. The small all-family matrix reaches the generic
-# X -> p -> Y composition at every applicable endpoint and every unconditional
+# u -> p -> v composition at every applicable endpoint and every unconditional
 # kernel competitor. Additional power-sum inputs cover conditional
 # Hall--Littlewood plans,
 # nonhomogeneous component routing, and the term-level Schur hybrid.
@@ -241,9 +241,16 @@ M2_SYMMETRIC_RINGS_FORCE_MULTIPLICATION_PLAN='Schur-product:horizontal-Pieri' \
 
 # Contributor-surface invariants: mathematical kernels, complete plans, and
 # endpoint picker policy have exactly one source owner each. Workflow
-# infrastructure must not regain a kernel enum, execution switch, or plan IDs.
+# infrastructure must not regain a kernel enum, execution switch, plan IDs, or
+# a third formula variant for one-plan compositions.
 if grep -F 'enum class BasisConversionKernel' \
     "$SOURCE_ROOT/Macaulay2/e/symmetric-rings/basis-conversion.hpp" \
+    >/dev/null ||
+   grep -E \
+    'KernelPlanFormula|NamedPlanFormula|ComposedPlansFormula|usePlan[[:space:]]*\(' \
+    "$SOURCE_ROOT/Macaulay2/e/symmetric-rings/basis-conversion.hpp" \
+    "$SOURCE_ROOT/Macaulay2/e/symmetric-rings/basis-conversion-plans.cpp" \
+    "$SOURCE_ROOT/Macaulay2/e/symmetric-rings/basis-conversion.cpp" \
     >/dev/null ||
    grep -F 'executeBasisConversionKernel' \
     "$SOURCE_ROOT/Macaulay2/e/symmetric-rings/basis-conversion.cpp" \

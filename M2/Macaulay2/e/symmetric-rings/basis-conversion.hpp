@@ -164,8 +164,8 @@
 // policy-free, the picker chooses one top-level plan, and the generic
 // executor follows that plan's fixed formulas without choosing a replacement.
 
-  // The database stores complete source-to-target plans. A case either uses
-  // one kernel, uses one named plan, or composes named plans.
+  // The database stores complete source-to-target plans. A case uses either
+  // one kernel or a nonempty fixed composition of named plans.
   struct BasisConversionPlanId
   {
     std::string value;
@@ -178,21 +178,14 @@
 
   struct BasisConversionPlanDefinition;
 
-  struct KernelPlanFormula
+  struct KernelPlan
   {
     std::string name;
     BasisConversionKernel kernel = nullptr;
     ExpressionCondition outputGuarantee = always();
   };
 
-  struct NamedPlanFormula
-  {
-    BasisConversionPlanId plan;
-    mutable const BasisConversionPlanDefinition *planDefinition =
-        nullptr;
-  };
-
-  struct ComposedPlansFormula
+  struct CompositionPlan
   {
     std::vector<BasisConversionPlanId> plans;
     mutable std::vector<const BasisConversionPlanDefinition *>
@@ -201,9 +194,8 @@
 
   using BasisConversionPlanFormula =
       std::variant<
-          KernelPlanFormula,
-          NamedPlanFormula,
-          ComposedPlansFormula>;
+          KernelPlan,
+          CompositionPlan>;
 
   struct BasisConversionPlanCase
   {
@@ -272,8 +264,6 @@
       std::string name,
       BasisConversionKernel kernel,
       ExpressionCondition outputGuarantee = always());
-  static BasisConversionPlanFormula usePlan(
-      BasisConversionPlanId plan);
   static BasisConversionPlanFormula composePlans(
       std::initializer_list<BasisConversionPlanId> plans);
   static const std::vector<BasisConversionPlanDefinition>&

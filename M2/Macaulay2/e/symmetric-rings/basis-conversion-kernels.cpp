@@ -2142,7 +2142,7 @@ ring_elem SymmetricEngineRing::skewPOrPOmegaToPowerSums(
 {
     // The skew atom itself cannot enter the plan database. The pairing formula
     // first expands it canonically in monomial or forgotten coordinates; each
-    // conversion after that point uses the ordinary X -> Y workflow.
+    // conversion after that point uses the ordinary u -> v workflow.
     ring_elem skewCapital = skewQOrBFunction(lambda, mu, omega);
     if (error()) return zero();
     const int powerSumId =

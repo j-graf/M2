@@ -995,7 +995,7 @@ void SymmetricEngineRing::validateBasisConversionPlanDatabase()
       const auto& plansBySourceAndTarget =
           basisConversionPlansBySourceAndTarget();
 
-      // The concrete plans together with the one generic X -> p -> Y plan
+      // The concrete plans together with the one generic u -> p -> v plan
       // cover the complete directed graph of built-in bases. Identity arrows
       // remain a generic workflow bypass.
       const std::vector<BasisKind> builtInConversionBases{
@@ -1135,7 +1135,7 @@ void SymmetricEngineRing::validateBasisConversionPlanDatabase()
                       plan.id.value + ": " + exception.what());
                 }
               if (const auto *kernelCase =
-                      std::get_if<KernelPlanFormula>(
+                      std::get_if<KernelPlan>(
                           &item.formula))
                 {
                   if (kernelCase->name.empty() ||
@@ -1160,27 +1160,16 @@ void SymmetricEngineRing::validateBasisConversionPlanDatabase()
                           plan.id.value + ": " + exception.what());
                     }
                 }
-              else if (const auto *namedPlan =
-                           std::get_if<
-                               NamedPlanFormula>(
-                               &item.formula))
-                {
-                  if (namedPlan->plan.value.empty())
-                    throw exc::engine_error(
-                        "basis-conversion plan " + plan.id.value +
-                        " has an empty named-plan identifier");
-                  namedPlan->planDefinition = nullptr;
-                }
               else
                 {
                   const auto& composition =
                       std::get<
-                          ComposedPlansFormula>(
+                          CompositionPlan>(
                           item.formula);
-                  if (composition.plans.size() < 2)
+                  if (composition.plans.empty())
                     throw exc::engine_error(
                         "basis-conversion plan " + plan.id.value +
-                        " has a composition with fewer than two children");
+                        " has an empty composition");
                   composition.planDefinitions.clear();
                 }
             }
@@ -1192,20 +1181,13 @@ void SymmetricEngineRing::validateBasisConversionPlanDatabase()
         for (const auto& item : plan.cases)
           {
             if (std::holds_alternative<
-                    KernelPlanFormula>(
+                    KernelPlan>(
                     item.formula))
               continue;
-            std::vector<BasisConversionPlanId> childIds;
-            if (const auto *namedPlan =
-                    std::get_if<
-                        NamedPlanFormula>(
-                        &item.formula))
-              childIds.push_back(namedPlan->plan);
-            else
-              childIds =
-                  std::get<
-                      ComposedPlansFormula>(
-                      item.formula).plans;
+            auto& composition =
+                std::get<
+                    CompositionPlan>(
+                    item.formula);
             BasisKind current = plan.sourceBasisKind;
             ExpressionCondition guaranteedCondition =
                 plan.pieceKind ==
@@ -1218,44 +1200,37 @@ void SymmetricEngineRing::validateBasisConversionPlanDatabase()
                     ExpressionConditionKind::Otherwise)
               guaranteedCondition =
                   guaranteedCondition && item.condition;
-            for (const auto& childId : childIds)
+            for (const auto& componentPlanId : composition.plans)
               {
-                auto found = plansById.find(childId.value);
+                auto found =
+                    plansById.find(componentPlanId.value);
                 if (found == plansById.end())
                   throw exc::engine_error(
                       "basis-conversion plan " +
                       plan.id.value +
-                      " references unknown child plan " +
-                      childId.value);
-                const auto& child = *found->second;
-                if (auto *namedPlan =
-                        std::get_if<
-                            NamedPlanFormula>(
-                            &item.formula))
-                  namedPlan->planDefinition = found->second;
-                else
-                  std::get<
-                      ComposedPlansFormula>(
-                      item.formula).planDefinitions.push_back(
-                          found->second);
-                if (child.sourceBasisKind != current)
+                      " references unknown component plan " +
+                      componentPlanId.value);
+                const auto& componentPlan = *found->second;
+                composition.planDefinitions.push_back(
+                    found->second);
+                if (componentPlan.sourceBasisKind != current)
                   throw exc::engine_error(
                       "basis-conversion plan " +
                       plan.id.value +
-                      " has incompatible child-plan endpoints");
+                      " has incompatible composition endpoints");
                 if (!expressionConditionImplies(
                         guaranteedCondition,
-                        child.applicability))
+                        componentPlan.applicability))
                   throw exc::engine_error(
                       "basis-conversion composition " +
                       plan.id.value +
-                      " references a child with an unproved "
+                      "references a plan with an unproved "
                       "applicability requirement");
-                current = child.targetBasisKind;
+                current = componentPlan.targetBasisKind;
                 guaranteedCondition =
-                    child.outputGuarantee;
+                    componentPlan.outputGuarantee;
                 dependencies[plan.id.value].push_back(
-                    child.id.value);
+                    componentPlan.id.value);
               }
             if (current != plan.targetBasisKind)
               throw exc::engine_error(
@@ -1373,7 +1348,7 @@ SymmetricEngineRing::basisConversionPlanForRing(
 // Generic Declarative Formula And Plan Executor
 // ============================================================================
 // The executor interprets the already-selected plan. Kernel formulas call one
-// kernel; compositions identify their fixed named plans recursively.
+// kernel; compositions identify their fixed component plans recursively.
 // Neither path invokes performance policy or substitutes another plan.
 
 ring_elem SymmetricEngineRing::executeBasisConversionPlanFormula(
@@ -1392,7 +1367,7 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlanFormula(
         return zero();
       }
     if (const auto *kernelCase =
-            std::get_if<KernelPlanFormula>(
+            std::get_if<KernelPlan>(
                 &formula))
       {
         if (kernelCase->kernel == nullptr)
@@ -1470,35 +1445,35 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlanFormula(
     ring_elem current = expression;
     ExpressionFacts currentFacts = inputFacts;
     int currentBasisId = sourceBasisId;
-    auto executeChild =
-        [&](const BasisConversionPlanDefinition *childDefinition)
+    auto executeComponentPlan =
+        [&](const BasisConversionPlanDefinition *componentDefinition)
             -> bool {
-          if (childDefinition == nullptr)
+          if (componentDefinition == nullptr)
             {
-              ERROR("a named basis-conversion formula reached "
-                    "execution before its named plan was identified");
+              ERROR("a basis-conversion composition reached execution "
+                    "before a component plan was identified");
               return false;
             }
-          RingBasisConversionPlan child =
+          RingBasisConversionPlan componentPlan =
               basisConversionPlanForRing(
-                  childDefinition);
+                  componentDefinition);
           if (error()) return false;
-          if (child.sourceBasisId != currentBasisId)
+          if (componentPlan.sourceBasisId != currentBasisId)
             {
-              ERROR("a named basis-conversion formula has "
-                    "incompatible runtime child endpoints");
+              ERROR("a basis-conversion composition has "
+                    "incompatible runtime endpoints");
               return false;
             }
           current = executeBasisConversionPlan(
-              child,
+              componentPlan,
               current,
               combinatorialTags,
               currentFacts,
               nullptr);
           if (error()) return false;
-          currentBasisId = child.targetBasisId;
-          // Conditions in the next fixed child apply to the actual realized
-          // intermediate, never to a predicted support profile.
+          currentBasisId = componentPlan.targetBasisId;
+          // Conditions in the next fixed component plan apply to the actual
+          // realized intermediate, never to a predicted support profile.
           currentFacts = inferCanonicalExpansionFacts(
               current,
               currentBasisId,
@@ -1508,32 +1483,21 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlanFormula(
           return true;
         };
 
-    if (const auto *namedPlan =
-            std::get_if<
-                NamedPlanFormula>(
-                &formula))
+    const auto& composition =
+        std::get<
+            CompositionPlan>(
+            formula);
+    if (composition.planDefinitions.size() !=
+        composition.plans.size())
       {
-        if (!executeChild(namedPlan->planDefinition))
-          return zero();
+        ERROR("a basis-conversion composition reached execution "
+              "before its named plans were identified");
+        return zero();
       }
-    else
-      {
-        const auto& composition =
-            std::get<
-                ComposedPlansFormula>(
-                formula);
-        if (composition.planDefinitions.size() !=
-            composition.plans.size())
-          {
-            ERROR("a basis-conversion composition reached execution "
-                  "before its named plans were identified");
-            return zero();
-          }
-        for (const auto *childDefinition :
-             composition.planDefinitions)
-          if (!executeChild(childDefinition))
-            return zero();
-      }
+    for (const auto *componentDefinition :
+         composition.planDefinitions)
+      if (!executeComponentPlan(componentDefinition))
+        return zero();
     if (currentBasisId != targetBasisId ||
         !currentFacts.canonicalExpansionInBasis(targetBasisId))
       {
@@ -1717,8 +1681,8 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
 
         // A case formula receives the complete subexpression assigned to that
         // case, not one invocation per term or component. This preserves the
-        // declarative semantics and lets fixed child plans inspect the actual
-        // aggregate support produced for the case.
+        // declarative semantics and lets fixed component plans inspect the
+        // actual aggregate support produced for the case.
         VECTOR(SymmetricTerm) caseTerms;
         caseTerms.reserve(termPositions.size());
         for (size_t position : termPositions)
@@ -2055,7 +2019,7 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
       }
 
     // Selection for every source group is complete before any group executes.
-    // Each selected definition fixes every case, kernel, and named child.
+    // Each selected definition fixes every case, kernel, and component plan.
     VECTOR(SymmetricTerm) resultTerms = std::move(scalarTerms);
     for (const auto& prepared : preparedConversions)
       {

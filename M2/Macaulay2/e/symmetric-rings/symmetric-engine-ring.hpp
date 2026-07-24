@@ -106,7 +106,7 @@ class SymmetricEngineRing : public Ring
   mutable GCMap<int, GCMap<std::string, ring_elem>> monomialToPowerSumCache;
   mutable GCMap<int, GCMap<std::string, ring_elem>> forgottenToPowerSumCache;
   // A runtime invariant guard: executing a fixed conversion plan may recurse
-  // into named children, but it must never invoke performance selection.
+  // into its component plans, but it must never invoke performance selection.
   mutable size_t basisConversionPlanExecutionDepth = 0;
 
   // Schur conversion and product state.
