@@ -163,28 +163,37 @@ This file owns public computational policy, including the `toBasis` and
 - the optional constant-QQ working-ring policy.
 
 The engine implementation of `multiplyToBasis` accepts and distributes
-product-free linear combinations into calls to a strict binary helper. That helper follows
-the redesign contract: it accepts exactly two normalized mathematical basis
-elements and selects one multiplication plan together with any operand
-conversions. The owning workflow executes those conversions, runs the
-policy-free product kernel, normalizes the declared kernel output when
-necessary, and only then selects and executes the post-kernel conversion
-through the same basis-conversion registry.
+product-free linear combinations into calls to a strict binary helper. That
+helper accepts exactly two normalized mathematical basis elements and selects
+one multiplication plan together with any required operand conversions. The
+owning workflow executes those conversions, runs the policy-free product
+kernel, normalizes its declared output, and uses the shared conversion
+registry for any final change of basis.
 
-`toBasis` uses one workflow for pure and mixed expressions: normalize,
-resolve products, group canonical terms by source basis and weight, select
-every composition and direct plan, execute the selections, and combine the
-target-basis result. Its picker may use any registered intermediate basis, not
-only power sums, and exact ordered compositions can be forced for contract
-tests. Built-in plans invoke mathematical kernels directly; custom and
-transformed formulas remain at the M2 registry boundary.
+The engine implementation of `toBasis` similarly has one workflow for pure,
+mixed-basis, skew, and product-bearing expressions. It normalizes when exact
+metadata does not justify a bypass, resolves products, groups canonical terms
+by source basis, and selects one complete named source-to-target plan for each
+group. A plan may state different formulas for the whole expression,
+individual terms, or homogeneous components. Each formula is either one
+mathematical kernel or a fixed composition of named child plans. The picker
+does not search an ad hoc graph of intermediate bases, and execution never
+reselects a child plan.
+
+The current diagrams and complete contributor contract for these workflows
+are maintained in the
+[pipeline guide](../../e/symmetric-rings/README-pipelines.md). The present
+package guide describes their public mathematical role rather than duplicating
+their internal control flow.
 
 ## Basis identity: key, id, and symbol
 
 These three notions must not be confused:
 
 - The **registry key** is the stable mathematical name, such as `Schur`.
-- The **basis id** is the integer used by the engine for one registered basis.
+- The **basis id** is the stable registry-assigned integer used by the engine
+  for one registered basis. Each engine ring receives descriptors only for
+  bases available on that ring.
 - The **symbol** is ring-local presentation, such as `S`, and may be changed by
   the user through `"BasisSymbols"`.
 
@@ -219,14 +228,17 @@ For a public call `toBasis(F, B)`, the M2 layer does the following:
 4. Otherwise call the general engine conversion entry point.
 5. Wrap the raw result back in the user's original `SymmetricRing`.
 
-Custom bases may provide `ToPowerSums` and `FromPowerSums` hooks. If such a hook
-is involved, `toBasisFallback` performs the required M2-level work and uses
+Custom bases may provide `ToPowerSums` and `FromPowerSums` hooks. If such a
+hook is involved, the M2 fallback performs the user-supplied formula and uses
 power sums as the common interchange basis.
 
-Built-in conversion is planned in the C++ engine. See the
-[engine maintainer guide](../../e/symmetric-rings/README.md) for conversion
-guarantees, pipelines, the current `p -> S` dispatcher, and the procedure for
-adding a route.
+Built-in conversion and multiplication are implemented by the C++ engine's
+declarative plan registries; multiplication reuses the conversion executor for
+its operand and result conversions. See the
+[pipeline guide](../../e/symmetric-rings/README-pipelines.md) for the current
+diagrams and the
+[engine maintainer guide](../../e/symmetric-rings/README.md) for mathematical
+kernel ownership and the procedure for adding an algorithm.
 
 ## Computing over the constant-QQ shadow
 

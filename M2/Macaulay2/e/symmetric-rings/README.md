@@ -28,11 +28,11 @@ The same distinction applies to metadata.  Combinatorial tags describe the
 dominant structure of the user's operation, such as a Schur product or
 plethysm.  Conversion kernels are implementation details and must not create
 or replace these tags.  Subsequent computational pipelines use this preserved
-provenance as one input to algorithm selection: for example, the `p -> S`
-picker may choose a kernel that benchmarks best for expressions arising
-from plethysm, Littlewood--Richardson products, or Pieri products.  The tags
-affect performance decisions only; they do not change the mathematical value
-of an expression.
+provenance as one input to algorithm selection. For example, the selected
+default `PowerSum -> Schur` plan has ordered cases that may use different
+formulas for expressions arising from plethysm, Littlewood--Richardson
+products, or Pieri products. The tags affect performance decisions only; they
+do not change the mathematical value of an expression.
 
 ## Directory map
 
@@ -51,7 +51,7 @@ The principal files are:
 | `basis-conversion.*` | Expression facts, shared conversion-plan registry, and conversion/multiplication workflows |
 | `basis-coefficient.*` | Targeted scalar transitions and default full-conversion fallback |
 | `basis-conversion-kernels.*` | Basis-family formulas, Jacobi--Trudi, characters, Hall--Littlewood transitions, and straightening |
-| `basis-conversion-products.*` | Product-aware conversion workflows |
+| `basis-conversion-products.*` | Littlewood--Richardson, Pieri, border-strip, and monomial-like product mathematics |
 | `inner-product-dispatch.*` | Inner-product context resolution and route selection |
 | `inner-product-kernels.*` | Mathematical inner-product algorithms |
 | `plethysm.*` | Plethysm workflows and their kernels |
@@ -61,6 +61,11 @@ The principal files are:
 Some class declarations are split among topic-specific header fragments and
 included into the central class.  This is organizational, not a separate
 object hierarchy.
+
+The current end-to-end diagrams are kept in
+[`README-pipelines.md`](README-pipelines.md). This guide explains ownership
+and mathematical contracts; the pipeline guide is the canonical description
+of the implemented control flow.
 
 ## Mathematical elements and bases
 
@@ -154,7 +159,7 @@ prepare exact facts
 plan picker
         |-- a direct combinatorial formula
         |-- coefficient extraction or diagonal pairing
-        |-- an intermediate-basis computation
+        |-- a fixed named-plan composition
         `-- the operation's broad fallback
         |
         v
@@ -173,7 +178,7 @@ explicit pairing.
 | Operation | Preserved request structure | High-level decision | Broad fallback |
 |---|---|---|---|
 | Basis conversion | Expression, exact source/target facts, and tags | Select one complete source-to-target plan from the shared registry | Convert general terms through named source-to-power-sum and power-sum-to-target child plans |
-| Product-aware conversion | Left factor, right factor, and output basis | Choose a combinatorial product rule or factorwise conversion | Multiply or convert factors through general conversion |
+| Multiplication to a basis | Left operand, right operand, and output basis | Select one multiplication plan, including operand conversions and a product kernel | Convert through power sums and multiply there |
 | Plethysm to a basis | Outer operand, inner operand, and target basis | Choose a specialized combined route or materialize in power sums | Adams-operation plethysm followed by general conversion |
 | Inner product | Two operand profiles, pairing context, and registered metadata | Choose a diagonal, single-element, or structured-coordinate workflow | Convert both operands to power sums and apply the pairing |
 
@@ -218,7 +223,7 @@ fresh process with:
 
 ```sh
 M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN='PowerSum->Schur:grouped-characters'
-M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN='Complete->Schur:via-PowerSum-default'
+M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN='Complete->Schur:recursive-transition'
 M2_SYMMETRIC_RINGS_FORCE_MULTIPLICATION_PLAN='product:power-sums'
 ```
 
@@ -264,86 +269,28 @@ it to disable tracing.  Forced variables, by contrast, inspect the exact
 string value.  Tracing adds output and overhead, and forced routing bypasses
 production selection, so neither belongs in an accepted benchmark run.
 
-## Basis conversion from end to end
+## Basis conversion as mathematics
 
-Basis conversion applies this architecture to pure, mixed-basis, skew, and
-product-bearing expressions. An exact canonical expression in one basis can
-skip work needed by the general preparation stages.
+Basis conversion accepts pure, mixed-basis, skew, and product-bearing
+expressions. After normalization and product resolution, canonical terms are
+grouped by source basis. Each source group receives one complete named
+source-to-target plan. Exact metadata may prove that some preparation is
+already complete, but it never changes the mathematical contract.
 
-A normal conversion has these conceptual stages:
+A conversion plan should read like a named casewise identity. Its endpoints
+name the two bases; its ordered conditions may refer to the whole expression,
+individual terms, or homogeneous components; and each formula is either one
+kernel or a fixed composition of named child plans. For example, the default
+`PowerSum -> Schur` plan applies its policy separately to homogeneous
+components and can use the abacus formula, conversion through complete
+functions, or a fixed term-level hybrid. Every case computes the same Schur
+expansion.
 
-```text
-Macaulay2 toBasis request
-        |
-        v
-rawSymmetricRingsToBasis
-        |
-        v
-load exact metadata or normalize and infer expression facts
-        |
-        v
-resolve product and skew terms
-        |
-        v
-group canonical terms by source basis and weight
-        |
-        v
-select one complete registered plan per source group
-        |
-        v
-execute selected plans and combine results
-        |
-        v
-attach exact output facts and preserve semantic tags
-```
-
-`ExpressionFacts` carries canonical form, basis composition, weights, term and
-factor counts, skew counts, single-element shape, and provenance. Expensive
-selector-only profiles are computed lazily. The picker chooses one complete
-registered source-to-target plan. A selected plan may contain fixed
-compositions of named child plans; execution never changes that selection or
-calls the picker.
-
-### Worked example: converting `p -> S`
-
-Suppose `F` is already an expanded power-sum expression and the user asks for
-`toBasis(F,S)`.  The important control flow is:
-
-```text
-toBasis(F,S)
-    |
-    v
-exact power-sum metadata bypass
-    |
-    v
-complete-plan picker
-    `-- PowerSum -> Schur                 [selected]
-            |
-            v
-    selected power-sum-to-Schur plan
-            |
-            v
-    Schur expansion with exact facts
-    and preserved tags
-```
-
-The metadata bypass applies because no source conversion or normalization is
-needed. Automatic routing chooses the named default power-sum-to-Schur plan;
-that plan's ordered component cases choose the fixed formula appropriate to
-the realized support. Competing complete plans remain available for
-independent checking and forced diagnostics.
-
-The default plan's ordered conditions may use coarse properties of each
-homogeneous component, its coefficient ring, and combinatorial tags.
-Nonhomogeneous inputs are handled degree by degree. These are performance
-choices only: every case computes the same Schur expansion, and conversion
-preserves the expression's semantic tags.
-
-The conversion trace described above shows the selected stable top-level plan
-identifier and any fixed children executed by its formula. Exact component
-heuristics and thresholds belong in the declarative default plan, while the
-picker only chooses among complete top-level plans. Neither is duplicated in
-this overview.
+The picker chooses only among complete registered plans with the requested
+endpoints. It does not construct new intermediate-basis paths, and the generic
+executor never calls the picker. See the
+[basis-conversion diagram and contract](README-pipelines.md#basis-conversion)
+for the implemented stages, metadata bypasses, and plan-case semantics.
 
 ### Coefficient rings and the constant-QQ shadow ring
 
@@ -397,30 +344,24 @@ attaches one dominant combinatorial tag.  Once expanded, the expression still
 remembers that it arose from LR, Pieri, or border-strip structure, but no
 longer retains the original two operands.
 
-`multiplyToBasis(f,g,B)` instead creates a factorized conversion request.  The
-`FactorizedProduct` pipeline can inspect `f` and `g` separately and select a
-`ProductExpansionMethod`:
+`multiplyToBasis(f,g,B)` instead preserves both operands until it has selected
+one complete multiplication plan. The public wrapper accepts product-free
+linear combinations and distributes over their terms. For each nonscalar term
+pair, its strict binary helper sees two canonical basis elements and selects
+the operand conversions and product kernel together. Available kernels include
+Littlewood--Richardson, horizontal and vertical Pieri, border strips,
+compatible Schur factor rules, monomial-like products, and the broad
+power-sum product.
 
-```text
-FactorizedProduct pipeline
-        |
-        v
-product-method selector
-        |-- Littlewood--Richardson
-        |-- horizontal or vertical Pieri
-        |-- border strips
-        |-- compatible Schur rules
-        `-- factorwise conversion
-        |
-        v
-        expression in the requested basis
-```
-
-This is the same information-preservation principle seen in the conversion
-pipelines: do not expand away a factorization before deciding whether it is
-algorithmically valuable.  The product method attaches the tag describing the
-outer multiplication, regardless of whether the implementation literally
-enumerated LR tableaux or reached the same expansion by another route.
+Selection fixes every operand conversion before execution. A
+support-dependent final conversion is selected only after the kernel's actual
+normalized output exists. This preserves the useful factorization without
+placing conversion policy inside a product kernel. The outer multiplication
+attaches its mathematical tag regardless of whether the implementation
+literally enumerated LR tableaux or reached the same expansion by another
+justified formula. See the
+[multiplication diagrams](README-pipelines.md#multiplication) for the public
+distribution, strict binary workflow, and one-term product resolver.
 
 ### Plethysm
 
@@ -431,32 +372,11 @@ and chooses one complete plethysm-to-basis route before calculation.
 
 The selector chooses the specialized Schur plethysm-to-Schur route when its
 shape restrictions and benchmarked crossover permit it. Otherwise it computes
-plain plethysm and calls the default `toBasis` workflow:
+plain plethysm in power sums, attaches exact facts and `Plethysm` provenance,
+and calls the default `toBasis` workflow.
 
-```text
-outer operand + inner operand + target basis
-        |
-        v
-select complete plethysm route
-        |-- specialized combined Schur route
-        |       `------------------------------.
-        `-- general Adams-operation route      |
-                |                              |
-                v                              |
-        materialize plethysm in p              |
-        and attach Plethysm provenance         |
-                |                              |
-                v                              |
-        default toBasis workflow               |
-                `------------------------------'
-                        |
-                        v
-                requested target basis
-```
-
-The canonical power-sum result carries exact facts and a `Plethysm` tag, so
-`toBasis` can bypass normalization and grouping and begin with the ordinary
-power-sum-to-target plan picker.
+See the [plethysm diagram](README-pipelines.md#plethysm) for the two current
+routes and their shared output contract.
 
 When extending plethysm, keep four concerns separate: the Adams-operation
 definition, the intermediate basis, conversion to the requested output basis,
@@ -471,28 +391,14 @@ on two bases but on an explicit pairing context.  The request contains the
 ordinary Hall, Hall--Littlewood, or other supported context, its power-sum
 pairing, registered dual/diagonal metadata, and a profile of each operand.
 
-The top-level inner-product pipelines are:
-
-| Pipeline | Opportunity it represents |
-|---|---|
-| `DiagonalBasis` | Both sides can be paired coefficientwise in a registered diagonal basis, including the power-sum diagonal formula |
-| `SingleBasisElement` | At least one operand is a single basis element, allowing coefficient extraction, Kostka formulas, or a character calculation instead of two full conversions |
-| `PowerSumsStructured` | One side is already structured in power sums and the other has a form suitable for weighted Schur-character evaluation |
-| `FallbackPowerSums` | No cheaper justified structure remains, so both operands are converted to power sums |
-
-Within a pipeline, the engine constructs applicable `InnerProductCandidate`
-values.  Their routes include registered diagonal pairing, dual-basis
-coefficient extraction, Kostka and conjugate-Kostka formulas, weighted Schur
-characters, the direct power-sum diagonal, and conversion of both sides to
-power sums.  Candidate estimates can account for operand size and whether a
-needed transition is already cached.  Selection chooses the least estimated
-applicable cost; execution does not repeat that selection.
-
-This is a useful contrast with `p -> S`.  The conversion dispatcher uses an
-empirical decision tree over one expression, whereas the inner-product
-dispatcher compares several route candidates built from two operand profiles.
-Both still obey the same separation between profiling, selection, tracing,
-execution, and fallback.
+The engine can pair registered diagonal bases, extract a coefficient in a dual
+basis, apply Kostka or conjugate-Kostka formulas, evaluate weighted Schur
+characters, use the power-sum diagonal directly, or convert both complete
+operands to power sums. The current dispatcher organizes those opportunities
+into four top-level pipelines and compares applicable scalar-route candidates
+inside the selected pipeline. See the
+[Hall-inner-product diagram](README-pipelines.md#hall-inner-products) for the
+current selection order and broad fallback.
 
 The Macaulay2 layer resolves the intended inner-product context explicitly;
 the engine must not infer it from display symbols or merely from which bases
@@ -538,7 +444,8 @@ Littlewood--Richardson tag for the new outer operation, without tagging every
 term of the plethysm expansion.  The tag is expression metadata; it is not a
 claim that the LR tableau algorithm was literally executed.
 
-Product-aware conversion code belongs in `basis-conversion-products.*`.
+Product algorithms belong in `basis-conversion-products.*`; the owning
+conversion and multiplication workflows remain in `basis-conversion.*`.
 Ordinary conversion kernels should neither infer nor mutate tags.
 
 ## Correctness and performance work

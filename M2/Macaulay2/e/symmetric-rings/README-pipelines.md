@@ -44,6 +44,12 @@ unassigned input, and the final `otherwise` case proves complete coverage.
 Each case contains one atomic kernel, a fixed named-plan delegation, or an
 ordered composition of named child plans.
 
+For a mathematician, a plan can be read as a named casewise identity: its
+source and target specify the two bases, its conditions describe the portion
+of the expression under consideration, and its formula names the conversion
+identity or fixed chain of identities to apply. Performance policy chooses
+among complete identities; it does not alter their mathematics.
+
 The selected top-level plan fixes every kernel and child identifier that
 execution can reach. The generic executor evaluates child cases against the
 actual intermediate expression, but never calls the picker. The broad
@@ -70,8 +76,10 @@ general rescanning.
 
 Arithmetic may retain individually valid hints after it invalidates the exact
 canonical-core marker. Only the complete marker can justify a conversion
-bypass. Cross-ring fallback transport discards numeric basis-identity facts so
-ring-local IDs are never interpreted in another engine ring.
+bypass. Numeric basis IDs are allocated by the package registry and remain
+stable, but each engine ring has its own available-basis descriptors.
+Cross-ring fallback transport therefore discards basis-identity facts and
+reconstructs them from the realized target-ring expression.
 
 ## Multiplication
 
