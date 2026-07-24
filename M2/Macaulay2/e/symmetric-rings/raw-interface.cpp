@@ -383,8 +383,9 @@ bool rawSymmetricRingsCopyConversionMetadata(const RingElement *source,
       if (metadata && sourceRing != targetRing)
         {
           // Basis IDs are ring-local. The M2 fallback reconstructs atoms on
-          // the target ring, so the exact facts profile must be recomputed.
-          metadata->expressionFactsComplete = false;
+          // the target ring, so basis identity and the exact facts profile
+          // must be recomputed together.
+          metadata->discardRingLocalBasisFacts();
         }
       mutablePolyValue(target->get_value())->conversionMetadata =
           std::move(metadata);

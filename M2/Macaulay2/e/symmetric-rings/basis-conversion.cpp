@@ -9,13 +9,25 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <iterator>
 #include <limits>
-#include <queue>
-#include <sstream>
+#include <numeric>
 #include <utility>
 
 namespace symmetric_rings {
+
+// Contributor map:
+//   1. exact expression facts and persistent metadata;
+//   2. normalization and condition-piece contexts;
+//   3. declarative conversion plans, contracts, selection, and execution;
+//   4. canonical source-group conversion;
+//   5. multiplication plans and the three multiplication workflows;
+//   6. the sole public built-in conversion workflow, toBasis.
+//
+// The matching declaration fragment follows the same order. Mathematical
+// formulas live in basis-conversion-kernels.cpp and product combinatorics live
+// in basis-conversion-products.cpp; this file owns orchestration, not formulas.
 
 // ============================================================================
 // Expression-Fact Inference
@@ -282,11 +294,13 @@ SymmetricEngineRing::basisElementFactsFromAtom(
     return facts;
   }
 
-void SymmetricEngineRing::enrichConversionSelectionFacts(
+void SymmetricEngineRing::enrichBasisConversionPlanSelectionFacts(
     ring_elem f,
     int targetBasisId,
     ExpressionFacts& facts) const
 {
+    if (facts.planSelectionTargetBasisId == targetBasisId)
+      return;
     if (!facts.expandedBasis ||
         basisKindForId(*facts.expandedBasis) != BasisKind::PowerSum)
       return;
@@ -295,33 +309,9 @@ void SymmetricEngineRing::enrichConversionSelectionFacts(
         targetKind == BasisKind::Schur ||
         targetKind == BasisKind::SchurOmega;
     const bool hallLittlewoodTarget =
-        targetKind == BasisKind::HallLittlewoodQ ||
-        targetKind == BasisKind::HallLittlewoodB ||
-        targetKind == BasisKind::HallLittlewoodP ||
-        targetKind == BasisKind::HallLittlewoodPOmega;
+        isHallLittlewoodCapitalBasisKind(targetKind);
     if (!schurTarget && !hallLittlewoodTarget) return;
-
-    if (schurTarget && !facts.homogeneousWeight &&
-        facts.weightTermPositions.empty())
-      {
-        size_t position = 0;
-        for (const auto& term : polyValue(f)->terms)
-          facts.weightTermPositions[
-              monomialWeight(term.monomial)].push_back(position++);
-      }
-    if (schurTarget && facts.homogeneousWeight &&
-        !facts.possibleTermCount)
-      {
-        const size_t possible =
-            partitionCountForConversionSelection(*facts.homogeneousWeight);
-        facts.possibleTermCount = possible;
-        if (possible != 0)
-          {
-            facts.density =
-                static_cast<double>(facts.termCount) /
-                static_cast<double>(possible);
-          }
-      }
+    facts.planSelectionTargetBasisId = targetBasisId;
 
     if (facts.singleBasisElementIndex &&
         facts.singleBasisElement())
@@ -415,9 +405,7 @@ SymmetricEngineRing::expressionFactsFromMetadata(ring_elem f) const
     const auto& metadata = *poly->conversionMetadata;
     if (!metadata.expressionFactsComplete ||
         !metadata.normalized || !metadata.skewFree || !metadata.collected ||
-        !metadata.noProducts || !*metadata.noProducts ||
-        !metadata.termCount || !metadata.singleTerm ||
-        !metadata.singleBasisElement)
+        !metadata.termCount)
       return std::nullopt;
 
     ExpressionFacts facts;
@@ -435,9 +423,18 @@ SymmetricEngineRing::expressionFactsFromMetadata(ring_elem f) const
     facts.singleFactorTermCount = *metadata.singleFactorTermCount;
     facts.productTermCount = *metadata.productTermCount;
     facts.maximumFactorsPerTerm = *metadata.maximumFactorsPerTerm;
+    if (facts.termCount != poly->terms.size() ||
+        facts.scalarTermCount + facts.singleFactorTermCount +
+            facts.productTermCount != facts.termCount ||
+        facts.productTermCount != 0 ||
+        facts.maximumFactorsPerTerm !=
+            (facts.singleFactorTermCount == 0 ? 0 : 1) ||
+        metadata.skewFactorCount.value_or(0) != 0)
+      return std::nullopt;
     // A zero or scalar expansion has no distinguished basis. Every
     // nonscalar canonical expansion must name its unique source basis.
-    if (facts.singleFactorTermCount != 0 && !metadata.expandedBasis)
+    if ((facts.singleFactorTermCount != 0 && !metadata.expandedBasis) ||
+        (facts.singleFactorTermCount == 0 && metadata.expandedBasis))
       return std::nullopt;
     facts.pureBasis = metadata.pureBasis
         ? metadata.pureBasis : metadata.expandedBasis;
@@ -446,6 +443,10 @@ SymmetricEngineRing::expressionFactsFromMetadata(ring_elem f) const
       facts.factorBases = *metadata.factorBases;
     else if (metadata.expandedBasis)
       facts.factorBases = {*metadata.expandedBasis};
+    if (metadata.expandedBasis &&
+        (facts.factorBases.size() != 1 ||
+         facts.factorBases.front() != *metadata.expandedBasis))
+      return std::nullopt;
     if (metadata.expandedBasis &&
         facts.singleFactorTermCount != 0)
       {
@@ -458,14 +459,136 @@ SymmetricEngineRing::expressionFactsFromMetadata(ring_elem f) const
     facts.homogeneousWeight = metadata.homogeneousWeight;
     facts.maximumPartitionLength =
         metadata.maximumPartitionLength.value_or(0);
-    facts.density = metadata.density;
     facts.singleBasisElementId =
         metadata.singleBasisElementId;
     facts.singleBasisElementIndex =
         metadata.singleBasisElementIndex;
     facts.singleBasisElementCoefficientOne =
         metadata.singleBasisElementCoefficientOne;
+    const bool singleBasisElement =
+        facts.termCount == 1 &&
+        facts.scalarTermCount == 0 &&
+        facts.singleFactorTermCount == 1;
+    if (singleBasisElement !=
+            static_cast<bool>(facts.singleBasisElementId) ||
+        (facts.singleBasisElementIndex &&
+         !facts.singleBasisElementId) ||
+        (facts.singleBasisElementCoefficientOne &&
+         !facts.singleBasisElementId) ||
+        (facts.singleBasisElementId &&
+         (!facts.expandedBasis ||
+          *facts.singleBasisElementId != *facts.expandedBasis)))
+      return std::nullopt;
     return facts;
+  }
+
+// ============================================================================
+// Metadata Lifecycle
+// ============================================================================
+// Arithmetic may preserve inexpensive hints even when cancellation or product
+// formation prevents it from proving the complete canonical core. All such
+// construction and invalidation goes through these helpers so no operation
+// invents its own interpretation of SymmetricConversionMetadata.
+
+void SymmetricEngineRing::invalidateExactExpressionFacts(
+    SymmetricConversionMetadataSlot& metadata) const
+{
+    if (!metadata) return;
+    metadata->invalidateExactExpressionFacts();
+  }
+
+void SymmetricEngineRing::refreshSingleBasisElementCoefficientFact(
+    SymmetricConversionMetadata& metadata,
+    const SymmetricRingPoly *poly) const
+{
+    if (!metadata.expressionFactsComplete) return;
+    const bool singleBasisElement =
+        metadata.termCount.value_or(0) == 1 &&
+        metadata.singleFactorTermCount.value_or(0) == 1 &&
+        metadata.scalarTermCount.value_or(0) == 0 &&
+        metadata.productTermCount.value_or(0) == 0 &&
+        poly->terms.size() == 1 &&
+        !poly->terms.front().monomial.data.empty();
+    if (!singleBasisElement)
+      {
+        metadata.singleBasisElementCoefficientOne.reset();
+        return;
+      }
+    metadata.singleBasisElementCoefficientOne =
+        coefficientRing->is_equal(
+            poly->terms.front().coeff, coefficientRing->one());
+  }
+
+SymmetricConversionMetadata SymmetricEngineRing::metadataAfterAddition(
+    const SymmetricConversionMetadata& left,
+    const SymmetricConversionMetadata& right,
+    const SymmetricRingPoly *result) const
+{
+    SymmetricConversionMetadata metadata;
+    if (left.pureBasis == right.pureBasis)
+      metadata.pureBasis = left.pureBasis;
+    if (left.expandedBasis == right.expandedBasis)
+      metadata.expandedBasis = left.expandedBasis;
+    if (left.homogeneousWeight == right.homogeneousWeight)
+      metadata.homogeneousWeight = left.homogeneousWeight;
+    // Cancellation can only decrease this maximum, so the retained value is a
+    // conservative cost hint even though the exact core is invalidated below.
+    if (left.maximumPartitionLength && right.maximumPartitionLength)
+      metadata.maximumPartitionLength = std::max(
+          *left.maximumPartitionLength, *right.maximumPartitionLength);
+    if (left.factorBases && right.factorBases)
+      {
+        std::vector<int> factors = *left.factorBases;
+        factors.insert(
+            factors.end(), right.factorBases->begin(), right.factorBases->end());
+        std::sort(factors.begin(), factors.end());
+        factors.erase(std::unique(factors.begin(), factors.end()), factors.end());
+        metadata.factorBases = std::move(factors);
+      }
+    metadata.termCount = result->terms.size();
+    metadata.normalized = left.normalized && right.normalized;
+    metadata.skewFree = left.skewFree && right.skewFree;
+    metadata.collected = true;
+    // Cancellation can change every exact support count. The retained fields
+    // above are hints only and cannot justify the canonical metadata bypass.
+    metadata.invalidateExactExpressionFacts();
+    return metadata;
+  }
+
+SymmetricConversionMetadata SymmetricEngineRing::metadataAfterProduct(
+    const SymmetricConversionMetadata& left,
+    const SymmetricConversionMetadata& right,
+    const SymmetricRingPoly *result) const
+{
+    SymmetricConversionMetadata metadata;
+    if (left.pureBasis && left.pureBasis == right.pureBasis)
+      metadata.pureBasis = left.pureBasis;
+    if (left.homogeneousWeight && right.homogeneousWeight)
+      metadata.homogeneousWeight =
+          *left.homogeneousWeight + *right.homogeneousWeight;
+    // Product indices concatenate or merge. Neither max(left, right) nor
+    // their sum is exact for every basis/storage combination, so leave this
+    // optional hint absent until the realized result is inspected.
+    if (left.factorBases && right.factorBases)
+      {
+        std::vector<int> factors = *left.factorBases;
+        factors.insert(
+            factors.end(), right.factorBases->begin(), right.factorBases->end());
+        std::sort(factors.begin(), factors.end());
+        factors.erase(std::unique(factors.begin(), factors.end()), factors.end());
+        metadata.factorBases = std::move(factors);
+      }
+    metadata.normalized = left.normalized && right.normalized;
+    metadata.skewFree = left.skewFree && right.skewFree;
+    if (metadata.pureBasis && isMultiplicativeBasis(*metadata.pureBasis) &&
+        metadata.skewFree)
+      metadata.expandedBasis = metadata.pureBasis;
+    metadata.termCount = result->terms.size();
+    metadata.collected = true;
+    // General products may merge factors or cancel coefficients. Exact facts
+    // are attached only by a workflow that has inspected the realized result.
+    metadata.invalidateExactExpressionFacts();
+    return metadata;
   }
 
 // ============================================================================
@@ -480,18 +603,19 @@ void SymmetricEngineRing::attachExpressionFacts(
     int targetBasisId,
     CombinatorialTags combinatorialTags) const
 {
-    (void) targetBasisId;
+    if (!facts.canonicalExpansionInBasis(targetBasisId))
+      {
+        ERROR("only exact canonical target-basis facts can be attached "
+              "as public conversion metadata");
+        return;
+      }
     SymmetricConversionMetadata metadata;
     metadata.pureBasis = facts.pureBasis;
     metadata.expandedBasis = facts.expandedBasis;
     metadata.homogeneousWeight = facts.homogeneousWeight;
     metadata.termCount = facts.termCount;
     metadata.maximumPartitionLength = facts.maximumPartitionLength;
-    metadata.density = facts.density;
     metadata.factorBases = facts.factorBases;
-    metadata.singleBasisElement = facts.singleBasisElement();
-    metadata.singleTerm = facts.singleTerm();
-    metadata.noProducts = facts.noProducts();
     metadata.normalized = facts.normalized;
     metadata.skewFree = facts.skewFree;
     metadata.collected = facts.collected;
@@ -554,10 +678,7 @@ ring_elem SymmetricEngineRing::skewBasisElementExpansion(
         if (error()) return zero();
         return jacobiTrudi(outer, inner, generatorId);
       }
-    if (kind == BasisKind::HallLittlewoodQ ||
-        kind == BasisKind::HallLittlewoodB ||
-        kind == BasisKind::HallLittlewoodP ||
-        kind == BasisKind::HallLittlewoodPOmega)
+    if (isHallLittlewoodCapitalBasisKind(kind))
       return skewHallLittlewoodToPowerSums(outer, inner, kind);
 
     ERROR("the normalization stage cannot expand this skew basis kind");
@@ -649,598 +770,1451 @@ ring_elem SymmetricEngineRing::normalizeExpression(
     return result;
   }
 
-SymmetricEngineRing::ExpressionFacts
-SymmetricEngineRing::conservativeExpressionFactsForBasis(
-    const ExpressionFacts& sourceFacts,
-    int basisId) const
-{
-    // Plan selection for an unexecuted intermediate edge may rely only on
-    // invariants guaranteed by every preceding plan. Shape- and support-based
-    // facts intentionally remain unknown until that intermediate exists.
-    ExpressionFacts facts;
-    facts.normalized = true;
-    facts.skewFree = true;
-    facts.collected = true;
-    facts.combinatorialTags = sourceFacts.combinatorialTags;
-    facts.maximumFactorsPerTerm = 1;
-    facts.factorBases = {basisId};
-    facts.pureBasis = basisId;
-    facts.expandedBasis = basisId;
-    facts.homogeneousWeight = sourceFacts.homogeneousWeight;
-    return facts;
-  }
-
 // ============================================================================
-// Direct Basis-Conversion Plan Catalog
+// Expression-Condition Context Construction
 // ============================================================================
-// This function is the single contributor-facing catalog. It declares which
-// mathematical kernels connect one adjacent basis pair and the exact input
-// shape each kernel accepts. It contains no cost or preference policy.
+// Conditions remain independent inspectable values. This adapter supplies
+// their exact mathematical context from canonical symmetric-function storage.
 
-const std::vector<SymmetricEngineRing::BasisConversionPlan>&
-SymmetricEngineRing::registeredBasisConversionPlans(
-    int sourceBasisId,
-    int targetBasisId) const
-{
-    const std::pair<int, int> key{sourceBasisId, targetBasisId};
-    auto found = basisConversionPlanRegistryCache.find(key);
-    if (found != basisConversionPlanRegistryCache.end())
-      return found->second;
-    auto inserted = basisConversionPlanRegistryCache.emplace(
-        key,
-        buildBasisConversionPlans(sourceBasisId, targetBasisId));
-    return inserted.first->second;
-  }
-
-std::vector<SymmetricEngineRing::BasisConversionPlan>
-SymmetricEngineRing::buildBasisConversionPlans(
-    int sourceBasisId,
-    int targetBasisId) const
-{
-    requireBasis(sourceBasisId);
-    requireBasis(targetBasisId);
-    if (error()) return {};
-
-    std::vector<BasisConversionPlan> plans;
-    auto addPlan =
-        [&](std::string_view identifier,
-            BasisConversionKernel kernel,
-            BasisConversionInputShape inputShape =
-                BasisConversionInputShape::CanonicalExpansion) {
-          plans.push_back({
-              identifier,
-              sourceBasisId,
-              targetBasisId,
-              kernel,
-              inputShape});
-    };
-
-    int powerSumBasisId = requiredBasisIdForKind(BasisKind::PowerSum);
-    if (error()) return {};
-
-    // Every built-in basis has one broad, policy-free formula to power sums.
-    if (targetBasisId == powerSumBasisId &&
-        sourceBasisId != powerSumBasisId &&
-        basisKindForId(sourceBasisId) != BasisKind::Custom)
-      {
-        BasisConversionKernel kernel =
-            BasisConversionKernel::Unavailable;
-        std::string_view identifier;
-        switch (basisKindForId(sourceBasisId))
-          {
-            case BasisKind::Complete:
-              kernel =
-                  BasisConversionKernel::CompleteToPowerSumsClassical;
-              identifier = "Complete->PowerSum:classical-formula";
-              break;
-            case BasisKind::Elementary:
-              kernel =
-                  BasisConversionKernel::ElementaryToPowerSumsClassical;
-              identifier = "Elementary->PowerSum:classical-formula";
-              break;
-            case BasisKind::Schur:
-              kernel =
-                  BasisConversionKernel::SchurToPowerSumsCharacters;
-              identifier = "Schur->PowerSum:characters";
-              break;
-            case BasisKind::SchurOmega:
-              kernel =
-                  BasisConversionKernel::SchurOmegaToPowerSumsCharacters;
-              identifier = "SchurOmega->PowerSum:characters";
-              break;
-            case BasisKind::Monomial:
-              kernel =
-                  BasisConversionKernel::MonomialToPowerSumsTransition;
-              identifier = "Monomial->PowerSum:transition";
-              break;
-            case BasisKind::Forgotten:
-              kernel =
-                  BasisConversionKernel::ForgottenToPowerSumsTransition;
-              identifier = "Forgotten->PowerSum:transition";
-              break;
-            case BasisKind::HallLittlewoodQGenerator:
-              kernel = BasisConversionKernel::
-                  HallLittlewoodQGeneratorToPowerSumsClassical;
-              identifier =
-                  "HallLittlewoodQGenerator->PowerSum:classical-formula";
-              break;
-            case BasisKind::HallLittlewoodBGenerator:
-              kernel = BasisConversionKernel::
-                  HallLittlewoodBGeneratorToPowerSumsClassical;
-              identifier =
-                  "HallLittlewoodBGenerator->PowerSum:classical-formula";
-              break;
-            case BasisKind::HallLittlewoodQ:
-              kernel = BasisConversionKernel::
-                  HallLittlewoodQToPowerSumsRaising;
-              identifier =
-                  "HallLittlewoodQ->PowerSum:raising-operators";
-              break;
-            case BasisKind::HallLittlewoodB:
-              kernel = BasisConversionKernel::
-                  HallLittlewoodBToPowerSumsRaising;
-              identifier =
-                  "HallLittlewoodB->PowerSum:raising-operators";
-              break;
-            case BasisKind::HallLittlewoodP:
-              kernel = BasisConversionKernel::
-                  HallLittlewoodPToPowerSumsNormalization;
-              identifier =
-                  "HallLittlewoodP->PowerSum:capital-normalization";
-              break;
-            case BasisKind::HallLittlewoodPOmega:
-              kernel = BasisConversionKernel::
-                  HallLittlewoodPOmegaToPowerSumsNormalization;
-              identifier =
-                  "HallLittlewoodPOmega->PowerSum:capital-normalization";
-              break;
-            case BasisKind::PowerSum:
-            case BasisKind::Custom:
-              return plans;
-          }
-        addPlan(identifier, kernel);
-      }
-
-    BasisKind sourceKind = basisKindForId(sourceBasisId);
-    BasisKind targetKind = basisKindForId(targetBasisId);
-
-    // Direct changes of normalization or involution avoid an intermediate
-    // basis while preserving the canonical-expansion contract.
-    if ((sourceKind == BasisKind::HallLittlewoodQ &&
-         targetKind == BasisKind::HallLittlewoodP) ||
-        (sourceKind == BasisKind::HallLittlewoodP &&
-         targetKind == BasisKind::HallLittlewoodQ) ||
-        (sourceKind == BasisKind::HallLittlewoodB &&
-         targetKind == BasisKind::HallLittlewoodPOmega) ||
-        (sourceKind == BasisKind::HallLittlewoodPOmega &&
-         targetKind == BasisKind::HallLittlewoodB))
-      addPlan(
-          "Hall-Littlewood-capital-normalized:diagonal-scaling",
-          BasisConversionKernel::HallLittlewoodNormalization);
-    if ((sourceKind == BasisKind::Schur &&
-         targetKind == BasisKind::SchurOmega) ||
-        (sourceKind == BasisKind::SchurOmega &&
-         targetKind == BasisKind::Schur))
-      addPlan(
-          "Schur-omega:partition-conjugation",
-          BasisConversionKernel::SchurOmegaConjugation);
-    if (sourceKind == BasisKind::Complete &&
-        targetKind == BasisKind::Schur)
-      addPlan(
-          "h->S:recursive-transition",
-          BasisConversionKernel::CompleteToSchurRecursive);
-    bool hallLittlewoodGeneratorTransition =
-        ((sourceKind == BasisKind::HallLittlewoodQGenerator) &&
-         (targetKind == BasisKind::HallLittlewoodQ ||
-          targetKind == BasisKind::HallLittlewoodP)) ||
-        ((sourceKind == BasisKind::HallLittlewoodBGenerator) &&
-         (targetKind == BasisKind::HallLittlewoodB ||
-          targetKind == BasisKind::HallLittlewoodPOmega));
-    if (hallLittlewoodGeneratorTransition)
-      {
-        // Plan identifiers are immutable registry labels. Spell out the four
-        // edges so the registry can store non-owning string views safely.
-        std::string_view identifier;
-        if (sourceKind == BasisKind::HallLittlewoodQGenerator)
-          identifier =
-              targetKind == BasisKind::HallLittlewoodQ
-                  ? "HallLittlewoodQGenerator->HallLittlewoodQ:"
-                    "triangular-reduction"
-                  : "HallLittlewoodQGenerator->HallLittlewoodP:"
-                    "triangular-reduction";
-        else
-          identifier =
-              targetKind == BasisKind::HallLittlewoodB
-                  ? "HallLittlewoodBGenerator->HallLittlewoodB:"
-                    "triangular-reduction"
-                  : "HallLittlewoodBGenerator->HallLittlewoodPOmega:"
-                    "triangular-reduction";
-        addPlan(
-            identifier,
-            BasisConversionKernel::
-                HallLittlewoodGeneratorToCapitalTriangular);
-      }
-
-    // All remaining target families start from power sums.
-    if (sourceBasisId != powerSumBasisId ||
-        targetKind == BasisKind::Custom)
-      return plans;
-
-    switch (targetKind)
-      {
-        case BasisKind::PowerSum:
-          break;
-        case BasisKind::Complete:
-          addPlan("p->h:logarithm-formula",
-                  BasisConversionKernel::
-                      PowerSumsToCompleteLogarithm);
-          break;
-        case BasisKind::Elementary:
-          addPlan("p->e:logarithm-formula",
-                  BasisConversionKernel::
-                      PowerSumsToElementaryLogarithm);
-          break;
-        case BasisKind::Schur:
-          addPlan("p->S:abacus-rim-hooks",
-                  BasisConversionKernel::
-                      PowerSumsToSchurAbacusRimHooks);
-          addPlan("p->S:abacus-rim-hooks+complete",
-                  BasisConversionKernel::
-                      PowerSumsToSchurAbacusAndComplete,
-                  BasisConversionInputShape::
-                      MixedCompleteFriendlyPowerSumExpansion);
-          addPlan("p->h->S:recursive-transition",
-                  BasisConversionKernel::
-                      PowerSumsToSchurComplete);
-          addPlan("p->S:grouped-characters",
-                  BasisConversionKernel::
-                      PowerSumsToSchurCharacters);
-          addPlan("p->S:border-strips",
-                  BasisConversionKernel::
-                      PowerSumsToSchurBorderStrips);
-          break;
-        case BasisKind::SchurOmega:
-          addPlan("p->omega(p)->S->Somega:abacus-rim-hooks",
-                  BasisConversionKernel::
-                      PowerSumsToSchurOmegaAbacusRimHooks);
-          addPlan("p->omega(p)->S->Somega:abacus-rim-hooks+complete",
-                  BasisConversionKernel::
-                      PowerSumsToSchurOmegaAbacusAndComplete,
-                  BasisConversionInputShape::
-                      MixedCompleteFriendlyPowerSumExpansion);
-          addPlan("p->omega(p)->h->S->Somega",
-                  BasisConversionKernel::
-                      PowerSumsToSchurOmegaComplete);
-          addPlan("p->omega(p)->S->Somega:grouped-characters",
-                  BasisConversionKernel::
-                      PowerSumsToSchurOmegaCharacters);
-          addPlan("p->omega(p)->S->Somega:border-strips",
-                  BasisConversionKernel::
-                      PowerSumsToSchurOmegaBorderStrips);
-          break;
-        case BasisKind::HallLittlewoodQGenerator:
-          addPlan("p->q:logarithm-formula",
-                  BasisConversionKernel::
-                      PowerSumsToHallLittlewoodQGeneratorLogarithm);
-          break;
-        case BasisKind::HallLittlewoodBGenerator:
-          addPlan("p->b:logarithm-formula",
-                  BasisConversionKernel::
-                      PowerSumsToHallLittlewoodBGeneratorLogarithm);
-          break;
-        case BasisKind::HallLittlewoodQ:
-        case BasisKind::HallLittlewoodB:
-        case BasisKind::HallLittlewoodP:
-        case BasisKind::HallLittlewoodPOmega:
-          addPlan(
-              "single-cycle-p-terms->Hall-Littlewood:Green-polynomials",
-              BasisConversionKernel::
-                  PowerSumSingleCyclesToHallLittlewoodGreen,
-              BasisConversionInputShape::
-                  SingleCyclePowerSumExpansion);
-          addPlan("p->Hall-Littlewood:triangular-reduction",
-                  BasisConversionKernel::
-                      PowerSumsToHallLittlewoodTriangular);
-          addPlan(
-              "p_mu->Hall-Littlewood:Green-polynomials-via-duality",
-              BasisConversionKernel::
-                  PowerSumIndexToHallLittlewoodGreenDuality,
-              BasisConversionInputShape::SingleBasisElement);
-          break;
-        case BasisKind::Monomial:
-          addPlan("p->m:transition",
-                  BasisConversionKernel::
-                      PowerSumsToMonomialTransition);
-          break;
-        case BasisKind::Forgotten:
-          addPlan("p->ff:transition",
-                  BasisConversionKernel::
-                      PowerSumsToForgottenTransition);
-          break;
-        case BasisKind::Custom:
-          return plans;
-      }
-    return plans;
-  }
-
-// ============================================================================
-// Direct-Plan Applicability Contracts
-// ============================================================================
-// Applicability is mathematical, not a performance preference. Once this
-// returns true, execution must either complete or report a mathematical/engine
-// error; it must never select a replacement plan.
-
-bool SymmetricEngineRing::basisConversionPlanApplicable(
-    const BasisConversionPlan& plan,
+std::vector<ExpressionConditionContext>
+SymmetricEngineRing::buildExpressionConditionContexts(
+    ring_elem expression,
+    ExpressionPieceKind pieces,
     const ExpressionFacts& facts) const
 {
-    if (plan.kernel == BasisConversionKernel::Unavailable ||
-        !facts.canonicalExpansionInBasis(plan.sourceBasisId))
-      return false;
+    const auto& terms = polyValue(expression)->terms;
+    auto commonContext = [&](ExpressionPieceKind kind) {
+      ExpressionConditionContext context;
+      context.pieceKind = kind;
+      context.combinatorialTags = facts.combinatorialTags;
+      context.coefficientRingIsQQ = coefficientRing == globalQQ;
+      return context;
+    };
 
-    switch (plan.inputShape)
+    if (pieces == ExpressionPieceKind::WholeExpression)
       {
-        case BasisConversionInputShape::CanonicalExpansion:
-          return true;
-        case BasisConversionInputShape::SingleBasisElement:
-          return facts.singleTerm() && facts.singleBasisElement();
-        case BasisConversionInputShape::
-            SingleCyclePowerSumExpansion:
-          return facts.allPowerSumTermsSingleCycles.value_or(false);
-        case BasisConversionInputShape::
-            MixedCompleteFriendlyPowerSumExpansion:
+        ExpressionConditionContext context =
+            commonContext(pieces);
+        context.termPositions.resize(terms.size());
+        std::iota(
+            context.termPositions.begin(),
+            context.termPositions.end(),
+            size_t{0});
+        context.weight = facts.homogeneousWeight;
+        context.termCount = facts.termCount;
+        context.singleBasisElement = facts.singleBasisElement();
+        context.allPowerSumTermsSingleCycles =
+            facts.allPowerSumTermsSingleCycles;
+        context.completeFriendlyPowerSumTermCount =
+            facts.completeFriendlyPowerSumTermCount;
+        context.index = facts.singleBasisElementIndex;
+        std::optional<int> firstWeight;
+        bool multipleWeights = false;
+        for (const auto& term : terms)
           {
-            size_t completeFriendly =
-                facts.completeFriendlyPowerSumTermCount.value_or(0);
-            return facts.homogeneousWeight.has_value() &&
-                   completeFriendly > 0 &&
-                   completeFriendly < facts.termCount;
+            const int weight = monomialWeight(term.monomial);
+            if (!firstWeight)
+              firstWeight = weight;
+            else if (*firstWeight != weight)
+              {
+                multipleWeights = true;
+                break;
+              }
           }
+        context.expressionHasMultipleWeights = multipleWeights;
+        return {std::move(context)};
+      }
+
+    if (pieces == ExpressionPieceKind::Terms)
+      {
+        std::vector<ExpressionConditionContext> contexts;
+        contexts.reserve(terms.size());
+        for (size_t position = 0; position < terms.size(); ++position)
+          {
+            const auto& term = terms[position];
+            ExpressionConditionContext context =
+                commonContext(pieces);
+            context.termPositions = {position};
+            context.weight = monomialWeight(term.monomial);
+            context.termCount = 1;
+            if (!term.monomial.data.empty() &&
+                atomLengthAt(term.monomial, 0) ==
+                    term.monomial.data.size() &&
+                !atomIsSkewAt(term.monomial, 0))
+              {
+                Partition index =
+                    basisElementIndex(term.monomial, 0);
+                context.index = index;
+                if (basisKindForId(
+                        atomBasisIdAt(term.monomial, 0)) ==
+                    BasisKind::PowerSum)
+                  context.powerSumIndexCompleteFriendly =
+                      completeFriendlyPowerSumIndexForConversionSelection(
+                          index, partitionWeight(index));
+              }
+            contexts.push_back(std::move(context));
+          }
+        return contexts;
+      }
+
+    std::map<int, std::vector<size_t>> positionsByWeight;
+    for (size_t position = 0; position < terms.size(); ++position)
+      positionsByWeight[monomialWeight(
+          terms[position].monomial)].push_back(position);
+    std::vector<ExpressionConditionContext> contexts;
+    contexts.reserve(positionsByWeight.size());
+    for (auto& item : positionsByWeight)
+      {
+        ExpressionConditionContext context =
+            commonContext(pieces);
+        context.termPositions = std::move(item.second);
+        context.weight = item.first;
+        context.termCount = context.termPositions.size();
+        context.possibleTermCount =
+            partitionCountForConversionSelection(item.first);
+        size_t completeFriendlyTerms = 0;
+        std::vector<int> commonParts;
+        bool firstPowerSumIndex = true;
+        bool allTermsArePowerSums = true;
+        for (size_t position : context.termPositions)
+          {
+            Partition index;
+            if (!powerSumIndexFromMonomial(
+                    terms[position].monomial, index))
+              {
+                allTermsArePowerSums = false;
+                break;
+              }
+            if (index.empty()) continue;
+            if (completeFriendlyPowerSumIndexForConversionSelection(
+                    index, partitionWeight(index)))
+              ++completeFriendlyTerms;
+            std::vector<int> distinctParts(
+                index.begin(), index.end());
+            std::sort(
+                distinctParts.begin(), distinctParts.end());
+            distinctParts.erase(
+                std::unique(
+                    distinctParts.begin(), distinctParts.end()),
+                distinctParts.end());
+            if (firstPowerSumIndex)
+              {
+                commonParts = std::move(distinctParts);
+                firstPowerSumIndex = false;
+              }
+            else
+              {
+                std::vector<int> intersection;
+                std::set_intersection(
+                    commonParts.begin(),
+                    commonParts.end(),
+                    distinctParts.begin(),
+                    distinctParts.end(),
+                    std::back_inserter(intersection));
+                commonParts = std::move(intersection);
+              }
+          }
+        if (allTermsArePowerSums)
+          {
+            context.completeFriendlyPowerSumTermCount =
+                completeFriendlyTerms;
+            context.commonPowerSumParts = std::move(commonParts);
+          }
+        contexts.push_back(std::move(context));
+      }
+    return contexts;
+  }
+
+// ============================================================================
+// Declarative Basis-Conversion Plan Database
+// ============================================================================
+// This is the single contributor-facing catalog for atomic, delegated,
+// composed, and piecewise conversion formulas. Every entry is consumed
+// directly by the generic executor.
+
+SymmetricEngineRing::ConversionFormula
+SymmetricEngineRing::kernelFormula(BasisConversionKernel kernel)
+{
+    ConversionFormula result;
+    result.kind = ConversionFormulaKind::AtomicKernel;
+    result.kernel = kernel;
+    return result;
+  }
+
+SymmetricEngineRing::ConversionFormula
+SymmetricEngineRing::planFormula(
+    BasisConversionPlanId childPlan)
+{
+    ConversionFormula result;
+    result.kind = ConversionFormulaKind::PlanComposition;
+    result.childPlans.push_back(std::move(childPlan));
+    return result;
+  }
+
+SymmetricEngineRing::ConversionFormula
+SymmetricEngineRing::compositionFormula(
+    std::initializer_list<BasisConversionPlanId> childPlans)
+{
+    if (childPlans.size() < 2)
+      throw exc::engine_error(
+          "a basis-conversion plan composition requires at least two "
+          "named child plans");
+    ConversionFormula result;
+    result.kind = ConversionFormulaKind::PlanComposition;
+    result.childPlans.assign(childPlans.begin(), childPlans.end());
+    return result;
+  }
+
+const std::vector<SymmetricEngineRing::BasisConversionPlanDefinition>&
+SymmetricEngineRing::basisConversionPlanDatabase()
+{
+    static const std::vector<BasisConversionPlanDefinition> database = [] {
+      std::vector<BasisConversionPlanDefinition> plans;
+      auto addAtomic =
+          [&](std::string_view id,
+              BasisKind source,
+              BasisKind target,
+              BasisConversionKernel kernel,
+              ExpressionCondition applicability = always()) {
+            plans.push_back({
+                {std::string(id)},
+                source,
+                target,
+                std::move(applicability),
+                ExpressionPieceKind::WholeExpression,
+                {{otherwise(), kernelFormula(kernel)}}});
+          };
+
+      // Built-in atomic formulas to power sums.
+      addAtomic(
+          "Complete->PowerSum:classical-formula",
+          BasisKind::Complete,
+          BasisKind::PowerSum,
+          BasisConversionKernel::CompleteToPowerSumsClassical);
+      addAtomic(
+          "Elementary->PowerSum:classical-formula",
+          BasisKind::Elementary,
+          BasisKind::PowerSum,
+          BasisConversionKernel::ElementaryToPowerSumsClassical);
+      addAtomic(
+          "Schur->PowerSum:characters",
+          BasisKind::Schur,
+          BasisKind::PowerSum,
+          BasisConversionKernel::SchurToPowerSumsCharacters);
+      addAtomic(
+          "SchurOmega->PowerSum:characters",
+          BasisKind::SchurOmega,
+          BasisKind::PowerSum,
+          BasisConversionKernel::SchurOmegaToPowerSumsCharacters);
+      addAtomic(
+          "Monomial->PowerSum:transition",
+          BasisKind::Monomial,
+          BasisKind::PowerSum,
+          BasisConversionKernel::MonomialToPowerSumsTransition);
+      addAtomic(
+          "Forgotten->PowerSum:transition",
+          BasisKind::Forgotten,
+          BasisKind::PowerSum,
+          BasisConversionKernel::ForgottenToPowerSumsTransition);
+      addAtomic(
+          "HallLittlewoodQGenerator->PowerSum:classical-formula",
+          BasisKind::HallLittlewoodQGenerator,
+          BasisKind::PowerSum,
+          BasisConversionKernel::
+              HallLittlewoodQGeneratorToPowerSumsClassical);
+      addAtomic(
+          "HallLittlewoodBGenerator->PowerSum:classical-formula",
+          BasisKind::HallLittlewoodBGenerator,
+          BasisKind::PowerSum,
+          BasisConversionKernel::
+              HallLittlewoodBGeneratorToPowerSumsClassical);
+      addAtomic(
+          "HallLittlewoodQ->PowerSum:raising-operators",
+          BasisKind::HallLittlewoodQ,
+          BasisKind::PowerSum,
+          BasisConversionKernel::HallLittlewoodQToPowerSumsRaising);
+      addAtomic(
+          "HallLittlewoodB->PowerSum:raising-operators",
+          BasisKind::HallLittlewoodB,
+          BasisKind::PowerSum,
+          BasisConversionKernel::HallLittlewoodBToPowerSumsRaising);
+      addAtomic(
+          "HallLittlewoodP->PowerSum:capital-normalization",
+          BasisKind::HallLittlewoodP,
+          BasisKind::PowerSum,
+          BasisConversionKernel::
+              HallLittlewoodPToPowerSumsNormalization);
+      addAtomic(
+          "HallLittlewoodPOmega->PowerSum:capital-normalization",
+          BasisKind::HallLittlewoodPOmega,
+          BasisKind::PowerSum,
+          BasisConversionKernel::
+              HallLittlewoodPOmegaToPowerSumsNormalization);
+
+      // Atomic formulas from power sums.
+      addAtomic(
+          "PowerSum->Complete:logarithm-formula",
+          BasisKind::PowerSum,
+          BasisKind::Complete,
+          BasisConversionKernel::PowerSumsToCompleteLogarithm);
+      addAtomic(
+          "PowerSum->Elementary:logarithm-formula",
+          BasisKind::PowerSum,
+          BasisKind::Elementary,
+          BasisConversionKernel::PowerSumsToElementaryLogarithm);
+      addAtomic(
+          "PowerSum->Schur:abacus-rim-hooks",
+          BasisKind::PowerSum,
+          BasisKind::Schur,
+          BasisConversionKernel::PowerSumsToSchurAbacusRimHooks);
+      addAtomic(
+          "PowerSum->Schur:grouped-characters",
+          BasisKind::PowerSum,
+          BasisKind::Schur,
+          BasisConversionKernel::PowerSumsToSchurCharacters);
+      addAtomic(
+          "PowerSum->Schur:border-strips",
+          BasisKind::PowerSum,
+          BasisKind::Schur,
+          BasisConversionKernel::PowerSumsToSchurBorderStrips);
+      addAtomic(
+          "PowerSum->SchurOmega:abacus-rim-hooks",
+          BasisKind::PowerSum,
+          BasisKind::SchurOmega,
+          BasisConversionKernel::
+              PowerSumsToSchurOmegaAbacusRimHooks);
+      addAtomic(
+          "PowerSum->SchurOmega:grouped-characters",
+          BasisKind::PowerSum,
+          BasisKind::SchurOmega,
+          BasisConversionKernel::PowerSumsToSchurOmegaCharacters);
+      addAtomic(
+          "PowerSum->SchurOmega:border-strips",
+          BasisKind::PowerSum,
+          BasisKind::SchurOmega,
+          BasisConversionKernel::PowerSumsToSchurOmegaBorderStrips);
+      addAtomic(
+          "PowerSum->HallLittlewoodQGenerator:logarithm-formula",
+          BasisKind::PowerSum,
+          BasisKind::HallLittlewoodQGenerator,
+          BasisConversionKernel::
+              PowerSumsToHallLittlewoodQGeneratorLogarithm);
+      addAtomic(
+          "PowerSum->HallLittlewoodBGenerator:logarithm-formula",
+          BasisKind::PowerSum,
+          BasisKind::HallLittlewoodBGenerator,
+          BasisConversionKernel::
+              PowerSumsToHallLittlewoodBGeneratorLogarithm);
+
+      auto addPowerSumsToHallLittlewood =
+          [&](BasisKind target, std::string_view targetName) {
+            const std::string prefix =
+                "PowerSum->" + std::string(targetName);
+            addAtomic(
+                std::string(prefix + ":single-cycles-Green"),
+                BasisKind::PowerSum,
+                target,
+                BasisConversionKernel::
+                    PowerSumSingleCyclesToHallLittlewoodGreen,
+                allPowerSumTermsAreSingleCycles());
+            addAtomic(
+                std::string(prefix + ":triangular-reduction"),
+                BasisKind::PowerSum,
+                target,
+                BasisConversionKernel::
+                    PowerSumsToHallLittlewoodTriangular);
+            addAtomic(
+                std::string(prefix + ":Green-duality"),
+                BasisKind::PowerSum,
+                target,
+                BasisConversionKernel::
+                    PowerSumIndexToHallLittlewoodGreenDuality,
+                expressionIsSingleBasisElement());
+          };
+      addPowerSumsToHallLittlewood(
+          BasisKind::HallLittlewoodQ, "HallLittlewoodQ");
+      addPowerSumsToHallLittlewood(
+          BasisKind::HallLittlewoodB, "HallLittlewoodB");
+      addPowerSumsToHallLittlewood(
+          BasisKind::HallLittlewoodP, "HallLittlewoodP");
+      addPowerSumsToHallLittlewood(
+          BasisKind::HallLittlewoodPOmega,
+          "HallLittlewoodPOmega");
+      addAtomic(
+          "PowerSum->Monomial:transition",
+          BasisKind::PowerSum,
+          BasisKind::Monomial,
+          BasisConversionKernel::PowerSumsToMonomialTransition);
+      addAtomic(
+          "PowerSum->Forgotten:transition",
+          BasisKind::PowerSum,
+          BasisKind::Forgotten,
+          BasisConversionKernel::PowerSumsToForgottenTransition);
+
+      // Direct normalization, involution, and generator transitions.
+      addAtomic(
+          "HallLittlewoodQ->HallLittlewoodP:diagonal-scaling",
+          BasisKind::HallLittlewoodQ,
+          BasisKind::HallLittlewoodP,
+          BasisConversionKernel::HallLittlewoodNormalization);
+      addAtomic(
+          "HallLittlewoodP->HallLittlewoodQ:diagonal-scaling",
+          BasisKind::HallLittlewoodP,
+          BasisKind::HallLittlewoodQ,
+          BasisConversionKernel::HallLittlewoodNormalization);
+      addAtomic(
+          "HallLittlewoodB->HallLittlewoodPOmega:diagonal-scaling",
+          BasisKind::HallLittlewoodB,
+          BasisKind::HallLittlewoodPOmega,
+          BasisConversionKernel::HallLittlewoodNormalization);
+      addAtomic(
+          "HallLittlewoodPOmega->HallLittlewoodB:diagonal-scaling",
+          BasisKind::HallLittlewoodPOmega,
+          BasisKind::HallLittlewoodB,
+          BasisConversionKernel::HallLittlewoodNormalization);
+      addAtomic(
+          "Schur->SchurOmega:partition-conjugation",
+          BasisKind::Schur,
+          BasisKind::SchurOmega,
+          BasisConversionKernel::SchurOmegaConjugation);
+      addAtomic(
+          "SchurOmega->Schur:partition-conjugation",
+          BasisKind::SchurOmega,
+          BasisKind::Schur,
+          BasisConversionKernel::SchurOmegaConjugation);
+      addAtomic(
+          "Schur->Complete:Jacobi-Trudi",
+          BasisKind::Schur,
+          BasisKind::Complete,
+          BasisConversionKernel::SchurToCompleteJacobiTrudi);
+      addAtomic(
+          "SchurOmega->Elementary:Jacobi-Trudi",
+          BasisKind::SchurOmega,
+          BasisKind::Elementary,
+          BasisConversionKernel::
+              SchurOmegaToElementaryJacobiTrudi);
+      addAtomic(
+          "Complete->Schur:recursive-transition",
+          BasisKind::Complete,
+          BasisKind::Schur,
+          BasisConversionKernel::CompleteToSchurRecursive);
+      addAtomic(
+          "HallLittlewoodQGenerator->HallLittlewoodQ:"
+          "triangular-reduction",
+          BasisKind::HallLittlewoodQGenerator,
+          BasisKind::HallLittlewoodQ,
+          BasisConversionKernel::
+              HallLittlewoodGeneratorToCapitalTriangular);
+      addAtomic(
+          "HallLittlewoodQGenerator->HallLittlewoodP:"
+          "triangular-reduction",
+          BasisKind::HallLittlewoodQGenerator,
+          BasisKind::HallLittlewoodP,
+          BasisConversionKernel::
+              HallLittlewoodGeneratorToCapitalTriangular);
+      addAtomic(
+          "HallLittlewoodBGenerator->HallLittlewoodB:"
+          "triangular-reduction",
+          BasisKind::HallLittlewoodBGenerator,
+          BasisKind::HallLittlewoodB,
+          BasisConversionKernel::
+              HallLittlewoodGeneratorToCapitalTriangular);
+      addAtomic(
+          "HallLittlewoodBGenerator->HallLittlewoodPOmega:"
+          "triangular-reduction",
+          BasisKind::HallLittlewoodBGenerator,
+          BasisKind::HallLittlewoodPOmega,
+          BasisConversionKernel::
+              HallLittlewoodGeneratorToCapitalTriangular);
+
+      // The established p -> Schur policy applies independently to each
+      // homogeneous component of a nonhomogeneous expression. Encoding that
+      // decision tree as ordered cases makes the split an ordinary plan:
+      // each case fixes its kernel, and execution performs no child choice.
+      auto schurComponentPolicyCases = [&] {
+            const auto completeFormula =
+                compositionFormula({
+                    {"PowerSum->Complete:logarithm-formula"},
+                    {"Complete->Schur:recursive-transition"}});
+            const auto abacusFormula =
+                kernelFormula(
+                    BasisConversionKernel::
+                        PowerSumsToSchurAbacusRimHooks);
+            const auto termHybridFormula =
+                planFormula({
+                    "PowerSum->Schur:"
+                    "complete-friendly-hybrid-plan"});
+            const uint32_t plethysmTag =
+                combinatorialTagMask(
+                    CombinatorialTag::Plethysm);
+            const uint32_t littlewoodRichardsonTag =
+                combinatorialTagMask(
+                    CombinatorialTag::
+                        LittlewoodRichardson);
+            const uint32_t horizontalPieriTag =
+                combinatorialTagMask(
+                    CombinatorialTag::HorizontalPieri);
+            const uint32_t verticalPieriTag =
+                combinatorialTagMask(
+                    CombinatorialTag::VerticalPieri);
+            const uint32_t borderStripsTag =
+                combinatorialTagMask(
+                    CombinatorialTag::BorderStrips);
+
+            const auto supportPreference =
+                componentSupportSquareFavorsComplete();
+            const auto ordinaryCompletePreference =
+                !coefficientRingIsQQ() ||
+                componentDensityAtLeast(1, 4) ||
+                supportPreference;
+            const auto plethysmComplete =
+                hasCombinatorialTag(plethysmTag) &&
+                (supportPreference ||
+                 (componentWeightGreaterThan(7) &&
+                  componentTermCountAtLeast(2)));
+            const auto littlewoodRichardsonComplete =
+                !hasCombinatorialTag(plethysmTag) &&
+                hasCombinatorialTag(
+                    littlewoodRichardsonTag) &&
+                componentWeightGreaterThan(6) &&
+                ordinaryCompletePreference;
+            const auto pieriComplete =
+                !hasCombinatorialTag(plethysmTag) &&
+                !hasCombinatorialTag(
+                    littlewoodRichardsonTag) &&
+                (hasCombinatorialTag(horizontalPieriTag) ||
+                 hasCombinatorialTag(verticalPieriTag)) &&
+                componentWeightGreaterThan(7) &&
+                ordinaryCompletePreference;
+            const auto smallCommonCycle =
+                (coefficientRingIsQQ() &&
+                 componentHasCommonPowerSumPartAtMostPercent(36)) ||
+                (!coefficientRingIsQQ() &&
+                 componentHasCommonPowerSumPartAtMostPercent(41));
+            const auto largeBorderStripWithoutCommonOne =
+                combinatorialTagsEqual(borderStripsTag) &&
+                componentWeightGreaterThan(15) &&
+                componentTermCountAtLeast(8) &&
+                !componentHasCommonPowerSumPartOne() &&
+                smallCommonCycle;
+            const auto borderStripWithCommonOne =
+                combinatorialTagsEqual(borderStripsTag) &&
+                componentWeightGreaterThan(7) &&
+                componentTermCountAtLeast(8) &&
+                componentHasCommonPowerSumPartOne() &&
+                ordinaryCompletePreference;
+            const auto ordinaryOrBorderStrip =
+                combinatorialTagsEqual(0) ||
+                combinatorialTagsEqual(borderStripsTag);
+            const auto allCompleteFriendly =
+                ordinaryOrBorderStrip &&
+                componentWeightGreaterThan(13) &&
+                componentTermCountAtLeast(2) &&
+                componentAllPowerSumTermsCompleteFriendly();
+            const auto hybrid =
+                ordinaryOrBorderStrip &&
+                componentWeightGreaterThan(13) &&
+                componentTermCountAtLeast(8) &&
+                componentCompleteFriendlyFractionAtLeast(
+                    1, 4, 8) &&
+                componentHasMixedCompleteFriendlyPowerSumTerms();
+
+            return std::vector<BasisConversionPlanCase>{
+                {plethysmComplete,
+                 completeFormula},
+                {littlewoodRichardsonComplete,
+                 completeFormula},
+                {pieriComplete,
+                 completeFormula},
+                {largeBorderStripWithoutCommonOne,
+                 completeFormula},
+                {borderStripWithCommonOne,
+                 completeFormula},
+                {allCompleteFriendly,
+                 completeFormula},
+                // Delegate the complete component to the fixed term-level
+                // hybrid. That child partitions its realized component
+                // without re-entering the picker.
+                {hybrid, termHybridFormula},
+                {otherwise(), abacusFormula}};
+          };
+      plans.push_back({
+          {"PowerSum->Schur:default-policy"},
+          BasisKind::PowerSum,
+          BasisKind::Schur,
+          always(),
+          ExpressionPieceKind::HomogeneousComponents,
+          schurComponentPolicyCases()});
+
+      // Named compositions and hybrids use the same plan representation as
+      // direct kernels. Child identifiers completely determine execution.
+      plans.push_back({
+          {"PowerSum->Schur:via-complete"},
+          BasisKind::PowerSum,
+          BasisKind::Schur,
+          always(),
+          ExpressionPieceKind::WholeExpression,
+          {{otherwise(),
+            compositionFormula({
+                {"PowerSum->Complete:logarithm-formula"},
+                {"Complete->Schur:recursive-transition"}})}}});
+      plans.push_back({
+          {"PowerSum->Schur:complete-friendly-hybrid-plan"},
+          BasisKind::PowerSum,
+          BasisKind::Schur,
+          always(),
+          ExpressionPieceKind::Terms,
+          {{powerSumIndexIsCompleteFriendly(),
+            compositionFormula({
+                {"PowerSum->Complete:logarithm-formula"},
+                {"Complete->Schur:recursive-transition"}})},
+           {otherwise(),
+            kernelFormula(
+                BasisConversionKernel::
+                    PowerSumsToSchurAbacusRimHooks)}}});
+      plans.push_back({
+          {"PowerSum->SchurOmega:default-policy"},
+          BasisKind::PowerSum,
+          BasisKind::SchurOmega,
+          always(),
+          ExpressionPieceKind::WholeExpression,
+          {{otherwise(),
+            compositionFormula({
+                {"PowerSum->Schur:default-policy"},
+                {"Schur->SchurOmega:partition-conjugation"}})}}});
+      plans.push_back({
+          {"PowerSum->SchurOmega:via-complete"},
+          BasisKind::PowerSum,
+          BasisKind::SchurOmega,
+          always(),
+          ExpressionPieceKind::WholeExpression,
+          {{otherwise(),
+            compositionFormula({
+                {"PowerSum->Schur:via-complete"},
+                {"Schur->SchurOmega:partition-conjugation"}})}}});
+      plans.push_back({
+          {"PowerSum->SchurOmega:complete-friendly-hybrid-plan"},
+          BasisKind::PowerSum,
+          BasisKind::SchurOmega,
+          always(),
+          ExpressionPieceKind::WholeExpression,
+          {{otherwise(),
+            compositionFormula({
+                {"PowerSum->Schur:complete-friendly-hybrid-plan"},
+                {"Schur->SchurOmega:partition-conjugation"}})}}});
+
+      // Every broad built-in X -> Y fallback is a named top-level plan. The
+      // intermediate power-sum plans below are fixed child identifiers, so
+      // realizing their intermediate expressions never invokes the picker.
+      struct BroadPlanFamily
+      {
+        BasisKind kind;
+        std::string_view name;
+        std::string_view toPowerSums;
+        std::string_view fromPowerSums;
+        // Dense expansions in this source family use the established
+        // source -> p -> h -> Schur composition. A false value delegates the
+        // realized power-sum expression to the support-sensitive Schur plan.
+        bool schurViaComplete;
+      };
+      const std::vector<BroadPlanFamily> families{
+          {BasisKind::Complete,
+           "Complete",
+           "Complete->PowerSum:classical-formula",
+           "PowerSum->Complete:logarithm-formula",
+           true},
+          {BasisKind::Elementary,
+           "Elementary",
+           "Elementary->PowerSum:classical-formula",
+           "PowerSum->Elementary:logarithm-formula",
+           true},
+          {BasisKind::Schur,
+           "Schur",
+           "Schur->PowerSum:characters",
+           "PowerSum->Schur:default-policy",
+           true},
+          {BasisKind::SchurOmega,
+           "SchurOmega",
+           "SchurOmega->PowerSum:characters",
+           "PowerSum->SchurOmega:default-policy",
+           true},
+          {BasisKind::Monomial,
+           "Monomial",
+           "Monomial->PowerSum:transition",
+           "PowerSum->Monomial:transition",
+           false},
+          {BasisKind::Forgotten,
+           "Forgotten",
+           "Forgotten->PowerSum:transition",
+           "PowerSum->Forgotten:transition",
+           false},
+          {BasisKind::HallLittlewoodQGenerator,
+           "HallLittlewoodQGenerator",
+           "HallLittlewoodQGenerator->PowerSum:classical-formula",
+           "PowerSum->HallLittlewoodQGenerator:logarithm-formula",
+           true},
+          {BasisKind::HallLittlewoodBGenerator,
+           "HallLittlewoodBGenerator",
+           "HallLittlewoodBGenerator->PowerSum:classical-formula",
+           "PowerSum->HallLittlewoodBGenerator:logarithm-formula",
+           true},
+          {BasisKind::HallLittlewoodQ,
+           "HallLittlewoodQ",
+           "HallLittlewoodQ->PowerSum:raising-operators",
+           "PowerSum->HallLittlewoodQ:triangular-reduction",
+           true},
+          {BasisKind::HallLittlewoodB,
+           "HallLittlewoodB",
+           "HallLittlewoodB->PowerSum:raising-operators",
+           "PowerSum->HallLittlewoodB:triangular-reduction",
+           true},
+          {BasisKind::HallLittlewoodP,
+           "HallLittlewoodP",
+           "HallLittlewoodP->PowerSum:capital-normalization",
+           "PowerSum->HallLittlewoodP:triangular-reduction",
+           true},
+          {BasisKind::HallLittlewoodPOmega,
+           "HallLittlewoodPOmega",
+           "HallLittlewoodPOmega->PowerSum:capital-normalization",
+           "PowerSum->HallLittlewoodPOmega:triangular-reduction",
+           true}};
+      for (const auto& source : families)
+        for (const auto& target : families)
+          {
+            if (source.kind == target.kind) continue;
+            ConversionFormula broadFormula;
+            if (target.kind == BasisKind::Schur &&
+                source.schurViaComplete)
+              {
+                // Dense built-in sources historically convert to Schur
+                // through complete functions. Monomial and forgotten
+                // expansions are usually sparse after conversion to power
+                // sums, so they deliberately retain the support-sensitive
+                // p -> Schur child plan below.
+                broadFormula = compositionFormula({
+                    {std::string(source.toPowerSums)},
+                    {"PowerSum->Complete:logarithm-formula"},
+                    {"Complete->Schur:recursive-transition"}});
+              }
+            else
+              broadFormula = compositionFormula({
+                  {std::string(source.toPowerSums)},
+                  {std::string(target.fromPowerSums)}});
+            plans.push_back({
+                {std::string(source.name) + "->" +
+                 std::string(target.name) +
+                 ":via-PowerSum-default"},
+                source.kind,
+                target.kind,
+                always(),
+                ExpressionPieceKind::WholeExpression,
+                {{otherwise(), std::move(broadFormula)}}});
+          }
+      return plans;
+    }();
+    return database;
+  }
+
+// ============================================================================
+// Declarative Plan Contracts And Validation
+// ============================================================================
+
+const SymmetricEngineRing::BasisConversionPlanDefinition *
+SymmetricEngineRing::basisConversionPlanDefinition(
+    const BasisConversionPlanId& id)
+{
+    const auto& plansById = basisConversionPlansById();
+    const auto found = plansById.find(id.value);
+    return found == plansById.end() ? nullptr : found->second;
+  }
+
+const std::map<
+    std::string,
+    const SymmetricEngineRing::BasisConversionPlanDefinition *>&
+SymmetricEngineRing::basisConversionPlansById()
+{
+    static const std::map<
+        std::string,
+        const BasisConversionPlanDefinition *> index = [] {
+      std::map<
+          std::string,
+          const BasisConversionPlanDefinition *> result;
+      for (const auto& plan : basisConversionPlanDatabase())
+        if (plan.id.value.empty() ||
+            !result.emplace(plan.id.value, &plan).second)
+          throw exc::engine_error(
+              "basis-conversion plan identifiers must be "
+              "nonempty and unique");
+      return result;
+    }();
+    return index;
+  }
+
+const std::map<
+    std::pair<
+        SymmetricEngineRing::BasisKind,
+        SymmetricEngineRing::BasisKind>,
+    std::vector<
+        const SymmetricEngineRing::BasisConversionPlanDefinition *>>&
+SymmetricEngineRing::basisConversionPlansByEndpoints()
+{
+    static const std::map<
+        std::pair<BasisKind, BasisKind>,
+        std::vector<const BasisConversionPlanDefinition *>>
+        index = [] {
+          std::map<
+              std::pair<BasisKind, BasisKind>,
+              std::vector<const BasisConversionPlanDefinition *>>
+              result;
+          for (const auto& plan : basisConversionPlanDatabase())
+            result[{plan.sourceBasisKind, plan.targetBasisKind}].
+                push_back(&plan);
+          return result;
+        }();
+    return index;
+  }
+
+SymmetricEngineRing::BasisConversionKernelContract
+SymmetricEngineRing::basisConversionKernelContract(
+    BasisConversionKernel kernel,
+    BasisKind source,
+    BasisKind target)
+{
+    switch (kernel)
+      {
+        case BasisConversionKernel::Unavailable:
+          return false;
+        case BasisConversionKernel::CompleteToPowerSumsClassical:
+          return source == BasisKind::Complete &&
+                 target == BasisKind::PowerSum;
+        case BasisConversionKernel::
+            ElementaryToPowerSumsClassical:
+          return source == BasisKind::Elementary &&
+                 target == BasisKind::PowerSum;
+        case BasisConversionKernel::SchurToPowerSumsCharacters:
+          return source == BasisKind::Schur &&
+                 target == BasisKind::PowerSum;
+        case BasisConversionKernel::
+            SchurOmegaToPowerSumsCharacters:
+          return source == BasisKind::SchurOmega &&
+                 target == BasisKind::PowerSum;
+        case BasisConversionKernel::
+            MonomialToPowerSumsTransition:
+          return source == BasisKind::Monomial &&
+                 target == BasisKind::PowerSum;
+        case BasisConversionKernel::
+            ForgottenToPowerSumsTransition:
+          return source == BasisKind::Forgotten &&
+                 target == BasisKind::PowerSum;
+        case BasisConversionKernel::
+            HallLittlewoodQGeneratorToPowerSumsClassical:
+          return source ==
+                     BasisKind::HallLittlewoodQGenerator &&
+                 target == BasisKind::PowerSum;
+        case BasisConversionKernel::
+            HallLittlewoodBGeneratorToPowerSumsClassical:
+          return source ==
+                     BasisKind::HallLittlewoodBGenerator &&
+                 target == BasisKind::PowerSum;
+        case BasisConversionKernel::
+            HallLittlewoodQToPowerSumsRaising:
+          return source == BasisKind::HallLittlewoodQ &&
+                 target == BasisKind::PowerSum;
+        case BasisConversionKernel::
+            HallLittlewoodBToPowerSumsRaising:
+          return source == BasisKind::HallLittlewoodB &&
+                 target == BasisKind::PowerSum;
+        case BasisConversionKernel::
+            HallLittlewoodPToPowerSumsNormalization:
+          return source == BasisKind::HallLittlewoodP &&
+                 target == BasisKind::PowerSum;
+        case BasisConversionKernel::
+            HallLittlewoodPOmegaToPowerSumsNormalization:
+          return source == BasisKind::HallLittlewoodPOmega &&
+                 target == BasisKind::PowerSum;
+        case BasisConversionKernel::
+            PowerSumsToCompleteLogarithm:
+          return source == BasisKind::PowerSum &&
+                 target == BasisKind::Complete;
+        case BasisConversionKernel::
+            PowerSumsToElementaryLogarithm:
+          return source == BasisKind::PowerSum &&
+                 target == BasisKind::Elementary;
+        case BasisConversionKernel::
+            PowerSumsToSchurBorderStrips:
+        case BasisConversionKernel::
+            PowerSumsToSchurAbacusRimHooks:
+        case BasisConversionKernel::
+            PowerSumsToSchurCharacters:
+          return source == BasisKind::PowerSum &&
+                 target == BasisKind::Schur;
+        case BasisConversionKernel::
+            PowerSumsToSchurOmegaBorderStrips:
+        case BasisConversionKernel::
+            PowerSumsToSchurOmegaAbacusRimHooks:
+        case BasisConversionKernel::
+            PowerSumsToSchurOmegaCharacters:
+          return source == BasisKind::PowerSum &&
+                 target == BasisKind::SchurOmega;
+        case BasisConversionKernel::
+            PowerSumsToHallLittlewoodQGeneratorLogarithm:
+          return source == BasisKind::PowerSum &&
+                 target ==
+                     BasisKind::HallLittlewoodQGenerator;
+        case BasisConversionKernel::
+            PowerSumsToHallLittlewoodBGeneratorLogarithm:
+          return source == BasisKind::PowerSum &&
+                 target ==
+                     BasisKind::HallLittlewoodBGenerator;
+        case BasisConversionKernel::
+            PowerSumSingleCyclesToHallLittlewoodGreen:
+        case BasisConversionKernel::
+            PowerSumIndexToHallLittlewoodGreenDuality:
+        case BasisConversionKernel::
+            PowerSumsToHallLittlewoodTriangular:
+          return source == BasisKind::PowerSum &&
+                 (target == BasisKind::HallLittlewoodQ ||
+                  target == BasisKind::HallLittlewoodB ||
+                  target == BasisKind::HallLittlewoodP ||
+                  target == BasisKind::HallLittlewoodPOmega);
+        case BasisConversionKernel::
+            PowerSumsToMonomialTransition:
+          return source == BasisKind::PowerSum &&
+                 target == BasisKind::Monomial;
+        case BasisConversionKernel::
+            PowerSumsToForgottenTransition:
+          return source == BasisKind::PowerSum &&
+                 target == BasisKind::Forgotten;
+        case BasisConversionKernel::HallLittlewoodNormalization:
+          return
+              (source == BasisKind::HallLittlewoodQ &&
+               target == BasisKind::HallLittlewoodP) ||
+              (source == BasisKind::HallLittlewoodP &&
+               target == BasisKind::HallLittlewoodQ) ||
+              (source == BasisKind::HallLittlewoodB &&
+               target == BasisKind::HallLittlewoodPOmega) ||
+              (source == BasisKind::HallLittlewoodPOmega &&
+               target == BasisKind::HallLittlewoodB);
+        case BasisConversionKernel::SchurOmegaConjugation:
+          return
+              (source == BasisKind::Schur &&
+               target == BasisKind::SchurOmega) ||
+              (source == BasisKind::SchurOmega &&
+               target == BasisKind::Schur);
+        case BasisConversionKernel::SchurToCompleteJacobiTrudi:
+          return source == BasisKind::Schur &&
+                 target == BasisKind::Complete;
+        case BasisConversionKernel::
+            SchurOmegaToElementaryJacobiTrudi:
+          return source == BasisKind::SchurOmega &&
+                 target == BasisKind::Elementary;
+        case BasisConversionKernel::CompleteToSchurRecursive:
+          return source == BasisKind::Complete &&
+                 target == BasisKind::Schur;
+        case BasisConversionKernel::
+            HallLittlewoodGeneratorToCapitalTriangular:
+          return
+              (source ==
+                   BasisKind::HallLittlewoodQGenerator &&
+               (target == BasisKind::HallLittlewoodQ ||
+                target == BasisKind::HallLittlewoodP)) ||
+              (source ==
+                   BasisKind::HallLittlewoodBGenerator &&
+               (target == BasisKind::HallLittlewoodB ||
+                target == BasisKind::HallLittlewoodPOmega));
       }
     return false;
   }
 
+void SymmetricEngineRing::validateBasisConversionPlanDatabase()
+{
+    static const bool validated = [] {
+      const auto& database = basisConversionPlanDatabase();
+      const auto& plansById = basisConversionPlansById();
+      for (const auto& plan : database)
+        {
+          try
+            {
+              validateExpressionCondition(
+                  plan.applicability,
+                  ExpressionPieceKind::WholeExpression);
+            }
+          catch (const std::exception& exception)
+            {
+              throw exc::engine_error(
+                  "invalid applicability condition for plan " +
+                  plan.id.value + ": " + exception.what());
+            }
+          try
+            {
+              validateExpressionCondition(
+                  plan.outputGuarantee,
+                  ExpressionPieceKind::WholeExpression);
+            }
+          catch (const std::exception& exception)
+            {
+              throw exc::engine_error(
+                  "invalid output guarantee for plan " +
+                  plan.id.value + ": " + exception.what());
+            }
+          if (plan.cases.empty())
+            throw exc::engine_error(
+                "basis-conversion plan " + plan.id.value +
+                " has no cases");
+          for (size_t i = 0; i < plan.cases.size(); ++i)
+            {
+              const auto& item = plan.cases[i];
+              const bool isOtherwise =
+                  item.condition.kind ==
+                  ExpressionConditionKind::Otherwise;
+              if (isOtherwise !=
+                  (i + 1 == plan.cases.size()))
+                throw exc::engine_error(
+                    "basis-conversion plan " + plan.id.value +
+                    " must end in exactly one otherwise case");
+              try
+                {
+                  validateExpressionCondition(
+                      item.condition,
+                      plan.pieces,
+                      isOtherwise);
+                }
+              catch (const std::exception& exception)
+                {
+                  throw exc::engine_error(
+                      "invalid case condition for plan " +
+                      plan.id.value + ": " + exception.what());
+                }
+              if (item.formula.kind ==
+                  ConversionFormulaKind::AtomicKernel)
+                {
+                  const auto kernelContract =
+                      basisConversionKernelContract(
+                          item.formula.kernel,
+                          plan.sourceBasisKind,
+                          plan.targetBasisKind);
+                  if (!item.formula.childPlans.empty() ||
+                      !kernelContract.supportsEndpoints ||
+                      !expressionConditionImplies(
+                          kernelContract.outputGuarantee,
+                          plan.outputGuarantee))
+                    throw exc::engine_error(
+                        "basis-conversion plan " +
+                        plan.id.value +
+                        " has an invalid atomic-kernel contract");
+                }
+              else if (
+                  item.formula.kernel !=
+                      BasisConversionKernel::Unavailable ||
+                  item.formula.childPlans.empty())
+                throw exc::engine_error(
+                    "basis-conversion plan " + plan.id.value +
+                    " has an invalid named-plan formula");
+              item.formula.resolvedChildPlans.clear();
+            }
+        }
+
+      std::map<std::string, std::vector<std::string>>
+          dependencies;
+      for (const auto& plan : database)
+        for (const auto& item : plan.cases)
+          {
+            if (item.formula.kind !=
+                ConversionFormulaKind::PlanComposition)
+              continue;
+            BasisKind current = plan.sourceBasisKind;
+            ExpressionCondition guaranteedCondition =
+                plan.pieces ==
+                        ExpressionPieceKind::WholeExpression
+                    ? plan.applicability
+                    : always();
+            if (plan.pieces ==
+                    ExpressionPieceKind::WholeExpression &&
+                item.condition.kind !=
+                    ExpressionConditionKind::Otherwise)
+              guaranteedCondition =
+                  guaranteedCondition && item.condition;
+            for (const auto& childId :
+                 item.formula.childPlans)
+              {
+                auto found = plansById.find(childId.value);
+                if (found == plansById.end())
+                  throw exc::engine_error(
+                      "basis-conversion plan " +
+                      plan.id.value +
+                      " references unknown child plan " +
+                      childId.value);
+                const auto& child = *found->second;
+                item.formula.resolvedChildPlans.push_back(
+                    found->second);
+                if (child.sourceBasisKind != current)
+                  throw exc::engine_error(
+                      "basis-conversion plan " +
+                      plan.id.value +
+                      " has incompatible child-plan endpoints");
+                if (!expressionConditionImplies(
+                        guaranteedCondition,
+                        child.applicability))
+                  throw exc::engine_error(
+                      "basis-conversion composition " +
+                      plan.id.value +
+                      " references a child with an unproved "
+                      "applicability requirement");
+                current = child.targetBasisKind;
+                guaranteedCondition =
+                    child.outputGuarantee;
+                dependencies[plan.id.value].push_back(
+                    child.id.value);
+              }
+            if (current != plan.targetBasisKind)
+              throw exc::engine_error(
+                  "basis-conversion plan " + plan.id.value +
+                  " has the wrong composition target");
+            if (!expressionConditionImplies(
+                    guaranteedCondition,
+                    plan.outputGuarantee))
+              throw exc::engine_error(
+                  "basis-conversion composition " +
+                  plan.id.value +
+                  " does not prove its declared output guarantee");
+          }
+
+      enum class VisitState { Unseen, Active, Complete };
+      std::map<std::string, VisitState> state;
+      std::function<void(const std::string&)> visit =
+          [&](const std::string& id) {
+            if (state[id] == VisitState::Complete) return;
+            if (state[id] == VisitState::Active)
+              throw exc::engine_error(
+                  "basis-conversion plan dependencies are cyclic at " +
+                  id);
+            state[id] = VisitState::Active;
+            for (const auto& child : dependencies[id])
+              visit(child);
+            state[id] = VisitState::Complete;
+          };
+      for (const auto& plan : database)
+        visit(plan.id.value);
+      return true;
+    }();
+    (void) validated;
+  }
+
+const std::vector<SymmetricEngineRing::ResolvedBasisConversionPlan>&
+SymmetricEngineRing::registeredBasisConversionPlans(
+    int sourceBasisId,
+    int targetBasisId) const
+{
+    static const std::vector<ResolvedBasisConversionPlan> empty;
+    requireBasis(sourceBasisId);
+    requireBasis(targetBasisId);
+    if (error()) return empty;
+    const std::pair<int, int> endpoint{
+        sourceBasisId, targetBasisId};
+    auto cached =
+        resolvedBasisConversionPlanCache.find(endpoint);
+    if (cached != resolvedBasisConversionPlanCache.end())
+      return cached->second;
+    validateBasisConversionPlanDatabase();
+    const BasisKind source = basisKindForId(sourceBasisId);
+    const BasisKind target = basisKindForId(targetBasisId);
+    std::vector<ResolvedBasisConversionPlan> result;
+    const auto& plansByEndpoints =
+        basisConversionPlansByEndpoints();
+    auto found = plansByEndpoints.find({source, target});
+    if (found != plansByEndpoints.end())
+      {
+        result.reserve(found->second.size());
+        for (const auto *plan : found->second)
+          result.push_back(
+              {plan, sourceBasisId, targetBasisId});
+      }
+    auto inserted =
+        resolvedBasisConversionPlanCache.emplace(
+            endpoint, std::move(result));
+    return inserted.first->second;
+  }
+
+SymmetricEngineRing::ResolvedBasisConversionPlan
+SymmetricEngineRing::resolveBasisConversionPlan(
+    const BasisConversionPlanId& id) const
+{
+    validateBasisConversionPlanDatabase();
+    const auto *definition =
+        basisConversionPlanDefinition(id);
+    if (definition == nullptr)
+      {
+        ERROR("unknown basis-conversion plan: ",
+              id.value.c_str());
+        return {};
+      }
+    return resolveBasisConversionPlanDefinition(definition);
+  }
+
+SymmetricEngineRing::ResolvedBasisConversionPlan
+SymmetricEngineRing::resolveBasisConversionPlanDefinition(
+    const BasisConversionPlanDefinition *definition) const
+{
+    if (definition == nullptr) return {};
+    auto cached =
+        resolvedBasisConversionEndpointCache.find(
+            definition->id.value);
+    if (cached !=
+        resolvedBasisConversionEndpointCache.end())
+      return {
+          definition,
+          cached->second.first,
+          cached->second.second};
+    const int sourceBasisId =
+        requiredBasisIdForKind(
+            definition->sourceBasisKind);
+    const int targetBasisId =
+        requiredBasisIdForKind(
+            definition->targetBasisKind);
+    if (error()) return {};
+    resolvedBasisConversionEndpointCache.emplace(
+        definition->id.value,
+        std::make_pair(sourceBasisId, targetBasisId));
+    return {definition, sourceBasisId, targetBasisId};
+  }
+
 // ============================================================================
-// Direct-Plan Cost Policy
+// Complete-Plan Applicability And Performance Policy
 // ============================================================================
-// These structural estimates only rank mathematically applicable plans.
-// Numerical tuning is intentionally deferred until the workflows are
-// benchmarked as complete units.
+
+bool SymmetricEngineRing::basisConversionPlanApplicable(
+    const ResolvedBasisConversionPlan& plan,
+    ring_elem expression,
+    const ExpressionFacts& facts) const
+{
+    if (!plan.valid() ||
+        !facts.canonicalExpansionInBasis(
+            plan.sourceBasisId))
+      return false;
+    if (plan.definition->applicability.kind ==
+        ExpressionConditionKind::Always)
+      return true;
+    const auto contexts =
+        buildExpressionConditionContexts(
+            expression,
+            ExpressionPieceKind::WholeExpression,
+            facts);
+    return contexts.size() == 1 &&
+           expressionConditionHolds(
+               plan.definition->applicability,
+               contexts.front());
+  }
 
 size_t SymmetricEngineRing::basisConversionPlanCost(
-    const BasisConversionPlan& plan,
+    const ResolvedBasisConversionPlan& plan,
     const ExpressionFacts& facts,
     CombinatorialTags combinatorialTags) const
 {
+    if (!plan.valid())
+      return std::numeric_limits<size_t>::max();
     size_t terms = std::max<size_t>(1, facts.termCount);
     size_t weight = static_cast<size_t>(
-        std::max(0, facts.homogeneousWeight.value_or(0)));
+        std::max(
+            0, facts.homogeneousWeight.value_or(0)));
     size_t cost = 100 + terms + weight;
-    switch (plan.kernel)
+    bool hasComposition = false;
+    for (const auto& item : plan.definition->cases)
       {
-        case BasisConversionKernel::Unavailable:
-          return std::numeric_limits<size_t>::max();
-        case BasisConversionKernel::HallLittlewoodNormalization:
-        case BasisConversionKernel::SchurOmegaConjugation:
-        case BasisConversionKernel::CompleteToSchurRecursive:
-        case BasisConversionKernel::
-            HallLittlewoodGeneratorToCapitalTriangular:
-          return 20 + terms;
-        case BasisConversionKernel::PowerSumsToSchurCharacters:
-        case BasisConversionKernel::
-            PowerSumsToSchurOmegaCharacters:
-          cost += 4 * terms + weight;
-          break;
-        case BasisConversionKernel::
-            PowerSumsToSchurAbacusAndComplete:
-        case BasisConversionKernel::
-            PowerSumsToSchurOmegaAbacusAndComplete:
-          cost += 2 * terms;
-          break;
-        default:
-          break;
+        hasComposition =
+            hasComposition ||
+            item.formula.kind ==
+                ConversionFormulaKind::PlanComposition;
+        if (item.formula.kind !=
+            ConversionFormulaKind::AtomicKernel)
+          continue;
+        switch (item.formula.kernel)
+          {
+            case BasisConversionKernel::
+                HallLittlewoodNormalization:
+            case BasisConversionKernel::SchurOmegaConjugation:
+            case BasisConversionKernel::CompleteToSchurRecursive:
+            case BasisConversionKernel::
+                HallLittlewoodGeneratorToCapitalTriangular:
+              cost = std::min(cost, 20 + terms);
+              break;
+            case BasisConversionKernel::
+                PowerSumsToSchurCharacters:
+            case BasisConversionKernel::
+                PowerSumsToSchurOmegaCharacters:
+              cost += 4 * terms + weight;
+              break;
+            default:
+              break;
+          }
       }
+    if (hasComposition) cost += 1000;
     if (hasCombinatorialTag(
-            combinatorialTags, CombinatorialTag::Plethysm) &&
+            combinatorialTags,
+            CombinatorialTag::Plethysm) &&
         cost > 10)
       cost -= 10;
     return cost;
   }
 
-// ============================================================================
-// Direct-Plan Picker
-// ============================================================================
-// Pair-local policy chooses one applicable plan. Composition policy remains in
-// pickBasisConversionPlans so registry entries never choose intermediates.
-
-SymmetricEngineRing::BasisConversionPlan
+SymmetricEngineRing::ResolvedBasisConversionPlan
 SymmetricEngineRing::selectBasisConversionPlan(
+    ring_elem expression,
     int sourceBasisId,
     int targetBasisId,
     const ExpressionFacts& facts,
     CombinatorialTags combinatorialTags,
-    const std::optional<std::string>& forcedIdentifier) const
+    const std::optional<std::string>& forcedIdentifier,
+    ExpressionFacts *selectionFacts) const
 {
-    const auto& plans =
-        registeredBasisConversionPlans(sourceBasisId, targetBasisId);
-
-    if (forcedIdentifier)
+    if (basisConversionPlanExecutionDepth != 0)
       {
-        for (const auto& plan : plans)
-          if (plan.identifier == *forcedIdentifier &&
-              basisConversionPlanApplicable(plan, facts))
-            return plan;
-        ERROR("the requested conversion plan is unknown or inapplicable: ",
-              forcedIdentifier->c_str());
-        return {"unavailable",
-                sourceBasisId,
-                targetBasisId,
-                BasisConversionKernel::Unavailable,
-                BasisConversionInputShape::CanonicalExpansion};
+        ERROR("basis-conversion plan execution attempted to invoke "
+              "the performance picker");
+        return {};
+      }
+    if (!facts.canonicalExpansionInBasis(sourceBasisId))
+      {
+        ERROR("the basis-conversion picker requires a canonical "
+              "single-source-basis expansion");
+        return {};
+      }
+    const auto& plans =
+        registeredBasisConversionPlans(
+            sourceBasisId, targetBasisId);
+    const BasisKind sourceKind =
+        basisKindForId(sourceBasisId);
+    const BasisKind targetKind =
+        basisKindForId(targetBasisId);
+    std::optional<std::string> requested =
+        forcedIdentifier;
+    if (!requested)
+      {
+        const char *forced =
+            std::getenv(
+                "M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN");
+        if (forced != nullptr)
+          requested = forced;
+      }
+    ExpressionFacts selectionProfile = facts;
+    selectionProfile.combinatorialTags = combinatorialTags;
+    auto publishSelectionFacts = [&] {
+      if (selectionFacts != nullptr)
+        *selectionFacts = selectionProfile;
+    };
+    // Most endpoints have one unconditional mathematical plan. Once forcing
+    // has been ruled out, return that stable entry without allocating an
+    // enriched profile or running general ranking policy.
+    if (!requested &&
+        plans.size() == 1 &&
+        plans.front().definition->applicability.kind ==
+            ExpressionConditionKind::Always)
+      {
+        publishSelectionFacts();
+        return plans.front();
       }
 
-    BasisKind targetKind = basisKindForId(targetBasisId);
-    if (sourceBasisId == requiredBasisIdForKind(BasisKind::PowerSum) &&
+    if (requested)
+      {
+        for (const auto& plan : plans)
+          if (plan.definition->id.value == *requested)
+            {
+              // Unconditional forced plans need only the canonical source
+              // contract already checked above. Conditional plans request
+              // their endpoint-specific profile before applicability is
+              // evaluated.
+              if (plan.definition->applicability.kind !=
+                  ExpressionConditionKind::Always)
+                enrichBasisConversionPlanSelectionFacts(
+                    expression, targetBasisId, selectionProfile);
+              publishSelectionFacts();
+              if (basisConversionPlanApplicable(
+                      plan, expression, selectionProfile))
+                return plan;
+              break;
+            }
+        ERROR("the requested conversion plan is unknown or "
+              "inapplicable: ",
+              requested->c_str());
+        return {};
+      }
+
+    if (sourceKind == BasisKind::PowerSum &&
         (targetKind == BasisKind::Schur ||
          targetKind == BasisKind::SchurOmega))
       {
-        auto findKernel =
-            [&](BasisConversionKernel kernel)
-                -> std::optional<BasisConversionPlan> {
-              for (const auto& plan : plans)
-                if (plan.kernel == kernel &&
-                    basisConversionPlanApplicable(plan, facts))
-                  return plan;
-              return std::nullopt;
-            };
-        const bool omega = targetKind == BasisKind::SchurOmega;
-        const size_t termCount = facts.termCount;
-        const size_t possibleTerms = facts.possibleTermCount.value_or(
-            partitionCountForConversionSelection(
-                facts.homogeneousWeight.value_or(0)));
-        const long double termsSquared =
-            static_cast<long double>(termCount) *
-            static_cast<long double>(termCount);
-        const bool supportSquareFavorsComplete =
-            2.0L * termsSquared >=
-                35.0L * static_cast<long double>(possibleTerms);
-        const int weight = facts.homogeneousWeight.value_or(0);
-        const double density = possibleTerms == 0
-            ? 0.0
-            : static_cast<double>(termCount) /
-                  static_cast<double>(possibleTerms);
-        bool plethysm =
-            hasCombinatorialTag(combinatorialTags,
-                                CombinatorialTag::Plethysm);
-        const CombinatorialTags borderStripsTag =
-            combinatorialTagMask(CombinatorialTag::BorderStrips);
-        size_t completeFriendly =
-            facts.completeFriendlyPowerSumTermCount.value_or(0);
-        size_t minimumCompleteGroup =
-            std::max<size_t>(8, (termCount + 3) / 4);
-
-        BasisConversionKernel preferredKernel;
-        // This decision order and every predicate mirror
-        // selectPowerSumsToSchurRoute.  Keeping the policy equal is essential:
-        // benchmarks should measure workflow overhead, not different kernels.
-        bool completePreferred = false;
-        if (plethysm)
-          completePreferred =
-              supportSquareFavorsComplete ||
-              (weight >= 8 && termCount >= 2);
-        else if (hasCombinatorialTag(
-                     combinatorialTags,
-                     CombinatorialTag::LittlewoodRichardson))
-          completePreferred =
-              weight >= 7 &&
-              (coefficientRing != globalQQ || density >= 0.25 ||
-               supportSquareFavorsComplete);
-        else if (hasCombinatorialTag(
-                     combinatorialTags,
-                     CombinatorialTag::HorizontalPieri) ||
-                 hasCombinatorialTag(
-                     combinatorialTags,
-                     CombinatorialTag::VerticalPieri))
-          completePreferred =
-              weight >= 8 &&
-              (coefficientRing != globalQQ || density >= 0.25 ||
-               supportSquareFavorsComplete);
-
-        static const std::vector<int> noCommonParts;
-        const auto& commonParts = facts.commonPowerSumParts
-            ? *facts.commonPowerSumParts
-            : noCommonParts;
-        bool hasSmallCommonCycle = std::any_of(
-            commonParts.begin(),
-            commonParts.end(),
-            [&](int part) {
-              int crossoverPercent =
-                  coefficientRing == globalQQ ? 36 : 41;
-              return 100 * part <= crossoverPercent * weight;
-            });
-        bool hasCommonOne =
-            std::find(commonParts.begin(), commonParts.end(), 1) !=
-            commonParts.end();
-        if (!completePreferred &&
-            combinatorialTags == borderStripsTag &&
-            weight >= 16 && termCount >= 8 &&
-            !hasCommonOne && hasSmallCommonCycle)
-          completePreferred = true;
-        if (!completePreferred &&
-            combinatorialTags == borderStripsTag &&
-            weight >= 8 && termCount >= 8 && hasCommonOne &&
-            (coefficientRing != globalQQ || density >= 0.25 ||
-             supportSquareFavorsComplete))
-          completePreferred = true;
-        if (!completePreferred &&
-            (combinatorialTags == 0 ||
-             combinatorialTags == borderStripsTag) &&
-            weight >= 14 && termCount >= 2 &&
-            completeFriendly == termCount)
-          completePreferred = true;
-
-        bool hybridPreferred =
-            !completePreferred &&
-            (combinatorialTags == 0 ||
-             combinatorialTags == borderStripsTag) &&
-            weight >= 14 && termCount >= 8 &&
-            completeFriendly >= minimumCompleteGroup &&
-            completeFriendly < termCount;
-
-        if (completePreferred)
-          preferredKernel =
-              omega
-                  ? BasisConversionKernel::
-                        PowerSumsToSchurOmegaComplete
-                  : BasisConversionKernel::
-                        PowerSumsToSchurComplete;
-        else if (hybridPreferred)
-          preferredKernel =
-              omega
-                  ? BasisConversionKernel::
-                        PowerSumsToSchurOmegaAbacusAndComplete
-                  : BasisConversionKernel::
-                        PowerSumsToSchurAbacusAndComplete;
-        else
-          preferredKernel =
-              omega
-                  ? BasisConversionKernel::
-                        PowerSumsToSchurOmegaAbacusRimHooks
-                  : BasisConversionKernel::
-                        PowerSumsToSchurAbacusRimHooks;
-        auto preferred = findKernel(preferredKernel);
-        if (preferred) return *preferred;
-      }
-
-    if (sourceBasisId == requiredBasisIdForKind(BasisKind::PowerSum) &&
-        (targetKind == BasisKind::HallLittlewoodQ ||
-         targetKind == BasisKind::HallLittlewoodB ||
-         targetKind == BasisKind::HallLittlewoodP ||
-         targetKind == BasisKind::HallLittlewoodPOmega))
-      {
-        BasisConversionKernel preferredKernel =
-            facts.allPowerSumTermsSingleCycles.value_or(false)
-                ? BasisConversionKernel::
-                      PowerSumSingleCyclesToHallLittlewoodGreen
-                : (facts.singleTerm() && facts.singleBasisElement()
-                       ? BasisConversionKernel::
-                             PowerSumIndexToHallLittlewoodGreenDuality
-                       : BasisConversionKernel::
-                             PowerSumsToHallLittlewoodTriangular);
+        // The component plan itself owns all p -> Schur policy facts. Select
+        // it before whole-expression enrichment so its component partitioner
+        // is the only code that scans those profiles.
+        const std::string_view defaultId =
+            targetKind == BasisKind::SchurOmega
+                ? "PowerSum->SchurOmega:default-policy"
+                : "PowerSum->Schur:default-policy";
         for (const auto& plan : plans)
-          if (plan.kernel == preferredKernel &&
-              basisConversionPlanApplicable(plan, facts))
-            return plan;
+          if (plan.definition->id.value == defaultId)
+            {
+              publishSelectionFacts();
+              return plan;
+            }
       }
 
-    const BasisConversionPlan *best = nullptr;
-    size_t bestCost = std::numeric_limits<size_t>::max();
+    enrichBasisConversionPlanSelectionFacts(
+        expression, targetBasisId, selectionProfile);
+    publishSelectionFacts();
+    auto findId =
+        [&](const std::string& id)
+            -> std::optional<ResolvedBasisConversionPlan> {
+          for (const auto& plan : plans)
+            if (plan.definition->id.value == id &&
+                basisConversionPlanApplicable(
+                    plan, expression, selectionProfile))
+              return plan;
+          return std::nullopt;
+        };
+
+    if (sourceKind == BasisKind::PowerSum &&
+        isHallLittlewoodCapitalBasisKind(targetKind))
+      {
+        std::string targetName;
+        switch (targetKind)
+          {
+            case BasisKind::HallLittlewoodQ:
+              targetName = "HallLittlewoodQ";
+              break;
+            case BasisKind::HallLittlewoodB:
+              targetName = "HallLittlewoodB";
+              break;
+            case BasisKind::HallLittlewoodP:
+              targetName = "HallLittlewoodP";
+              break;
+            case BasisKind::HallLittlewoodPOmega:
+              targetName = "HallLittlewoodPOmega";
+              break;
+            default:
+              break;
+          }
+        const std::string suffix =
+            selectionProfile.allPowerSumTermsSingleCycles.
+                    value_or(false)
+                ? ":single-cycles-Green"
+                : (selectionProfile.singleTerm() &&
+                           selectionProfile.singleBasisElement()
+                       ? ":Green-duality"
+                       : ":triangular-reduction");
+        auto selected = findId(
+            "PowerSum->" + targetName + suffix);
+        if (selected) return *selected;
+      }
+
+    const ResolvedBasisConversionPlan *best = nullptr;
+    size_t bestCost =
+        std::numeric_limits<size_t>::max();
     for (const auto& plan : plans)
       {
-        if (!basisConversionPlanApplicable(plan, facts))
+        if (!basisConversionPlanApplicable(
+                plan, expression, selectionProfile))
           continue;
         const size_t cost = basisConversionPlanCost(
-            plan, facts, combinatorialTags);
+            plan, selectionProfile, combinatorialTags);
         if (best == nullptr || cost < bestCost)
           {
             best = &plan;
@@ -1248,377 +2222,30 @@ SymmetricEngineRing::selectBasisConversionPlan(
           }
       }
     if (best != nullptr) return *best;
-    ERROR("the basis-conversion registry has no applicable plan from ",
+    ERROR("the basis-conversion registry has no applicable "
+          "complete plan from ",
           basisKeyForId(sourceBasisId).c_str(),
           " to ",
           basisKeyForId(targetBasisId).c_str());
-    return {"unavailable",
-            sourceBasisId,
-            targetBasisId,
-            BasisConversionKernel::Unavailable,
-            BasisConversionInputShape::CanonicalExpansion};
+    return {};
   }
 
 // ============================================================================
-// Basis-Composition Picker
-// ============================================================================
-// The picker returns the entire ordered composition before execution. Exact
-// forcing controls are contract-test bypasses; automatic mode searches the
-// registered basis graph using guarantees for unexecuted intermediates. A
-// data-dependent plan chosen from those guarantees is provisional and is
-// reselected from exact facts when that intermediate has been realized.
-
-SymmetricEngineRing::BasisConversionPlanSelection
-SymmetricEngineRing::pickBasisConversionPlans(
-    int sourceBasisId,
-    int targetBasisId,
-    const ExpressionFacts& facts,
-    CombinatorialTags combinatorialTags) const
-{
-    BasisConversionPlanSelection selection;
-    if (!facts.canonicalExpansionInBasis(sourceBasisId))
-      {
-        ERROR("the basis-composition picker requires a canonical "
-              "single-source-basis expansion");
-        return selection;
-      }
-    int powerSumBasisId = requiredBasisIdForKind(BasisKind::PowerSum);
-    if (error()) return selection;
-
-    auto basisIdFromKey = [&](const std::string& key) {
-      for (const auto& item : basisDescriptors)
-        if (item.second.canonicalKey == key) return item.first;
-      return -1;
-    };
-    auto split = [](const std::string& value, char delimiter) {
-      std::vector<std::string> pieces;
-      std::stringstream stream(value);
-      std::string piece;
-      while (std::getline(stream, piece, delimiter))
-        pieces.push_back(piece);
-      return pieces;
-    };
-    auto hasApplicablePlan =
-        [&](int from,
-            int to,
-            const ExpressionFacts& edgeFacts) {
-          const auto& plans =
-              registeredBasisConversionPlans(from, to);
-          return std::any_of(
-              plans.begin(),
-              plans.end(),
-              [&](const BasisConversionPlan& plan) {
-                return basisConversionPlanApplicable(
-                    plan, edgeFacts);
-              });
-        };
-
-    // Stage 1: choose or validate the complete basis composition.
-    std::vector<int> composition;
-    const char *forcedComposition =
-        std::getenv(
-            "M2_SYMMETRIC_RINGS_FORCE_CONVERSION_COMPOSITION");
-    if (forcedComposition != nullptr)
-      {
-        std::string requested(forcedComposition);
-        if (requested == "direct")
-          composition = sourceBasisId == targetBasisId
-              ? std::vector<int>{sourceBasisId}
-              : std::vector<int>{sourceBasisId, targetBasisId};
-        else if (requested == "via-power-sums")
-          composition =
-              {sourceBasisId, powerSumBasisId, targetBasisId};
-        else
-          {
-            for (const auto& key : split(requested, '>'))
-              {
-                std::string normalizedKey = key;
-                if (!normalizedKey.empty() &&
-                    normalizedKey.back() == '-')
-                  normalizedKey.pop_back();
-                int basisId = basisIdFromKey(normalizedKey);
-                if (basisId < 0)
-                  {
-                    ERROR("the requested conversion composition "
-                          "contains an unknown basis: ",
-                          normalizedKey.c_str());
-                    return selection;
-                  }
-                composition.push_back(basisId);
-              }
-          }
-        if (composition.empty() ||
-            composition.front() != sourceBasisId ||
-            composition.back() != targetBasisId ||
-            (composition.size() == 1 &&
-             sourceBasisId != targetBasisId))
-          {
-            ERROR("the requested conversion composition has the "
-                  "wrong endpoints");
-            return selection;
-          }
-        for (size_t i = 1; i < composition.size(); ++i)
-          if (composition[i - 1] == composition[i])
-            {
-              ERROR("a requested conversion composition contains "
-                    "a repeated adjacent basis");
-              return selection;
-            }
-      }
-    else if (sourceBasisId == targetBasisId)
-      composition = {sourceBasisId};
-    else if (hasApplicablePlan(sourceBasisId, targetBasisId, facts))
-      {
-        // Avoid allocating and searching the complete basis graph when an
-        // applicable direct kernel already supplies the preferred edge.
-        composition = {sourceBasisId, targetBasisId};
-      }
-    else
-      {
-        const size_t infinity = std::numeric_limits<size_t>::max();
-        std::map<int, size_t> distances;
-        std::map<int, int> previous;
-        using QueueEntry = std::pair<size_t, int>;
-        std::priority_queue<
-            QueueEntry,
-            std::vector<QueueEntry>,
-            std::greater<QueueEntry>> queue;
-        for (const auto& item : basisDescriptors)
-          distances[item.first] = infinity;
-        distances[sourceBasisId] = 0;
-        queue.push({0, sourceBasisId});
-
-        while (!queue.empty())
-          {
-            auto current = queue.top();
-            queue.pop();
-            size_t distance = current.first;
-            int from = current.second;
-            if (distance != distances[from]) continue;
-            if (from == targetBasisId) break;
-            ExpressionFacts conservativeFacts;
-            const ExpressionFacts *edgeFacts = &facts;
-            if (from != sourceBasisId)
-              {
-                conservativeFacts =
-                    conservativeExpressionFactsForBasis(
-                        facts, from);
-                edgeFacts = &conservativeFacts;
-              }
-            for (const auto& item : basisDescriptors)
-              {
-                int to = item.first;
-                if (to == from ||
-                    basisKindForId(to) == BasisKind::Custom)
-                  continue;
-                const BasisConversionPlan *best = nullptr;
-                size_t bestPlanCost =
-                    std::numeric_limits<size_t>::max();
-                for (const auto& plan :
-                     registeredBasisConversionPlans(from, to))
-                  {
-                    if (!basisConversionPlanApplicable(
-                            plan, *edgeFacts))
-                      continue;
-                    const size_t planCost =
-                        basisConversionPlanCost(
-                            plan, *edgeFacts, combinatorialTags);
-                    if (planCost < bestPlanCost)
-                      {
-                        best = &plan;
-                        bestPlanCost = planCost;
-                      }
-                  }
-                if (best == nullptr) continue;
-                size_t edgeCost = 1000 + bestPlanCost;
-                if (distance <= infinity - edgeCost &&
-                    distance + edgeCost < distances[to])
-                  {
-                    distances[to] = distance + edgeCost;
-                    previous[to] = from;
-                    queue.push({distances[to], to});
-                  }
-              }
-          }
-        if (!distances.count(targetBasisId) ||
-            distances[targetBasisId] == infinity)
-          {
-            ERROR("the basis-conversion registry has no composition "
-                  "for the requested basis pair");
-            return selection;
-          }
-        for (int current = targetBasisId;; current = previous[current])
-          {
-            composition.push_back(current);
-            if (current == sourceBasisId) break;
-          }
-        std::reverse(composition.begin(), composition.end());
-      }
-
-    // Stage 2: validate optional ordered plan forcing for the chosen edges.
-    std::vector<std::string> orderedForcedPlans;
-    const char *forcedPlans =
-        std::getenv(
-            "M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLANS");
-    if (forcedPlans != nullptr)
-      orderedForcedPlans = split(forcedPlans, ',');
-    if (!orderedForcedPlans.empty() &&
-        orderedForcedPlans.size() + 1 != composition.size())
-      {
-        ERROR("the requested ordered conversion plans do not match "
-              "the selected composition length");
-        return selection;
-      }
-
-    const char *singleForcedPlan =
-        std::getenv("M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN");
-    bool singleForcedPlanUsed = singleForcedPlan == nullptr;
-    // Stage 3: select the exact first edge and provisional later edges.
-    selection.basisComposition = composition;
-    const ExpressionFacts *edgeFacts = &facts;
-    ExpressionFacts laterEdgeFacts;
-    for (size_t i = 1; i < composition.size(); ++i)
-      {
-        std::optional<std::string> forcedIdentifier;
-        if (!orderedForcedPlans.empty())
-          forcedIdentifier = orderedForcedPlans[i - 1];
-        else if (singleForcedPlan != nullptr)
-          {
-            for (const auto& plan :
-                 registeredBasisConversionPlans(
-                     composition[i - 1], composition[i]))
-              if (plan.identifier == singleForcedPlan &&
-                  basisConversionPlanApplicable(plan, *edgeFacts))
-                {
-                  forcedIdentifier = singleForcedPlan;
-                  singleForcedPlanUsed = true;
-                  break;
-                }
-          }
-        BasisConversionPlan plan =
-            selectBasisConversionPlan(
-                composition[i - 1],
-                composition[i],
-                *edgeFacts,
-                combinatorialTags,
-                forcedIdentifier);
-        if (error()) return selection;
-        selection.plans.push_back(std::move(plan));
-        selection.reselectFromExactIntermediate.push_back(
-            i > 1 && !forcedIdentifier.has_value());
-        laterEdgeFacts = conservativeExpressionFactsForBasis(
-            facts, composition[i]);
-        edgeFacts = &laterEdgeFacts;
-      }
-    if (!singleForcedPlanUsed)
-      {
-        ERROR("the requested conversion plan is not part of the "
-              "selected composition: ",
-              singleForcedPlan);
-        return selection;
-      }
-    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") != nullptr)
-      {
-        std::string compositionTrace;
-        for (size_t i = 0; i < composition.size(); ++i)
-          {
-            if (i != 0) compositionTrace += "->";
-            compositionTrace += basisKeyForId(composition[i]);
-          }
-        std::fprintf(
-            stderr,
-            "SymmetricRings conversion-selection: composition=%s "
-            "plans=%zu terms=%zu weight=%d density=%.6f\n",
-            compositionTrace.c_str(),
-            selection.plans.size(),
-            facts.termCount,
-            facts.homogeneousWeight.value_or(-1),
-            facts.density.value_or(-1.0));
-      }
-    return selection;
-  }
-
-// ============================================================================
-// Composite Schur Kernels
-// ============================================================================
-// These kernels combine the complete-function transition with the direct
-// Schur kernels. Selection policy remains in the plan picker above.
-
-ring_elem SymmetricEngineRing::powerSumsToSchurViaComplete(
-    ring_elem f,
-    int targetBasisId,
-    const std::string& targetDisplay,
-    int targetOrder) const
-{
-    CoeffMap inComplete = powerSumsToCompleteMapViaLogarithmFormula(f);
-    if (error()) return zero();
-    CoeffMap result =
-        completeToSchurCoefficientsViaRecursiveTransition(inComplete);
-    if (error()) return zero();
-    return coeffMapToElement(
-        result, targetBasisId, targetDisplay, targetOrder, false);
-}
-
-ring_elem SymmetricEngineRing::powerSumsToSchurViaAbacusAndComplete(
-    ring_elem f,
-    int targetBasisId,
-    const std::string& targetDisplay,
-    int targetOrder) const
-{
-    CoeffMap abacusResult;
-    CoeffMap completeInput;
-    const auto *poly = polyValue(f);
-    for (const auto& term : poly->terms)
-      {
-        Partition index;
-        if (!powerSumIndexFromMonomial(term.monomial, index))
-          {
-            ERROR("expected a pure power-sum expression during hybrid basis conversion");
-            return zero();
-          }
-        const int weight = partitionWeight(index);
-        if (completeFriendlyPowerSumIndexForConversionSelection(index, weight))
-          addPowerSumIndexToCompleteMapViaLogarithmFormula(
-              index, term.coeff, completeInput);
-        else
-          addPowerSumIndexToSchurMapViaAbacusRimHooks(
-              index, term.coeff, abacusResult);
-      }
-
-    if (!completeInput.empty())
-      {
-        CoeffMap completeResult =
-            completeToSchurCoefficientsViaRecursiveTransition(completeInput);
-        if (error()) return zero();
-        for (const auto& term : completeResult)
-          addNormalizedCoeff(abacusResult, term.first, term.second);
-      }
-    return coeffMapToElement(
-        abacusResult, targetBasisId, targetDisplay, targetOrder, false);
-}
-
-// ============================================================================
-// Direct-Plan Executor
+// Atomic Basis-Conversion Kernel Executor
 // ============================================================================
 // This executor contains no applicability or performance policy. The switch is
 // grouped by mathematical source/target family so a contributor can locate the
 // one kernel associated with a registry entry.
 
-ring_elem SymmetricEngineRing::executeBasisConversionPlan(
-    const BasisConversionPlan& plan,
+ring_elem SymmetricEngineRing::executeBasisConversionKernel(
+    BasisConversionKernel kernel,
+    int sourceBasisId,
+    int targetBasisId,
     ring_elem expression,
     CombinatorialTags combinatorialTags,
     ExpressionFacts *resultFacts,
     const std::optional<int>& knownHomogeneousWeight) const
 {
-    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") != nullptr)
-      std::fprintf(stderr,
-                   "SymmetricRings conversion-plan: source=%s target=%s "
-                   "plan=%s\n",
-                   displayForBasis(plan.sourceBasisId).c_str(),
-                   displayForBasis(plan.targetBasisId).c_str(),
-                   plan.identifier.data());
-
     auto powerSumsToSchurOmega =
         [&](BasisConversionKernel kernel) {
           ring_elem omegaInput = omegaPowerSums(expression);
@@ -1641,16 +2268,6 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
                     omegaInput, schurId, schurDisplay, schurOrder);
                 break;
               case BasisConversionKernel::
-                  PowerSumsToSchurOmegaAbacusAndComplete:
-                inSchur = powerSumsToSchurViaAbacusAndComplete(
-                    omegaInput, schurId, schurDisplay, schurOrder);
-                break;
-              case BasisConversionKernel::
-                  PowerSumsToSchurOmegaComplete:
-                inSchur = powerSumsToSchurViaComplete(
-                    omegaInput, schurId, schurDisplay, schurOrder);
-                break;
-              case BasisConversionKernel::
                   PowerSumsToSchurOmegaCharacters:
                 inSchur = powerSumsToSchurLikeViaCharacters(
                     omegaInput,
@@ -1665,15 +2282,15 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
             }
           if (error()) return zero();
           return replaceSingleBasis(
-              inSchur, schurId, plan.targetBasisId);
+              inSchur, schurId, targetBasisId);
         };
 
     const std::string targetDisplay =
-        displayForBasis(plan.targetBasisId);
+        displayForBasis(targetBasisId);
     const int targetOrder =
-        basisOrderForId(plan.targetBasisId);
+        basisOrderForId(targetBasisId);
     ring_elem result;
-    switch (plan.kernel)
+    switch (kernel)
       {
         case BasisConversionKernel::Unavailable:
           ERROR("an unavailable basis-conversion plan was executed");
@@ -1700,50 +2317,36 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
             HallLittlewoodPOmegaToPowerSumsNormalization:
           result = canonicalExpressionToPowerSumsViaBasisFormulas(
               expression,
-              basisKindForId(plan.sourceBasisId));
+              basisKindForId(sourceBasisId));
           break;
 
         // Classical power-sum targets.
         case BasisConversionKernel::PowerSumsToCompleteLogarithm:
           result = powerSumsToCompleteViaLogarithmFormula(
-              expression, plan.targetBasisId, targetOrder);
+              expression, targetBasisId, targetOrder);
           break;
         case BasisConversionKernel::PowerSumsToElementaryLogarithm:
           result = powerSumsToElementaryViaLogarithmFormula(
-              expression, plan.targetBasisId, targetOrder);
+              expression, targetBasisId, targetOrder);
           break;
         case BasisConversionKernel::PowerSumsToSchurBorderStrips:
           result = powerSumsToSchurViaBorderStrips(
               expression,
-              plan.targetBasisId,
+              targetBasisId,
               targetDisplay,
               targetOrder);
           break;
         case BasisConversionKernel::PowerSumsToSchurAbacusRimHooks:
           result = powerSumsToSchurViaAbacusRimHooks(
               expression,
-              plan.targetBasisId,
-              targetDisplay,
-              targetOrder);
-          break;
-        case BasisConversionKernel::PowerSumsToSchurAbacusAndComplete:
-          result = powerSumsToSchurViaAbacusAndComplete(
-              expression,
-              plan.targetBasisId,
-              targetDisplay,
-              targetOrder);
-          break;
-        case BasisConversionKernel::PowerSumsToSchurComplete:
-          result = powerSumsToSchurViaComplete(
-              expression,
-              plan.targetBasisId,
+              targetBasisId,
               targetDisplay,
               targetOrder);
           break;
         case BasisConversionKernel::PowerSumsToSchurCharacters:
           result = powerSumsToSchurLikeViaCharacters(
               expression,
-              plan.targetBasisId,
+              targetBasisId,
               targetOrder,
               targetDisplay,
               false);
@@ -1755,12 +2358,8 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
         case BasisConversionKernel::
             PowerSumsToSchurOmegaAbacusRimHooks:
         case BasisConversionKernel::
-            PowerSumsToSchurOmegaAbacusAndComplete:
-        case BasisConversionKernel::
-            PowerSumsToSchurOmegaComplete:
-        case BasisConversionKernel::
             PowerSumsToSchurOmegaCharacters:
-          result = powerSumsToSchurOmega(plan.kernel);
+          result = powerSumsToSchurOmega(kernel);
           break;
 
         // Hall--Littlewood generator and capital targets.
@@ -1772,11 +2371,11 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
             CoeffMap generators =
                 powerSumsToHallGeneratorMapViaLogarithmFormula(
                     expression,
-                    plan.kernel == BasisConversionKernel::
+                    kernel == BasisConversionKernel::
                         PowerSumsToHallLittlewoodBGeneratorLogarithm);
             result = coeffMapToElement(
                 generators,
-                plan.targetBasisId,
+                targetBasisId,
                 targetDisplay,
                 targetOrder,
                 true);
@@ -1787,7 +2386,7 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
           result =
               powerSumSingleCycleTermsToHallLittlewoodViaGreenPolynomials(
                   expression,
-                  plan.targetBasisId,
+                  targetBasisId,
                   targetDisplay,
                   targetOrder);
           break;
@@ -1796,7 +2395,7 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
           result =
               powerSumIndexToHallLittlewoodViaGreenPolynomialsAndDuality(
                   expression,
-                  plan.targetBasisId,
+                  targetBasisId,
                   targetDisplay,
                   targetOrder);
           break;
@@ -1804,7 +2403,7 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
             PowerSumsToHallLittlewoodTriangular:
           result = powerSumsToHallLittlewoodViaTriangularReduction(
               expression,
-              plan.targetBasisId,
+              targetBasisId,
               targetDisplay,
               targetOrder);
           break;
@@ -1814,22 +2413,22 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
         case BasisConversionKernel::PowerSumsToForgottenTransition:
           result = powerSumsToTargetViaTermwiseConversion(
               expression,
-              plan.targetBasisId,
+              targetBasisId,
               targetDisplay,
               targetOrder,
-              isMultiplicativeBasis(plan.targetBasisId));
+              isMultiplicativeBasis(targetBasisId));
           break;
 
         // Direct normalization, involution, and triangular transitions.
         case BasisConversionKernel::HallLittlewoodNormalization:
           {
             BasisKind sourceKind =
-                basisKindForId(plan.sourceBasisId);
+                basisKindForId(sourceBasisId);
             result =
                 hallLittlewoodCapitalNormalizedConversionViaDiagonalScaling(
                     expression,
-                    plan.sourceBasisId,
-                    plan.targetBasisId,
+                    sourceBasisId,
+                    targetBasisId,
                     targetDisplay,
                     targetOrder,
                     sourceKind == BasisKind::HallLittlewoodQ ||
@@ -1839,19 +2438,28 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
         case BasisConversionKernel::SchurOmegaConjugation:
           result = schurOmegaConversionViaPartitionConjugation(
               expression,
-              plan.sourceBasisId,
-              plan.targetBasisId,
+              sourceBasisId,
+              targetBasisId,
               targetDisplay,
               targetOrder);
+          break;
+        case BasisConversionKernel::SchurToCompleteJacobiTrudi:
+        case BasisConversionKernel::
+            SchurOmegaToElementaryJacobiTrudi:
+          result =
+              canonicalSchurLikeExpressionToGeneratorsViaJacobiTrudi(
+                  expression,
+                  sourceBasisId,
+                  targetBasisId);
           break;
         case BasisConversionKernel::CompleteToSchurRecursive:
           result = completeToSchurViaRecursiveTransition(
               expression,
-              plan.sourceBasisId,
-              displayForBasis(plan.sourceBasisId),
-              basisOrderForId(plan.sourceBasisId),
-              isMultiplicativeBasis(plan.sourceBasisId),
-              plan.targetBasisId,
+              sourceBasisId,
+              displayForBasis(sourceBasisId),
+              basisOrderForId(sourceBasisId),
+              isMultiplicativeBasis(sourceBasisId),
+              targetBasisId,
               targetDisplay,
               targetOrder);
           break;
@@ -1859,7 +2467,7 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
             HallLittlewoodGeneratorToCapitalTriangular:
           if (!tryExpressionToHallLittlewoodViaTriangularReduction(
                   expression,
-                  plan.targetBasisId,
+                  targetBasisId,
                   targetDisplay,
                   targetOrder,
                   result))
@@ -1880,10 +2488,10 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
       {
         *resultFacts = inferCanonicalExpansionFacts(
             result,
-            plan.targetBasisId,
+            targetBasisId,
             knownHomogeneousWeight);
         resultFacts->combinatorialTags = combinatorialTags;
-        if (!resultFacts->canonicalExpansionInBasis(plan.targetBasisId))
+        if (!resultFacts->canonicalExpansionInBasis(targetBasisId))
           {
             ERROR("a basis-conversion plan violated its canonical output "
                   "contract");
@@ -1895,88 +2503,431 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
   }
 
 // ============================================================================
-// Ordered-Composition Workflow
+// Generic Declarative Formula And Plan Executor
 // ============================================================================
-// The direct plan executor above is policy-free. This owning workflow performs
-// the one policy action that cannot be correct before execution: selecting a
-// data-dependent later-edge kernel from the exact intermediate support.
+// The executor interprets the already-selected plan. Atomic formulas call one
+// kernel; compositions resolve their fixed child identifiers recursively.
+// Neither path invokes performance policy or substitutes another plan.
 
-ring_elem SymmetricEngineRing::executeBasisConversionPlans(
-    const BasisConversionPlanSelection& selection,
+ring_elem SymmetricEngineRing::executeBasisConversionFormula(
+    const ConversionFormula& formula,
+    int sourceBasisId,
+    int targetBasisId,
     ring_elem expression,
     CombinatorialTags combinatorialTags,
     const ExpressionFacts& inputFacts,
     ExpressionFacts *resultFacts) const
 {
-    ring_elem current = expression;
-    const ExpressionFacts *facts = &inputFacts;
-    ExpressionFacts realizedFacts;
-    if (selection.basisComposition.empty() ||
-        selection.plans.size() + 1 !=
-            selection.basisComposition.size() ||
-        selection.reselectFromExactIntermediate.size() !=
-            selection.plans.size() ||
-        !facts->canonicalExpansionInBasis(
-            selection.basisComposition.front()))
+    if (!inputFacts.canonicalExpansionInBasis(sourceBasisId))
       {
-        ERROR("an invalid basis-conversion selection reached the executor");
+        ERROR("a basis-conversion formula received input outside "
+              "its canonical source-basis contract");
         return zero();
       }
-    for (size_t i = 0; i < selection.plans.size(); ++i)
+    if (formula.kind == ConversionFormulaKind::AtomicKernel)
       {
-        BasisConversionPlan plan = selection.plans[i];
-        if (selection.reselectFromExactIntermediate[i])
+        const auto kernelContract =
+            basisConversionKernelContract(
+                formula.kernel,
+                basisKindForId(sourceBasisId),
+                basisKindForId(targetBasisId));
+        if (!kernelContract.supportsEndpoints)
           {
-            enrichConversionSelectionFacts(
-                current,
-                selection.basisComposition[i + 1],
-                realizedFacts);
-            plan = selectBasisConversionPlan(
-                selection.basisComposition[i],
-                selection.basisComposition[i + 1],
-                *facts,
-                combinatorialTags);
-            if (error()) return zero();
-          }
-        if (plan.sourceBasisId != selection.basisComposition[i] ||
-            plan.targetBasisId != selection.basisComposition[i + 1])
-          {
-            ERROR("a basis-conversion plan does not match its selected "
-                  "composition edge");
+            ERROR("an atomic basis-conversion formula has invalid "
+                  "runtime endpoints");
             return zero();
           }
-        if (!facts->canonicalExpansionInBasis(plan.sourceBasisId))
+        return executeBasisConversionKernel(
+            formula.kernel,
+            sourceBasisId,
+            targetBasisId,
+            expression,
+            combinatorialTags,
+            resultFacts,
+            inputFacts.homogeneousWeight);
+      }
+
+    ring_elem current = expression;
+    ExpressionFacts currentFacts = inputFacts;
+    int currentBasisId = sourceBasisId;
+    if (formula.resolvedChildPlans.size() !=
+        formula.childPlans.size())
+      {
+        ERROR("a basis-conversion composition reached execution "
+              "before its child plans were resolved");
+        return zero();
+      }
+    for (const auto *childDefinition :
+         formula.resolvedChildPlans)
+      {
+        ResolvedBasisConversionPlan child =
+            resolveBasisConversionPlanDefinition(
+                childDefinition);
+        if (error()) return zero();
+        if (child.sourceBasisId != currentBasisId)
           {
-            ERROR("a basis-conversion plan received input outside its "
-                  "canonical source-basis contract");
+            ERROR("a basis-conversion composition has incompatible "
+                  "runtime child endpoints");
             return zero();
           }
-        const bool needsRealizedFacts =
-            i + 1 < selection.plans.size() || resultFacts != nullptr;
         current = executeBasisConversionPlan(
-            plan,
+            child,
             current,
             combinatorialTags,
-            needsRealizedFacts ? &realizedFacts : nullptr,
-            facts->homogeneousWeight);
+            currentFacts,
+            nullptr);
         if (error()) return zero();
-        if (needsRealizedFacts) facts = &realizedFacts;
+        currentBasisId = child.targetBasisId;
+        // A child contract proves canonical target output, but ExpressionFacts
+        // represents exact support rather than an abstract guarantee. Inspect
+        // the realized intermediate before passing it to the next child so no
+        // condition or contract check can observe fabricated term counts.
+        currentFacts = inferCanonicalExpansionFacts(
+            current,
+            currentBasisId,
+            inputFacts.homogeneousWeight);
+        currentFacts.combinatorialTags = combinatorialTags;
+      }
+    if (currentBasisId != targetBasisId ||
+        !currentFacts.canonicalExpansionInBasis(targetBasisId))
+      {
+        ERROR("a basis-conversion composition violated its target "
+              "contract");
+        return zero();
       }
     if (resultFacts != nullptr)
       {
-        if (selection.plans.empty())
-          *resultFacts = inputFacts;
-        else
-          *resultFacts = std::move(realizedFacts);
+        *resultFacts = std::move(currentFacts);
+        resultFacts->combinatorialTags =
+            combinatorialTags;
       }
     return current;
+  }
+
+ring_elem SymmetricEngineRing::executeBasisConversionPlan(
+    const ResolvedBasisConversionPlan& plan,
+    ring_elem expression,
+    CombinatorialTags combinatorialTags,
+    const ExpressionFacts& inputFacts,
+    ExpressionFacts *resultFacts) const
+{
+    if (!plan.valid() ||
+        !inputFacts.canonicalExpansionInBasis(
+            plan.sourceBasisId))
+      {
+        ERROR("an invalid complete basis-conversion plan reached "
+              "the executor");
+        return zero();
+      }
+    struct ExecutionScope
+    {
+      size_t& depth;
+      explicit ExecutionScope(size_t& value) : depth(value)
+      {
+        ++depth;
+      }
+      ~ExecutionScope() { --depth; }
+    } executionScope(basisConversionPlanExecutionDepth);
+
+    const bool wholeExpressionOtherwise =
+        plan.definition->pieces ==
+            ExpressionPieceKind::WholeExpression &&
+        plan.definition->cases.size() == 1 &&
+        plan.definition->cases.front().condition.kind ==
+            ExpressionConditionKind::Otherwise;
+    ExpressionFacts executionFacts = inputFacts;
+    executionFacts.combinatorialTags = combinatorialTags;
+    const bool needsSelectionProfiles =
+        plan.definition->applicability.kind !=
+            ExpressionConditionKind::Always ||
+        (plan.definition->pieces ==
+             ExpressionPieceKind::WholeExpression &&
+         !wholeExpressionOtherwise);
+    // Term and homogeneous-component contexts derive their own profiles from
+    // the realized pieces. Only whole-expression conditions consume the
+    // endpoint-specific profile stored on ExpressionFacts.
+    if (needsSelectionProfiles)
+      enrichBasisConversionPlanSelectionFacts(
+          expression,
+          plan.targetBasisId,
+          executionFacts);
+    if (!basisConversionPlanApplicable(
+            plan, expression, executionFacts))
+      {
+        ERROR("a selected basis-conversion plan is inapplicable "
+              "to its runtime input: ",
+              plan.definition->id.value.c_str());
+        return zero();
+      }
+    if (std::getenv(
+            "M2_SYMMETRIC_RINGS_TRACE_CONVERSION") != nullptr)
+      std::fprintf(
+          stderr,
+          "SymmetricRings conversion-plan: source=%s target=%s "
+          "plan=%s\n",
+          basisKeyForId(plan.sourceBasisId).c_str(),
+          basisKeyForId(plan.targetBasisId).c_str(),
+          plan.definition->id.value.c_str());
+
+    if (wholeExpressionOtherwise)
+      {
+        // Most registered plans are one whole-expression formula. Their
+        // declarative meaning is exactly a direct call on the original input;
+        // constructing a one-piece partition and then copying and recollecting
+        // the complete expression would add work without changing semantics.
+        const bool needDirectFacts =
+            resultFacts != nullptr ||
+            plan.definition->outputGuarantee.kind !=
+                ExpressionConditionKind::Always;
+        ExpressionFacts directFacts;
+        ring_elem directResult =
+            executeBasisConversionFormula(
+                plan.definition->cases.front().formula,
+                plan.sourceBasisId,
+                plan.targetBasisId,
+                expression,
+                combinatorialTags,
+                executionFacts,
+                needDirectFacts ? &directFacts : nullptr);
+        if (error()) return zero();
+        if (needDirectFacts &&
+            !directFacts.canonicalExpansionInBasis(
+                plan.targetBasisId))
+          {
+            ERROR("a complete basis-conversion plan violated its "
+                  "canonical output contract");
+            return zero();
+          }
+        if (plan.definition->outputGuarantee.kind !=
+            ExpressionConditionKind::Always)
+          {
+            try
+              {
+                const auto outputContexts =
+                    buildExpressionConditionContexts(
+                        directResult,
+                        ExpressionPieceKind::WholeExpression,
+                        directFacts);
+                if (outputContexts.size() != 1 ||
+                    !expressionConditionHolds(
+                        plan.definition->outputGuarantee,
+                        outputContexts.front()))
+                  {
+                    ERROR("a complete basis-conversion plan violated its "
+                          "declared output guarantee");
+                    return zero();
+                  }
+              }
+            catch (const std::exception& exception)
+              {
+                ERROR("basis-conversion output-guarantee validation "
+                      "failed: ",
+                      exception.what());
+                return zero();
+              }
+          }
+        mutablePolyValue(directResult)->combinatorialTags =
+            combinatorialTags;
+        if (resultFacts != nullptr)
+          *resultFacts = std::move(directFacts);
+        return directResult;
+      }
+
+    std::vector<ExpressionConditionContext> pieces;
+    ExpressionConditionPartition partition;
+    try
+      {
+        pieces = buildExpressionConditionContexts(
+            expression,
+            plan.definition->pieces,
+            executionFacts);
+        std::vector<ExpressionCondition> conditions;
+        conditions.reserve(
+            plan.definition->cases.size());
+        for (const auto& item : plan.definition->cases)
+          conditions.push_back(item.condition);
+        partition = partitionExpressionConditionContexts(
+            pieces,
+            conditions,
+            polyValue(expression)->terms.size());
+      }
+    catch (const std::exception& exception)
+      {
+        ERROR("basis-conversion plan partitioning failed: ",
+              exception.what());
+        return zero();
+      }
+
+    const auto& sourceTerms =
+        polyValue(expression)->terms;
+    VECTOR(SymmetricTerm) resultTerms;
+    for (size_t caseIndex = 0;
+         caseIndex < plan.definition->cases.size();
+         ++caseIndex)
+      {
+        const auto& termPositions =
+            partition.termPositionsByCase[caseIndex];
+        if (termPositions.empty()) continue;
+
+        // A case formula receives the complete subexpression assigned to that
+        // case, not one invocation per term or component. This preserves the
+        // declarative semantics and lets fixed child plans inspect the actual
+        // aggregate support produced for the case.
+        VECTOR(SymmetricTerm) caseTerms;
+        caseTerms.reserve(termPositions.size());
+        for (size_t position : termPositions)
+          {
+            if (position >= sourceTerms.size())
+              {
+                ERROR("a basis-conversion piece contains an invalid "
+                      "term position");
+                return zero();
+              }
+            caseTerms.push_back(sourceTerms[position]);
+          }
+        ring_elem caseExpression =
+            fromTermVector(caseTerms, true);
+        ExpressionFacts caseFacts;
+        if (plan.definition->pieces ==
+            ExpressionPieceKind::WholeExpression)
+          caseFacts = executionFacts;
+        else
+          {
+            caseFacts = inferCanonicalExpansionFacts(
+                caseExpression,
+                plan.sourceBasisId);
+            caseFacts.combinatorialTags =
+                combinatorialTags;
+          }
+        ExpressionFacts convertedFacts;
+        ring_elem converted =
+            executeBasisConversionFormula(
+                plan.definition->cases[caseIndex].formula,
+                plan.sourceBasisId,
+                plan.targetBasisId,
+                caseExpression,
+                combinatorialTags,
+                caseFacts,
+                &convertedFacts);
+        if (error()) return zero();
+        if (!convertedFacts.canonicalExpansionInBasis(
+                plan.targetBasisId))
+          {
+            ERROR("a basis-conversion case violated its canonical "
+                  "target contract");
+            return zero();
+          }
+        for (const auto& term :
+             polyValue(converted)->terms)
+          appendTermIfNonZero(
+              resultTerms, term.coeff, term.monomial);
+      }
+
+    ring_elem result =
+        fromTermVector(resultTerms, false);
+    ExpressionFacts finalFacts =
+        inferCanonicalExpansionFacts(
+            result,
+            plan.targetBasisId,
+            executionFacts.homogeneousWeight);
+    finalFacts.combinatorialTags = combinatorialTags;
+    if (!finalFacts.canonicalExpansionInBasis(
+            plan.targetBasisId))
+      {
+        ERROR("a complete basis-conversion plan violated its "
+              "canonical output contract");
+        return zero();
+      }
+    if (plan.definition->outputGuarantee.kind !=
+        ExpressionConditionKind::Always)
+      {
+        try
+          {
+            const auto outputContexts =
+                buildExpressionConditionContexts(
+                    result,
+                    ExpressionPieceKind::WholeExpression,
+                    finalFacts);
+            if (outputContexts.size() != 1 ||
+                !expressionConditionHolds(
+                    plan.definition->outputGuarantee,
+                    outputContexts.front()))
+              {
+                ERROR("a complete basis-conversion plan violated its "
+                      "declared output guarantee");
+                return zero();
+              }
+          }
+        catch (const std::exception& exception)
+          {
+            ERROR("basis-conversion output-guarantee validation "
+                  "failed: ",
+                  exception.what());
+            return zero();
+          }
+      }
+    mutablePolyValue(result)->combinatorialTags =
+        combinatorialTags;
+    if (resultFacts != nullptr)
+      *resultFacts = std::move(finalFacts);
+    return result;
+  }
+
+bool SymmetricEngineRing::checkAllApplicableBasisConversionPlans(
+    ring_elem expression,
+    int sourceBasisId,
+    int targetBasisId,
+    CombinatorialTags combinatorialTags,
+    const ExpressionFacts& inputFacts,
+    ring_elem expectedResult) const
+{
+    if (std::getenv(
+            "M2_SYMMETRIC_RINGS_CHECK_ALL_CONVERSION_PLANS") ==
+        nullptr)
+      return true;
+
+    ExpressionFacts facts = inputFacts;
+    facts.combinatorialTags = combinatorialTags;
+    enrichBasisConversionPlanSelectionFacts(
+        expression, targetBasisId, facts);
+    size_t checked = 0;
+    for (const auto& plan :
+         registeredBasisConversionPlans(
+             sourceBasisId, targetBasisId))
+      {
+        if (!basisConversionPlanApplicable(
+                plan, expression, facts))
+          continue;
+        ring_elem candidate = executeBasisConversionPlan(
+            plan,
+            expression,
+            combinatorialTags,
+            facts);
+        if (error()) return false;
+        ++checked;
+        if (!is_equal(candidate, expectedResult))
+          {
+            ERROR("registered basis-conversion plan disagrees with "
+                  "the selected plan: ",
+                  plan.definition->id.value.c_str());
+            return false;
+          }
+      }
+    if (checked == 0)
+      {
+        ERROR("no applicable basis-conversion plan was available "
+              "for exhaustive checking");
+        return false;
+      }
+    return true;
   }
 
 // ============================================================================
 // Canonical Group Conversion Helper
 // ============================================================================
-// This helper owns grouping, weight-block selection, execution, and collection
-// for input that is already normalized, skew-free, and product-free.
+// This helper owns source-basis grouping, selected-plan execution, and final
+// collection for input that is already normalized, skew-free, and product-free.
+// Basis-specific partitioning belongs to the selected declarative plan.
 
 ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
     ring_elem f,
@@ -1987,7 +2938,6 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
     const bool trace =
         std::getenv(
             "M2_SYMMETRIC_RINGS_TRACE_CONVERSION") != nullptr;
-    BasisKind targetKind = basisKindForId(targetBasisId);
 
     // Exact zero/scalar metadata satisfies the target contract without basis
     // grouping or plan selection.
@@ -2003,71 +2953,66 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
         return result;
       }
 
-    // A pure canonical expansion can enter the picker directly. The sole
-    // exception is nonhomogeneous p-to-Schur conversion, whose weight blocks
-    // deliberately receive independent selections below.
+    // A pure canonical expansion can enter complete-plan selection directly.
+    // The selected declarative plan owns its basis-specific partitioning.
     if (knownFacts != nullptr && knownFacts->expandedBasis)
       {
         int sourceBasisId = *knownFacts->expandedBasis;
-        bool needsPowerSumWeightBlocks =
-            basisKindForId(sourceBasisId) == BasisKind::PowerSum &&
-            (targetKind == BasisKind::Schur ||
-             targetKind == BasisKind::SchurOmega) &&
-            !knownFacts->homogeneousWeight;
-        if (!needsPowerSumWeightBlocks)
+        ExpressionFacts resultFacts;
+        ring_elem result;
+        if (sourceBasisId == targetBasisId)
           {
-            // Most direct conversions consume only the exact canonical core.
-            // Copy the comparatively rich facts object only for power-sum
-            // policies that attach a transient selector profile.
-            ExpressionFacts enrichedFacts;
-            const ExpressionFacts *selectionFacts = knownFacts;
-            if (basisKindForId(sourceBasisId) == BasisKind::PowerSum)
-              {
-                enrichedFacts = *knownFacts;
-                enrichConversionSelectionFacts(
-                    f, targetBasisId, enrichedFacts);
-                selectionFacts = &enrichedFacts;
-              }
-            BasisConversionPlanSelection selection =
-                pickBasisConversionPlans(
+            result = copyPolyValue(polyValue(f));
+            resultFacts = *knownFacts;
+          }
+        else
+          {
+            ExpressionFacts selectedInputFacts = *knownFacts;
+            ResolvedBasisConversionPlan selection =
+                selectBasisConversionPlan(
+                    f,
                     sourceBasisId,
                     targetBasisId,
-                    *selectionFacts,
-                    combinatorialTags);
+                    *knownFacts,
+                    combinatorialTags,
+                    std::nullopt,
+                    &selectedInputFacts);
             if (error()) return zero();
-            ExpressionFacts resultFacts;
-            ring_elem result = executeBasisConversionPlans(
+            result = executeBasisConversionPlan(
                 selection,
                 f,
                 combinatorialTags,
-                *selectionFacts,
+                selectedInputFacts,
                 &resultFacts);
             if (error()) return zero();
-            if (selection.plans.empty())
-              {
-                result = copyPolyValue(polyValue(result));
-                resultFacts = *knownFacts;
-              }
-            if (!resultFacts.canonicalExpansionInBasis(targetBasisId))
-              {
-                ERROR("the canonical metadata bypass did not produce "
-                      "a target-basis expansion");
-                return zero();
-              }
-            attachExpressionFacts(
-                result,
-                resultFacts,
-                targetBasisId,
-                combinatorialTags);
-            return result;
+            if (!checkAllApplicableBasisConversionPlans(
+                    f,
+                    sourceBasisId,
+                    targetBasisId,
+                    combinatorialTags,
+                    selectedInputFacts,
+                    result))
+              return zero();
           }
+        if (!resultFacts.canonicalExpansionInBasis(targetBasisId))
+          {
+            ERROR("the canonical metadata bypass did not produce "
+                  "a target-basis expansion");
+            return zero();
+          }
+        attachExpressionFacts(
+            result,
+            resultFacts,
+            targetBasisId,
+            combinatorialTags);
+        return result;
       }
 
     struct PreparedConversion
     {
       ring_elem expression;
       ExpressionFacts facts;
-      BasisConversionPlanSelection selection;
+      std::optional<ResolvedBasisConversionPlan> selection;
     };
 
     std::vector<std::pair<int, VECTOR(SymmetricTerm)>> groups;
@@ -2103,13 +3048,19 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
     auto prepareGroup = [&](int sourceBasisId,
                             ring_elem expression,
                             ExpressionFacts facts) {
-      BasisConversionPlanSelection selection =
-          pickBasisConversionPlans(
+      std::optional<ResolvedBasisConversionPlan> selection;
+      if (sourceBasisId != targetBasisId)
+        {
+          selection = selectBasisConversionPlan(
+              expression,
               sourceBasisId,
               targetBasisId,
               facts,
-              combinatorialTags);
-      if (error()) return;
+              combinatorialTags,
+              std::nullopt,
+              &facts);
+          if (error()) return;
+        }
       preparedConversions.push_back({
           expression, std::move(facts), std::move(selection)});
     };
@@ -2132,77 +3083,33 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
         ExpressionFacts groupFacts = exactKnownGroup
             ? *knownFacts
             : inferExpressionFacts(groupExpression);
-        enrichConversionSelectionFacts(
-            groupExpression, targetBasisId, groupFacts);
-        bool splitPowerSumWeights =
-            basisKindForId(group.first) == BasisKind::PowerSum &&
-            (targetKind == BasisKind::Schur ||
-             targetKind == BasisKind::SchurOmega) &&
-            !groupFacts.homogeneousWeight;
-        if (!splitPowerSumWeights)
-          {
-            prepareGroup(
-                group.first, groupExpression, std::move(groupFacts));
-            if (error()) return zero();
-            continue;
-          }
-
-        if (trace)
-          std::fprintf(
-              stderr,
-              "SymmetricRings conversion-stage: source=%s target=%s "
-              "stage=weight-blocks blocks=%zu\n",
-              displayForBasis(group.first).c_str(),
-              displayForBasis(targetBasisId).c_str(),
-              groupFacts.weightTermPositions.size());
-        for (const auto& weightPositions :
-             groupFacts.weightTermPositions)
-          {
-            VECTOR(SymmetricTerm) blockTerms;
-            blockTerms.reserve(weightPositions.second.size());
-            for (size_t position : weightPositions.second)
-              {
-                if (position >= group.second.size())
-                  {
-                    ERROR("cached weight-block metadata is invalid");
-                    return zero();
-                  }
-                blockTerms.push_back(group.second[position]);
-              }
-            ring_elem blockExpression =
-                fromTermVector(blockTerms, true);
-            ExpressionFacts blockFacts =
-                inferCanonicalExpansionFacts(
-                    blockExpression,
-                    group.first,
-                    weightPositions.first);
-            if (!blockFacts.homogeneousWeight)
-              {
-                ERROR("a conversion weight block was not homogeneous");
-                return zero();
-              }
-            enrichConversionSelectionFacts(
-                blockExpression, targetBasisId, blockFacts);
-            prepareGroup(
-                group.first,
-                blockExpression,
-                std::move(blockFacts));
-            if (error()) return zero();
-          }
+        prepareGroup(
+            group.first, groupExpression, std::move(groupFacts));
+        if (error()) return zero();
       }
 
-    // Selection for every source/weight group is complete before any plan
-    // executes, so execution cannot introduce a hidden policy decision.
+    // Selection for every source group is complete before any group executes.
+    // Each selected definition fixes every case, kernel, and named child.
     VECTOR(SymmetricTerm) resultTerms = std::move(scalarTerms);
     for (const auto& prepared : preparedConversions)
       {
-        ring_elem converted =
-            executeBasisConversionPlans(
-                prepared.selection,
-                prepared.expression,
-                combinatorialTags,
-                prepared.facts);
+        ring_elem converted = prepared.selection
+            ? executeBasisConversionPlan(
+                  *prepared.selection,
+                  prepared.expression,
+                  combinatorialTags,
+                  prepared.facts)
+            : prepared.expression;
         if (error()) return zero();
+        if (prepared.selection &&
+            !checkAllApplicableBasisConversionPlans(
+                prepared.expression,
+                prepared.selection->sourceBasisId,
+                prepared.selection->targetBasisId,
+                combinatorialTags,
+                prepared.facts,
+                converted))
+          return zero();
         for (const auto& convertedTerm : polyValue(converted)->terms)
           appendTermIfNonZero(
               resultTerms,
@@ -2210,8 +3117,8 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
               convertedTerm.monomial);
       }
 
-    // Source and degree groups can overlap in the target. Merge them once,
-    // after every independently selected composition has executed.
+    // Source groups can overlap in the target. Merge them once, after every
+    // independently selected complete plan has executed.
     ring_elem result = fromTermVector(resultTerms, false);
     ExpressionFacts resultFacts =
         inferCanonicalExpansionFacts(result, targetBasisId);
@@ -2240,6 +3147,53 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
 // toBasis definition because product resolution in toBasis delegates to these
 // helpers. This dependency order keeps the owning workflow acyclic while the
 // block headers keep conversion and multiplication topics distinct.
+
+bool SymmetricEngineRing::isSchurCompatibleBasisKind(BasisKind kind)
+{
+    return kind == BasisKind::Schur ||
+           kind == BasisKind::Complete ||
+           kind == BasisKind::Elementary ||
+           kind == BasisKind::PowerSum;
+  }
+
+bool SymmetricEngineRing::isMonomialLikeCompatibleBasisKind(
+    BasisKind kind,
+    BasisKind target)
+{
+    return kind == target ||
+           kind == BasisKind::Complete ||
+           kind == BasisKind::Elementary ||
+           kind == BasisKind::PowerSum;
+  }
+
+std::string_view SymmetricEngineRing::multiplicationPlanIdentifier(
+    MultiplicationPlanId id)
+{
+    switch (id)
+      {
+        case MultiplicationPlanId::Unavailable:
+          return "unavailable";
+        case MultiplicationPlanId::SchurLittlewoodRichardson:
+          return "Schur-product:littlewood-richardson";
+        case MultiplicationPlanId::SchurHorizontalPieri:
+          return "Schur-product:horizontal-pieri";
+        case MultiplicationPlanId::SchurVerticalPieri:
+          return "Schur-product:vertical-pieri";
+        case MultiplicationPlanId::SchurBorderStrips:
+          return "Schur-product:border-strips";
+        case MultiplicationPlanId::SchurCompatibleFactorRules:
+          return "Schur-product:compatible-factor-rules";
+        case MultiplicationPlanId::MonomialLikeExponentSplittings:
+          return "monomial-like-product:exponent-splittings";
+        case MultiplicationPlanId::HallLittlewoodGenerators:
+          return "Hall-Littlewood-product:generators";
+        case MultiplicationPlanId::MultiplicativeTarget:
+          return "product:multiplicative-target";
+        case MultiplicationPlanId::PowerSums:
+          return "product:power-sums";
+      }
+    return "unavailable";
+  }
 
 const std::vector<SymmetricEngineRing::MultiplicationPlan>&
 SymmetricEngineRing::registeredMultiplicationPlans(
@@ -2278,18 +3232,10 @@ SymmetricEngineRing::buildMultiplicationPlans(
     if (rightFacts.expandedBasis)
       rightKind = basisKindForId(*rightFacts.expandedBasis);
 
-    auto isSchurCompatible = [](BasisKind kind) {
-      return kind == BasisKind::Schur ||
-             kind == BasisKind::Complete ||
-             kind == BasisKind::Elementary ||
-             kind == BasisKind::PowerSum;
-    };
-    if (targetKind == BasisKind::Schur && leftKind && rightKind &&
-        isSchurCompatible(*leftKind) &&
-        isSchurCompatible(*rightKind))
+    if (targetKind == BasisKind::Schur && leftKind && rightKind)
       {
-        std::string_view identifier =
-            "Schur-product:littlewood-richardson";
+        MultiplicationPlanId planId =
+            MultiplicationPlanId::SchurLittlewoodRichardson;
         int specializedKinds =
             static_cast<int>(*leftKind == BasisKind::Complete ||
                              *rightKind == BasisKind::Complete) +
@@ -2298,18 +3244,19 @@ SymmetricEngineRing::buildMultiplicationPlans(
             static_cast<int>(*leftKind == BasisKind::PowerSum ||
                              *rightKind == BasisKind::PowerSum);
         if (specializedKinds > 1)
-          identifier = "Schur-product:compatible-factor-rules";
+          planId =
+              MultiplicationPlanId::SchurCompatibleFactorRules;
         else if (*leftKind == BasisKind::Complete ||
                  *rightKind == BasisKind::Complete)
-          identifier = "Schur-product:horizontal-pieri";
+          planId = MultiplicationPlanId::SchurHorizontalPieri;
         else if (*leftKind == BasisKind::Elementary ||
                  *rightKind == BasisKind::Elementary)
-          identifier = "Schur-product:vertical-pieri";
+          planId = MultiplicationPlanId::SchurVerticalPieri;
         else if (*leftKind == BasisKind::PowerSum ||
                  *rightKind == BasisKind::PowerSum)
-          identifier = "Schur-product:border-strips";
+          planId = MultiplicationPlanId::SchurBorderStrips;
         plans.push_back({
-            identifier,
+            planId,
             MultiplicationKernel::SchurCompatibleFactors,
             -1,
             -1,
@@ -2317,34 +3264,17 @@ SymmetricEngineRing::buildMultiplicationPlans(
             true});
       }
 
-    auto isMonomialLikeCompatible =
-        [&](BasisKind kind) {
-          return kind == targetKind ||
-                 kind == BasisKind::Complete ||
-                 kind == BasisKind::Elementary ||
-                 kind == BasisKind::PowerSum;
-        };
     if ((targetKind == BasisKind::Monomial ||
-         targetKind == BasisKind::Forgotten) &&
-        leftKind && rightKind &&
-        isMonomialLikeCompatible(*leftKind) &&
-        isMonomialLikeCompatible(*rightKind))
+         targetKind == BasisKind::Forgotten))
       plans.push_back({
-          "monomial-like-product:exponent-splittings",
+          MultiplicationPlanId::MonomialLikeExponentSplittings,
           MultiplicationKernel::MonomialLikeExpansion,
           -1,
           -1,
           targetBasisId,
           true});
 
-    bool hallTarget =
-        targetKind == BasisKind::HallLittlewoodQ ||
-        targetKind == BasisKind::HallLittlewoodB ||
-        targetKind == BasisKind::HallLittlewoodP ||
-        targetKind == BasisKind::HallLittlewoodPOmega;
-    if (hallTarget && leftKind && rightKind &&
-        *leftKind != BasisKind::Custom &&
-        *rightKind != BasisKind::Custom)
+    if (isHallLittlewoodCapitalBasisKind(targetKind))
       {
         BasisKind generatorKind =
             targetKind == BasisKind::HallLittlewoodQ ||
@@ -2354,7 +3284,7 @@ SymmetricEngineRing::buildMultiplicationPlans(
         int generatorId = requiredBasisIdForKind(generatorKind);
         if (error()) return plans;
         plans.push_back({
-            "Hall-Littlewood-product:generators",
+            MultiplicationPlanId::HallLittlewoodGenerators,
             MultiplicationKernel::CanonicalBasisProduct,
             generatorId,
             generatorId,
@@ -2364,14 +3294,14 @@ SymmetricEngineRing::buildMultiplicationPlans(
 
     if (isMultiplicativeBasis(targetBasisId))
       plans.push_back({
-          "product:multiplicative-target",
+          MultiplicationPlanId::MultiplicativeTarget,
           MultiplicationKernel::CanonicalBasisProduct,
           targetBasisId,
           targetBasisId,
           targetBasisId,
           true});
     plans.push_back({
-        "product:power-sums",
+        MultiplicationPlanId::PowerSums,
         MultiplicationKernel::CanonicalBasisProduct,
         powerSumBasisId,
         powerSumBasisId,
@@ -2399,6 +3329,23 @@ bool SymmetricEngineRing::multiplicationPlanApplicable(
         !rightFacts.canonicalExpansionInBasis(
             *rightFacts.singleBasisElementId))
       return false;
+    const bool schurPlan =
+        plan.id == MultiplicationPlanId::SchurLittlewoodRichardson ||
+        plan.id == MultiplicationPlanId::SchurHorizontalPieri ||
+        plan.id == MultiplicationPlanId::SchurVerticalPieri ||
+        plan.id == MultiplicationPlanId::SchurBorderStrips ||
+        plan.id == MultiplicationPlanId::SchurCompatibleFactorRules;
+    if ((schurPlan &&
+         plan.kernel != MultiplicationKernel::SchurCompatibleFactors) ||
+        (plan.id ==
+             MultiplicationPlanId::MonomialLikeExponentSplittings &&
+         plan.kernel != MultiplicationKernel::MonomialLikeExpansion) ||
+        ((plan.id == MultiplicationPlanId::HallLittlewoodGenerators ||
+          plan.id == MultiplicationPlanId::MultiplicativeTarget ||
+          plan.id == MultiplicationPlanId::PowerSums) &&
+         plan.kernel != MultiplicationKernel::CanonicalBasisProduct) ||
+        plan.id == MultiplicationPlanId::Unavailable)
+      return false;
     if (plan.kernel == MultiplicationKernel::SchurCompatibleFactors)
       {
         if (!leftFacts.expandedBasis || !rightFacts.expandedBasis)
@@ -2406,15 +3353,10 @@ bool SymmetricEngineRing::multiplicationPlanApplicable(
         BasisKind leftKind = basisKindForId(*leftFacts.expandedBasis);
         BasisKind rightKind = basisKindForId(*rightFacts.expandedBasis);
         BasisKind targetKind = basisKindForId(targetBasisId);
-        auto compatible = [](BasisKind kind) {
-          return kind == BasisKind::Schur ||
-                 kind == BasisKind::Complete ||
-                 kind == BasisKind::Elementary ||
-                 kind == BasisKind::PowerSum;
-        };
         return plan.kernelOutputBasisId == targetBasisId &&
                targetKind == BasisKind::Schur &&
-               compatible(leftKind) && compatible(rightKind) &&
+               isSchurCompatibleBasisKind(leftKind) &&
+               isSchurCompatibleBasisKind(rightKind) &&
                leftFacts.skewFree && rightFacts.skewFree;
       }
     if (plan.kernel == MultiplicationKernel::MonomialLikeExpansion)
@@ -2424,16 +3366,13 @@ bool SymmetricEngineRing::multiplicationPlanApplicable(
         BasisKind leftKind = basisKindForId(*leftFacts.expandedBasis);
         BasisKind rightKind = basisKindForId(*rightFacts.expandedBasis);
         BasisKind targetKind = basisKindForId(targetBasisId);
-        auto compatible = [&](BasisKind kind) {
-          return kind == targetKind ||
-                 kind == BasisKind::Complete ||
-                 kind == BasisKind::Elementary ||
-                 kind == BasisKind::PowerSum;
-        };
         return plan.kernelOutputBasisId == targetBasisId &&
                (targetKind == BasisKind::Monomial ||
                 targetKind == BasisKind::Forgotten) &&
-               compatible(leftKind) && compatible(rightKind) &&
+               isMonomialLikeCompatibleBasisKind(
+                   leftKind, targetKind) &&
+               isMonomialLikeCompatibleBasisKind(
+                   rightKind, targetKind) &&
                leftFacts.skewFree && rightFacts.skewFree;
       }
     if (plan.kernel != MultiplicationKernel::CanonicalBasisProduct ||
@@ -2441,19 +3380,59 @@ bool SymmetricEngineRing::multiplicationPlanApplicable(
         plan.leftKernelBasisId <= 0 ||
         plan.rightKernelBasisId <= 0)
       return false;
-    return basisKindForId(plan.leftKernelBasisId) != BasisKind::Custom &&
-           basisKindForId(plan.rightKernelBasisId) != BasisKind::Custom;
+    switch (plan.id)
+      {
+        case MultiplicationPlanId::HallLittlewoodGenerators:
+          {
+            if (!leftFacts.expandedBasis || !rightFacts.expandedBasis)
+              return false;
+            const BasisKind targetKind = basisKindForId(targetBasisId);
+            const BasisKind leftKind =
+                basisKindForId(*leftFacts.expandedBasis);
+            const BasisKind rightKind =
+                basisKindForId(*rightFacts.expandedBasis);
+            return isHallLittlewoodCapitalBasisKind(targetKind) &&
+                   leftKind != BasisKind::Custom &&
+                   rightKind != BasisKind::Custom;
+          }
+        case MultiplicationPlanId::MultiplicativeTarget:
+          return plan.leftKernelBasisId == targetBasisId &&
+                 plan.rightKernelBasisId == targetBasisId &&
+                 plan.kernelOutputBasisId == targetBasisId &&
+                 isMultiplicativeBasis(targetBasisId);
+        case MultiplicationPlanId::PowerSums:
+          {
+            const int powerSumBasisId =
+                requiredBasisIdForKind(BasisKind::PowerSum);
+            return !error() &&
+                   plan.leftKernelBasisId == powerSumBasisId &&
+                   plan.rightKernelBasisId == powerSumBasisId &&
+                   plan.kernelOutputBasisId == powerSumBasisId;
+          }
+        case MultiplicationPlanId::Unavailable:
+        case MultiplicationPlanId::SchurLittlewoodRichardson:
+        case MultiplicationPlanId::SchurHorizontalPieri:
+        case MultiplicationPlanId::SchurVerticalPieri:
+        case MultiplicationPlanId::SchurBorderStrips:
+        case MultiplicationPlanId::SchurCompatibleFactorRules:
+        case MultiplicationPlanId::MonomialLikeExponentSplittings:
+          return false;
+      }
+    return false;
   }
 
 // ============================================================================
 // Multiplication-Plan Picker
 // ============================================================================
-// Operand basis compositions are selected here with the product kernel.
-// Support-dependent conversion edges are finalized from exact facts at their
-// execution stage boundaries by the owning composition workflow.
+// Operand conversions are selected here as complete plans together with the
+// product kernel. The later post-kernel conversion is intentionally selected
+// by the owning workflow only after the kernel's realized output has been
+// normalized and inspected.
 
 SymmetricEngineRing::MultiplicationPlanSelection
 SymmetricEngineRing::selectMultiplicationPlan(
+    ring_elem f,
+    ring_elem g,
     const ExpressionFacts& leftFacts,
     const ExpressionFacts& rightFacts,
     int targetBasisId) const
@@ -2468,7 +3447,8 @@ SymmetricEngineRing::selectMultiplicationPlan(
           if (plan.leftKernelBasisId > 0 &&
               *leftFacts.expandedBasis != plan.leftKernelBasisId)
             selection.leftConversion =
-                pickBasisConversionPlans(
+                selectBasisConversionPlan(
+                    f,
                     *leftFacts.expandedBasis,
                     plan.leftKernelBasisId,
                     leftFacts,
@@ -2477,7 +3457,8 @@ SymmetricEngineRing::selectMultiplicationPlan(
           if (plan.rightKernelBasisId > 0 &&
               *rightFacts.expandedBasis != plan.rightKernelBasisId)
             selection.rightConversion =
-                pickBasisConversionPlans(
+                selectBasisConversionPlan(
+                    g,
                     *rightFacts.expandedBasis,
                     plan.rightKernelBasisId,
                     rightFacts,
@@ -2489,14 +3470,14 @@ SymmetricEngineRing::selectMultiplicationPlan(
     if (forced != nullptr)
       {
         for (const auto& plan : plans)
-          if (plan.identifier == forced &&
+          if (multiplicationPlanIdentifier(plan.id) == forced &&
               multiplicationPlanApplicable(
                   plan, leftFacts, rightFacts, targetBasisId))
             return completeSelection(plan);
         ERROR("the requested multiplication plan is unknown or inapplicable: ",
               forced);
         int powerSumId = requiredBasisIdForKind(BasisKind::PowerSum);
-        return {{"unavailable",
+        return {{MultiplicationPlanId::Unavailable,
                  MultiplicationKernel::CanonicalBasisProduct,
                  powerSumId,
                  powerSumId,
@@ -2512,7 +3493,7 @@ SymmetricEngineRing::selectMultiplicationPlan(
         return completeSelection(plan);
     ERROR("the multiplication registry has no applicable plan");
     int powerSumId = requiredBasisIdForKind(BasisKind::PowerSum);
-    return {{"unavailable",
+    return {{MultiplicationPlanId::Unavailable,
              MultiplicationKernel::CanonicalBasisProduct,
              powerSumId,
              powerSumId,
@@ -2525,8 +3506,9 @@ SymmetricEngineRing::selectMultiplicationPlan(
 // ============================================================================
 // Policy-Free Multiplication Kernel Executor
 // ============================================================================
-// The try-style shared helpers predate this workflow. A false result here is a
-// contract violation, not a signal to select a fallback plan.
+// Try-style mathematical helpers revalidate the selected plan's structural
+// preconditions. A false result here is a contract violation, not a signal to
+// select a fallback plan.
 
 ring_elem SymmetricEngineRing::executeMultiplicationKernel(
     const MultiplicationPlan& plan,
@@ -2580,10 +3562,10 @@ ring_elem SymmetricEngineRing::executeMultiplicationKernel(
 // Binary Multiplication Workflow
 // ============================================================================
 // Stages are deliberately visible and linear: convert operands, execute the
-// selected kernel, normalize its declared output, select the post-kernel
-// composition, execute it, and validate the public target contract.
+// selected kernel, normalize its declared output, select and execute one
+// complete post-kernel conversion plan, and validate the target contract.
 
-ring_elem SymmetricEngineRing::executeMultiplicationWorkflow(
+ring_elem SymmetricEngineRing::runMultiplicationWorkflow(
     const MultiplicationPlanSelection& selection,
     ring_elem f,
     ring_elem g,
@@ -2605,9 +3587,10 @@ ring_elem SymmetricEngineRing::executeMultiplicationWorkflow(
           std::fprintf(
               stderr,
               "SymmetricRings multiplication-stage: "
-              "stage=convert-left plans=%zu\n",
-              selection.leftConversion->plans.size());
-        left = executeBasisConversionPlans(
+              "stage=convert-left plan=%s\n",
+              selection.leftConversion->
+                  definition->id.value.c_str());
+        left = executeBasisConversionPlan(
             *selection.leftConversion,
             f,
             polyValue(f)->combinatorialTags,
@@ -2620,9 +3603,10 @@ ring_elem SymmetricEngineRing::executeMultiplicationWorkflow(
           std::fprintf(
               stderr,
               "SymmetricRings multiplication-stage: "
-              "stage=convert-right plans=%zu\n",
-              selection.rightConversion->plans.size());
-        right = executeBasisConversionPlans(
+              "stage=convert-right plan=%s\n",
+              selection.rightConversion->
+                  definition->id.value.c_str());
+        right = executeBasisConversionPlan(
             *selection.rightConversion,
             g,
             polyValue(g)->combinatorialTags,
@@ -2635,7 +3619,7 @@ ring_elem SymmetricEngineRing::executeMultiplicationWorkflow(
           stderr,
           "SymmetricRings multiplication-stage: stage=kernel "
           "plan=%s output-basis=%s canonical=%s\n",
-          plan.identifier.data(),
+          multiplicationPlanIdentifier(plan.id).data(),
           basisKeyForId(plan.kernelOutputBasisId).c_str(),
           plan.kernelOutputCanonical ? "yes" : "no");
     ring_elem kernelResult = executeMultiplicationKernel(
@@ -2684,22 +3668,24 @@ ring_elem SymmetricEngineRing::executeMultiplicationWorkflow(
     ExpressionFacts resultFacts;
     if (plan.kernelOutputBasisId != targetBasisId)
       {
-        enrichConversionSelectionFacts(
-            canonicalKernelResult, targetBasisId, kernelFacts);
-        BasisConversionPlanSelection postKernelSelection =
-            pickBasisConversionPlans(
+        ResolvedBasisConversionPlan postKernelSelection =
+            selectBasisConversionPlan(
+                canonicalKernelResult,
                 plan.kernelOutputBasisId,
                 targetBasisId,
                 kernelFacts,
-                tags);
+                tags,
+                std::nullopt,
+                &kernelFacts);
         if (error()) return zero();
         if (trace)
           std::fprintf(
               stderr,
               "SymmetricRings multiplication-stage: "
-              "stage=post-kernel-conversion plans=%zu\n",
-              postKernelSelection.plans.size());
-        result = executeBasisConversionPlans(
+              "stage=post-kernel-conversion plan=%s\n",
+              postKernelSelection.
+                  definition->id.value.c_str());
+        result = executeBasisConversionPlan(
             postKernelSelection,
             canonicalKernelResult,
             tags,
@@ -2741,6 +3727,8 @@ ring_elem SymmetricEngineRing::multiplyBasisElementsWithFacts(
 {
     MultiplicationPlanSelection selection =
         selectMultiplicationPlan(
+            f,
+            g,
             leftFacts, rightFacts, targetBasisId);
     if (error()) return zero();
     if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") != nullptr)
@@ -2748,8 +3736,8 @@ ring_elem SymmetricEngineRing::multiplyBasisElementsWithFacts(
           stderr,
           "SymmetricRings multiplication-plan: target=%s plan=%s\n",
           displayForBasis(targetBasisId).c_str(),
-          selection.plan.identifier.data());
-    return executeMultiplicationWorkflow(
+          multiplicationPlanIdentifier(selection.plan.id).data());
+    return runMultiplicationWorkflow(
         selection,
         f,
         g,
@@ -2759,51 +3747,6 @@ ring_elem SymmetricEngineRing::multiplyBasisElementsWithFacts(
         attachResultFacts);
 }
 
-ring_elem SymmetricEngineRing::multiplyBasisElementsToBasis(
-    ring_elem f,
-    ring_elem g,
-    int targetBasisId) const
-{
-    auto strictFacts =
-        [&](ring_elem operand) {
-          const auto *poly = polyValue(operand);
-          if (poly->terms.size() != 1 ||
-              poly->terms.front().monomial.data.empty() ||
-              atomLengthAt(poly->terms.front().monomial, 0) !=
-                  poly->terms.front().monomial.data.size())
-            return ExpressionFacts{};
-          return basisElementFactsFromAtom(
-              poly->terms.front().monomial,
-              0,
-              poly->terms.front().coeff);
-        };
-    ExpressionFacts leftFacts = strictFacts(f);
-    ExpressionFacts rightFacts = strictFacts(g);
-    if (!leftFacts.singleBasisElement() ||
-        !rightFacts.singleBasisElement() ||
-        !leftFacts.singleBasisElementId ||
-        !rightFacts.singleBasisElementId ||
-        !leftFacts.singleBasisElementCoefficientOne.value_or(false) ||
-        !rightFacts.singleBasisElementCoefficientOne.value_or(false) ||
-        !leftFacts.canonicalExpansionInBasis(
-            *leftFacts.singleBasisElementId) ||
-        !rightFacts.canonicalExpansionInBasis(
-            *rightFacts.singleBasisElementId))
-      {
-        ERROR("the binary multiplication workflow expects exactly two "
-              "coefficient-one normalized non-skew basis elements");
-        return zero();
-      }
-
-    return multiplyBasisElementsWithFacts(
-        f,
-        g,
-        leftFacts,
-        rightFacts,
-        targetBasisId,
-        true);
-  }
-
 // ============================================================================
 // One-Term Product Resolver
 // ============================================================================
@@ -2811,7 +3754,8 @@ ring_elem SymmetricEngineRing::multiplyBasisElementsToBasis(
 // identity factors, applies the surviving coefficient once at the end, and
 // uses the multiplicative-target or pairwise branch prescribed by the design.
 
-ring_elem SymmetricEngineRing::multiplyTermToBasis(
+SymmetricEngineRing::ResolvedProductTerm
+SymmetricEngineRing::multiplyTermToBasis(
     const SymmetricTerm& term,
     int targetBasisId) const
 {
@@ -2868,27 +3812,21 @@ ring_elem SymmetricEngineRing::multiplyTermToBasis(
           const int sourceBasisId = *factor.facts.expandedBasis;
           CombinatorialTags factorTags =
               polyValue(factor.expression)->combinatorialTags;
-          ExpressionFacts enrichedFacts;
-          const ExpressionFacts *selectionFacts = &factor.facts;
-          if (basisKindForId(sourceBasisId) == BasisKind::PowerSum)
-            {
-              enrichedFacts = factor.facts;
-              enrichConversionSelectionFacts(
-                  factor.expression, targetBasisId, enrichedFacts);
-              selectionFacts = &enrichedFacts;
-            }
-          BasisConversionPlanSelection selection =
-              pickBasisConversionPlans(
+          if (sourceBasisId == targetBasisId)
+            return factor.expression;
+          ResolvedBasisConversionPlan selection =
+              selectBasisConversionPlan(
+                  factor.expression,
                   sourceBasisId,
                   targetBasisId,
-                  *selectionFacts,
+                  factor.facts,
                   factorTags);
           if (error()) return zero();
-          return executeBasisConversionPlans(
+          return executeBasisConversionPlan(
               selection,
               factor.expression,
               factorTags,
-              *selectionFacts);
+              factor.facts);
         };
 
     ring_elem result;
@@ -2926,7 +3864,7 @@ ring_elem SymmetricEngineRing::multiplyTermToBasis(
         for (const auto& factor : factors)
           {
             ring_elem converted = convertFactor(factor);
-            if (error()) return zero();
+            if (error()) return {zero(), {}};
             convertedFactors.push_back(converted);
           }
         // A balanced fold limits the size disparity of intermediate products
@@ -2944,7 +3882,7 @@ ring_elem SymmetricEngineRing::multiplyTermToBasis(
                   {
                     ring_elem product = mult(
                         convertedFactors[i], convertedFactors[i + 1]);
-                    if (error()) return zero();
+                    if (error()) return {zero(), {}};
                     nextLevel.push_back(product);
                   }
               }
@@ -2967,19 +3905,40 @@ ring_elem SymmetricEngineRing::multiplyTermToBasis(
             factors[0].facts,
             factors[1].facts,
             targetBasisId,
-            factors.size() > 2);
+            true);
         for (size_t i = 2; i < factors.size() && !error(); ++i)
           result = multiplyToBasis(
               result, factors[i].expression, targetBasisId);
       }
-    if (error()) return zero();
+    if (error()) return {zero(), {}};
     // Coefficients are immutable ring elements. Avoid walking and copying a
     // potentially large expansion when the product term already has unit
     // coefficient.
-    if (coefficientRing->is_equal(
+    if (!coefficientRing->is_equal(
             term.coeff, coefficientRing->one()))
-      return result;
-    return scaled(term.coeff, result);
+      result = scaled(term.coeff, result);
+    if (error()) return {zero(), {}};
+
+    auto metadataFacts = expressionFactsFromMetadata(result);
+    ExpressionFacts resultFacts = metadataFacts
+        ? *metadataFacts
+        : inferCanonicalExpansionFacts(
+              result, targetBasisId);
+    if (!resultFacts.canonicalExpansionInBasis(targetBasisId))
+      {
+        ERROR("a resolved product term violated its canonical "
+              "target-basis contract");
+        return {zero(), {}};
+      }
+    resultFacts.combinatorialTags =
+        polyValue(result)->combinatorialTags;
+    if (!metadataFacts)
+      attachExpressionFacts(
+          result,
+          resultFacts,
+          targetBasisId,
+          resultFacts.combinatorialTags);
+    return {result, std::move(resultFacts)};
   }
 
 // ============================================================================
@@ -3022,9 +3981,11 @@ ring_elem SymmetricEngineRing::multiplyToBasis(
       {
         MultiplicationPlanSelection selection =
             selectMultiplicationPlan(
+                f,
+                g,
                 *strictLeftFacts, *strictRightFacts, targetBasisId);
         if (error()) return zero();
-        return executeMultiplicationWorkflow(
+        return runMultiplicationWorkflow(
             selection,
             f,
             g,
@@ -3070,9 +4031,11 @@ ring_elem SymmetricEngineRing::multiplyToBasis(
         // of extracting two temporary atoms and inferring them again.
         MultiplicationPlanSelection selection =
             selectMultiplicationPlan(
+                left,
+                right,
                 leftFacts, rightFacts, targetBasisId);
         if (error()) return zero();
-        return executeMultiplicationWorkflow(
+        return runMultiplicationWorkflow(
             selection,
             left,
             right,
@@ -3124,31 +4087,24 @@ ring_elem SymmetricEngineRing::multiplyToBasis(
               return zero();
             }
           const int sourceBasisId = *prepared.facts.expandedBasis;
-          ExpressionFacts enrichedFacts;
-          const ExpressionFacts *selectionFacts =
-              &prepared.facts;
-          if (basisKindForId(sourceBasisId) == BasisKind::PowerSum)
-            {
-              enrichedFacts = prepared.facts;
-              enrichConversionSelectionFacts(
-                  prepared.factor, targetBasisId, enrichedFacts);
-              selectionFacts = &enrichedFacts;
-            }
-          BasisConversionPlanSelection conversion =
-              pickBasisConversionPlans(
+          if (sourceBasisId == targetBasisId)
+            return prepared.factor;
+          ResolvedBasisConversionPlan conversion =
+              selectBasisConversionPlan(
+                  prepared.factor,
                   sourceBasisId,
                   targetBasisId,
-                  *selectionFacts,
+                  prepared.facts,
                   tags);
           if (error()) return zero();
-          return executeBasisConversionPlans(
+          return executeBasisConversionPlan(
               conversion,
               prepared.factor,
               tags,
-              *selectionFacts);
+              prepared.facts);
         };
 
-    // Structured kernels need no operand compositions, and their selection
+    // Structured kernels need no operand conversion plans, and their selection
     // depends only on the two source bases and target. Reuse that completed
     // selection across equal-basis pairs in this distributive request.
     std::map<
@@ -3180,7 +4136,7 @@ ring_elem SymmetricEngineRing::multiplyToBasis(
                   targetBasisId);
               auto reusable = reusablePairSelections.find(key);
               if (reusable != reusablePairSelections.end())
-                product = executeMultiplicationWorkflow(
+                product = runMultiplicationWorkflow(
                     reusable->second,
                     leftTerm.factor,
                     rightTerm.factor,
@@ -3192,6 +4148,8 @@ ring_elem SymmetricEngineRing::multiplyToBasis(
                 {
                   MultiplicationPlanSelection selection =
                       selectMultiplicationPlan(
+                          leftTerm.factor,
+                          rightTerm.factor,
                           leftTerm.facts,
                           rightTerm.facts,
                           targetBasisId);
@@ -3199,7 +4157,7 @@ ring_elem SymmetricEngineRing::multiplyToBasis(
                   if (!selection.leftConversion &&
                       !selection.rightConversion)
                     reusablePairSelections.emplace(key, selection);
-                  product = executeMultiplicationWorkflow(
+                  product = runMultiplicationWorkflow(
                       selection,
                       leftTerm.factor,
                       rightTerm.factor,
@@ -3234,8 +4192,7 @@ ring_elem SymmetricEngineRing::multiplyToBasis(
 // ============================================================================
 // This is the sole owning engine workflow for built-in conversion. Its stages
 // are: exact-metadata bypass or normalization, product resolution, source-basis
-// grouping, composition selection, exact stage-edge selection and execution,
-// and collection.
+// grouping, complete-plan selection and execution, and collection.
 
 ring_elem SymmetricEngineRing::toBasis(
     ring_elem f,
@@ -3311,15 +4268,33 @@ ring_elem SymmetricEngineRing::toBasis(
           &normalizedFacts);
 
     // Stage 2: resolve every remaining multifactor term into the target.
-    VECTOR(SymmetricTerm) preparedTerms;
-    size_t resolvedProductTerms = 0;
-    bool passthroughTermsAlreadyInTarget = true;
     const auto& normalizedTerms = polyValue(normalized)->terms;
     if (normalizedFactorCounts.size() != normalizedTerms.size())
       {
         ERROR("normalized factor-count profile is inconsistent");
         return zero();
       }
+    if (normalizedTerms.size() == 1 &&
+        normalizedFactorCounts.front() > 1)
+      {
+        ResolvedProductTerm resolved =
+            multiplyTermToBasis(
+                normalizedTerms.front(),
+                targetBasisId);
+        if (error()) return zero();
+        resolved.facts.combinatorialTags =
+            combinatorialTags;
+        // multiplyTermToBasis already attached the same exact structural
+        // facts. Only the semantic tag belongs to the owning outer operation.
+        mutablePolyValue(
+            resolved.expression)->combinatorialTags =
+                combinatorialTags;
+        return resolved.expression;
+      }
+
+    VECTOR(SymmetricTerm) preparedTerms;
+    size_t resolvedProductTerms = 0;
+    bool passthroughTermsAlreadyInTarget = true;
     for (size_t termPosition = 0;
          termPosition < normalizedTerms.size();
          ++termPosition)
@@ -3335,10 +4310,11 @@ ring_elem SymmetricEngineRing::toBasis(
               passthroughTermsAlreadyInTarget = false;
             continue;
           }
-        ring_elem converted =
+        ResolvedProductTerm resolved =
             multiplyTermToBasis(term, targetBasisId);
         if (error()) return zero();
-        for (const auto& convertedTerm : polyValue(converted)->terms)
+        for (const auto& convertedTerm :
+             polyValue(resolved.expression)->terms)
           appendTermIfNonZero(
               preparedTerms,
               convertedTerm.coeff,
@@ -3363,7 +4339,7 @@ ring_elem SymmetricEngineRing::toBasis(
         // Every multifactor term was resolved into the target above, and all
         // scalar/single-factor passthrough terms were already target-native.
         // The combined expression is therefore target-closed; do not regroup
-        // it merely to execute an identity composition.
+        // it merely to execute an identity plan.
         ExpressionFacts preparedFacts =
             inferCanonicalExpansionFacts(
                 prepared, targetBasisId);

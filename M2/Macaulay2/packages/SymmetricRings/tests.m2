@@ -864,6 +864,13 @@ TEST ///
     assertConversionAgreement(p_3 + 2*p_2 + p_1, S)
     assertConversionAgreement(p_3 + 2*p_2 + p_1, Somega)
     assertConversionAgreement(p_3 + 2*p_2 + 3*p_1, Q)
+    assert(toBasis(S_{2,1}, h) == h_{2,1} - h_3)
+    assert(toBasis(Somega_{2,1}, e) == e_{2,1} - e_3)
+    laterEdgeWeightInput = e_3 + 2*e_2 + 3*e_1
+    assert(toBasis(toBasis(laterEdgeWeightInput, S), e) ==
+           laterEdgeWeightInput)
+    assert(toBasis(toBasis(laterEdgeWeightInput, Somega), e) ==
+           laterEdgeWeightInput)
     hybridAgreementInput =
         p_{4,4,3,3} + p_{4,4,3,2,1} + p_{4,3,3,2,2} +
         p_{4,3,2,2,1,1,1} + p_{3,3,3,3,2} +
@@ -900,6 +907,12 @@ TEST ///
     assert(toBasis(cachedScalar, S) == 3_R4)
     assert(toBasis(cachedZero, S) == 0_R4)
     assert(try (multiplyToBasis(S_2*S_1, S_1, S); false) else true)
+///
+
+TEST ///
+    RSomegaJacobiTrudi =
+        symmetricRing(QQ, "NormalizeSomega" => false)
+    assert(toBasis(Somega_{2,1}, e) == e_{2,1} - e_3)
 ///
 
 TEST ///

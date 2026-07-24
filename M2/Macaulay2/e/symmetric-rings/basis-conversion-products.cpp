@@ -56,7 +56,10 @@ mpz_class SymmetricEngineRing::littlewoodRichardsonCoefficientViaTableaux(const 
     int alphabet = static_cast<int>(content.size());
     std::vector<int> remaining(content.begin(), content.end());
     std::vector<int> used(alphabet, 0);
-    mpz_class count = 0;
+    // Every completed tableau consumes a recursion state, so the configured
+    // state limit also proves that this counter fits in size_t. Convert to
+    // arbitrary precision only at the public coefficient boundary.
+    size_t count = 0;
     size_t states = 0;
 
     std::function<void(size_t)> fill = [&](size_t k) {
@@ -109,7 +112,7 @@ mpz_class SymmetricEngineRing::littlewoodRichardsonCoefficientViaTableaux(const 
     };
 
     fill(0);
-    return count;
+    return mpz_class(static_cast<unsigned long>(count));
   }
 
 void SymmetricEngineRing::partitionsContainingRec(const Partition& lambda,
@@ -750,9 +753,12 @@ ring_elem SymmetricEngineRing::powerSumsToSchurViaAbacusRimHooks(
   }
 
 // ============================================================================
-// Schur Product Planning And Execution
+// Schur-Compatible Factor Kernel
 // ============================================================================
-// Factor classification selects LR, Pieri, border-strip, or converted-factor methods.
+// These choices are local mathematical methods inside one already-selected
+// multiplication kernel; they do not select another multiplication plan.
+// Factor classification chooses LR, Pieri, border-strip, or converted-factor
+// methods for each mathematical factor.
 
 ring_elem SymmetricEngineRing::multiplySchurExpansionsViaLittlewoodRichardson(ring_elem f,
                                   ring_elem g,
@@ -783,89 +789,6 @@ ring_elem SymmetricEngineRing::multiplySchurExpansionsViaLittlewoodRichardson(ri
             }
         }
     return coeffMapToElement(result, schurId, schurDisplay, schurOrder, false);
-  }
-
-bool SymmetricEngineRing::tryBasisElementToSchurFactors(
-    const SymmetricMonomial& monomial,
-    size_t pos,
-    int targetBasisId,
-    std::vector<Partition>& factors) const
-{
-    if (atomIsSkewAt(monomial, pos)) return false;
-
-    int basisId = atomBasisIdAt(monomial, pos);
-    Partition index = basisElementIndex(monomial, pos);
-    if (basisId == targetBasisId)
-      {
-        if (!isPartitionIndex(index)) return false;
-        factors.push_back(trimTrailingZerosPartition(index));
-        return true;
-      }
-
-    BasisKind kind = basisKindForId(basisId);
-    if (kind != BasisKind::Complete && kind != BasisKind::Elementary)
-      return false;
-
-    for (int part : index)
-      {
-        if (part < 0) return false;
-        if (part == 0) continue;
-        if (kind == BasisKind::Complete)
-          factors.push_back(Partition{part});
-        else
-          factors.push_back(Partition(static_cast<size_t>(part), 1));
-      }
-    return true;
-  }
-
-bool SymmetricEngineRing::trySchurProductMonomialToSchurViaLittlewoodRichardson(
-    const SymmetricMonomial& monomial,
-    int targetBasisId,
-    const std::string& targetDisplay,
-    int targetDisplayOrder,
-    ring_elem& result) const
-{
-    if (!hasBasisKind(targetBasisId, BasisKind::Schur)) return false;
-    if (monomial.data.empty())
-      {
-        result = one();
-        return true;
-      }
-
-    CoeffMap current = oneCoeffMap();
-    size_t pos = 0;
-    while (pos < monomial.data.size())
-      {
-        std::vector<Partition> factors;
-        if (!tryBasisElementToSchurFactors(
-                monomial, pos, targetBasisId, factors))
-          return false;
-
-        for (const auto& index : factors)
-          {
-            CoeffMap next;
-            for (const auto& term : current)
-              for (const auto& product :
-                   littlewoodRichardsonProductViaCoefficientEnumeration(
-                       term.first, index))
-                {
-                  ring_elem coeff = product.coefficient == 1
-                      ? term.second
-                      : coefficientRing->mult(cachedInteger(product.coefficient),
-                                              term.second);
-                  addCoeff(next, product.partition, coeff);
-                }
-            current = next;
-          }
-        pos += atomLengthAt(monomial, pos);
-      }
-
-    result = coeffMapToElement(current,
-                               targetBasisId,
-                               targetDisplay,
-                               targetDisplayOrder,
-                               false);
-    return true;
   }
 
 bool SymmetricEngineRing::trySchurCompatibleMonomialToSchur(
@@ -1178,34 +1101,6 @@ bool SymmetricEngineRing::schurCompatibleFactorsToSchurDispatch(
     return true;
   }
 
-bool SymmetricEngineRing::trySchurCompatibleExpressionToSchur(ring_elem f,
-                          int targetBasisId,
-                          const std::string& targetDisplay,
-                          int targetDisplayOrder,
-                          ring_elem& result) const
-{
-    if (!hasBasisKind(targetBasisId, BasisKind::Schur)) return false;
-    const auto *poly = polyValue(f);
-    VECTOR(SymmetricTerm) terms;
-    for (const auto& term : poly->terms)
-      {
-        ring_elem converted;
-        if (!trySchurCompatibleMonomialToSchur(term.monomial,
-                                             targetBasisId,
-                                             targetDisplay,
-                                             targetDisplayOrder,
-                                             converted))
-          return false;
-        const auto *convertedPoly = polyValue(converted);
-        terms.reserve(terms.size() + convertedPoly->terms.size());
-        for (const auto& convertedTerm : convertedPoly->terms)
-          terms.push_back({coefficientRing->mult(term.coeff, convertedTerm.coeff),
-                           convertedTerm.monomial});
-      }
-    result = fromTermVector(terms, false);
-    return true;
-  }
-
 bool SymmetricEngineRing::tryProductToSchurViaCompatibleFactors(ring_elem f,
                           ring_elem g,
                           int targetBasisId,
@@ -1273,7 +1168,9 @@ mpz_class SymmetricEngineRing::monomialProductCoefficientViaExponentSplittings(
       return true;
     };
 
-    mpz_class total = 0;
+    // As above, each accepted splitting is a visited recursion state. Keep
+    // the search counter native and allocate an mpz only for the result.
+    size_t total = 0;
     size_t states = 0;
     std::function<void(size_t)> split = [&](size_t pos) {
       if (!consumeRecursiveState(states, "monomial exponent splitting"))
@@ -1313,7 +1210,7 @@ mpz_class SymmetricEngineRing::monomialProductCoefficientViaExponentSplittings(
     };
 
     split(0);
-    return total;
+    return mpz_class(static_cast<unsigned long>(total));
   }
 
 const std::vector<PartitionCoefficientTerm>&

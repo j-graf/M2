@@ -363,26 +363,20 @@ ring_elem SymmetricEngineRing::plethysm(ring_elem f, ring_elem g) const
     ring_elem result = powerSumPlethysmViaAdamsOperations(fPowerSums, gPowerSums);
     if (error()) return zero();
 
-    SymmetricConversionMetadata metadata;
-    metadata.pureBasis = pBasisId;
-    metadata.expandedBasis = pBasisId;
-    metadata.termCount = polyValue(result)->terms.size();
-    metadata.factorBases = std::vector<int>{pBasisId};
-    metadata.singleTerm = polyValue(result)->terms.size() == 1;
-    metadata.noProducts = true;
-    metadata.singleBasisElement = polyValue(result)->terms.size() == 1 &&
-                          !polyValue(result)->terms[0].monomial.data.empty();
-    metadata.normalized = true;
-    metadata.skewFree = true;
-    metadata.collected = true;
+    std::optional<int> resultWeight;
     int outerWeight = elementWeight(f);
     int innerWeight = elementWeight(g);
     if (outerWeight >= 0 && innerWeight >= 0)
-      metadata.homogeneousWeight = outerWeight * innerWeight;
-    auto *resultPoly = mutablePolyValue(result);
-    resultPoly->combinatorialTags =
+      resultWeight = outerWeight * innerWeight;
+    ExpressionFacts resultFacts = inferCanonicalExpansionFacts(
+        result, pBasisId, resultWeight);
+    if (error()) return zero();
+    const CombinatorialTags tags =
         combinatorialTagMask(CombinatorialTag::Plethysm);
-    resultPoly->conversionMetadata = metadata;
+    auto *resultPoly = mutablePolyValue(result);
+    resultPoly->combinatorialTags = tags;
+    resultFacts.combinatorialTags = tags;
+    attachExpressionFacts(result, resultFacts, pBasisId, tags);
     return result;
   }
 

@@ -90,10 +90,34 @@ class SymmetricConversionMetadata : public our_gc_cleanup
   SymmetricConversionMetadata& operator=(
       SymmetricConversionMetadata&&) = default;
 
+  // Exact canonical facts form one indivisible contract. Arithmetic may keep
+  // individually valid hints after invalidating that contract, but no caller
+  // may use the remaining fields to justify a canonical-workflow bypass.
+  void invalidateExactExpressionFacts()
+  {
+    expressionFactsComplete = false;
+    singleBasisElementCoefficientOne.reset();
+  }
+
+  // Numeric basis IDs describe one SymmetricEngineRing. Cross-ring fallback
+  // reconstruction may preserve shapes and weights without preserving that
+  // ID map, so discard the complete basis-identity cluster together.
+  void discardRingLocalBasisFacts()
+  {
+    invalidateExactExpressionFacts();
+    pureBasis.reset();
+    expandedBasis.reset();
+    factorBases.reset();
+    singleBasisElementId.reset();
+    singleBasisElementIndex.reset();
+  }
+
   // True only when the exact canonical core needed for a workflow bypass was
   // attached together. Expensive selector-only profiles remain optional and
   // are enriched lazily from the expression when a policy consumes them.
-  // Arithmetic that can change the core leaves this false.
+  // Arithmetic that can change the core leaves this false. Predicates such as
+  // single-term, single-basis-element, and product-free are deliberately not
+  // stored: consumers derive them from the counts below.
   bool expressionFactsComplete = false;
   std::optional<int> pureBasis;
   std::optional<int> expandedBasis;
@@ -104,15 +128,11 @@ class SymmetricConversionMetadata : public our_gc_cleanup
   std::optional<size_t> productTermCount;
   std::optional<size_t> maximumFactorsPerTerm;
   std::optional<size_t> maximumPartitionLength;
-  std::optional<double> density;
   std::optional<std::vector<int>> factorBases;
   std::optional<size_t> skewFactorCount;
   std::optional<int> singleBasisElementId;
   std::optional<Partition> singleBasisElementIndex;
   std::optional<bool> singleBasisElementCoefficientOne;
-  std::optional<bool> singleBasisElement;
-  std::optional<bool> singleTerm;
-  std::optional<bool> noProducts;
   bool normalized = false;
   bool skewFree = false;
   bool collected = false;

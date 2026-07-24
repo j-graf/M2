@@ -12,6 +12,9 @@
 
   struct ExpressionFacts
   {
+    // Every ExpressionFacts value is an exact description of one realized
+    // expression. Canonical-output contracts are plan/kernel properties and
+    // must never be represented by invented support counts in this type.
     bool normalized = true;
     bool skewFree = true;
     bool collected = true;
@@ -27,14 +30,14 @@
     size_t skewFactorCount = 0;
     std::optional<int> pureBasis;
     std::optional<int> expandedBasis;
-    std::map<int, std::vector<size_t>> weightTermPositions;
     std::optional<int> homogeneousWeight;
     size_t maximumPartitionLength = 0;
-    std::optional<size_t> possibleTermCount;
-    std::optional<double> density;
     std::optional<bool> allPowerSumTermsSingleCycles;
     std::optional<size_t> completeFriendlyPowerSumTermCount;
     std::optional<std::vector<int>> commonPowerSumParts;
+    // Selection profiles are expression- and target-specific. This marker
+    // lets the selected executor reuse them without rescanning the same input.
+    std::optional<int> planSelectionTargetBasisId;
     std::optional<int> singleBasisElementId;
     std::optional<Partition> singleBasisElementIndex;
     std::optional<bool> singleBasisElementCoefficientOne;
@@ -77,7 +80,13 @@
     }
     bool singleBasisElement() const
     {
-      return termCount == 1 && singleFactorTermCount == 1 && normalized;
+      return termCount == 1 &&
+             scalarTermCount == 0 &&
+             singleFactorTermCount == 1 &&
+             productTermCount == 0 &&
+             normalized &&
+             skewFree &&
+             collected;
     }
     bool canonicalExpansionInBasis(int basisId) const
     {
@@ -108,12 +117,25 @@
       const SymmetricMonomial& monomial,
       size_t pos,
       ring_elem coefficient) const;
-  void enrichConversionSelectionFacts(
+  void enrichBasisConversionPlanSelectionFacts(
       ring_elem f,
       int targetBasisId,
       ExpressionFacts& facts) const;
   std::optional<ExpressionFacts> expressionFactsFromMetadata(
       ring_elem f) const;
+  void invalidateExactExpressionFacts(
+      SymmetricConversionMetadataSlot& metadata) const;
+  void refreshSingleBasisElementCoefficientFact(
+      SymmetricConversionMetadata& metadata,
+      const SymmetricRingPoly *poly) const;
+  SymmetricConversionMetadata metadataAfterAddition(
+      const SymmetricConversionMetadata& left,
+      const SymmetricConversionMetadata& right,
+      const SymmetricRingPoly *result) const;
+  SymmetricConversionMetadata metadataAfterProduct(
+      const SymmetricConversionMetadata& left,
+      const SymmetricConversionMetadata& right,
+      const SymmetricRingPoly *result) const;
   void attachExpressionFacts(
       ring_elem f,
       const ExpressionFacts& facts,
@@ -129,16 +151,18 @@
       ring_elem f,
       ExpressionFacts& resultFacts,
       std::vector<size_t> *termFactorCounts = nullptr) const;
-  ExpressionFacts conservativeExpressionFactsForBasis(
-      const ExpressionFacts& sourceFacts,
-      int basisId) const;
+  std::vector<ExpressionConditionContext>
+  buildExpressionConditionContexts(
+      ring_elem expression,
+      ExpressionPieceKind pieces,
+      const ExpressionFacts& facts) const;
 
 // ============================================================================
 // Basis-Conversion Plan Contracts
 // ============================================================================
-// A plan is one complete conversion between adjacent bases.  The registry is a
-// policy-free catalog, the picker chooses a composition, and the executor
-// performs the already-selected plans without choosing a replacement.
+// A plan is one complete source-to-target conversion. The registry is a
+// policy-free catalog, the picker chooses one top-level plan, and the generic
+// executor follows that plan's fixed formulas without choosing a replacement.
 
   enum class BasisConversionKernel
   {
@@ -161,13 +185,9 @@
     PowerSumsToElementaryLogarithm,
     PowerSumsToSchurBorderStrips,
     PowerSumsToSchurAbacusRimHooks,
-    PowerSumsToSchurAbacusAndComplete,
-    PowerSumsToSchurComplete,
     PowerSumsToSchurCharacters,
     PowerSumsToSchurOmegaBorderStrips,
     PowerSumsToSchurOmegaAbacusRimHooks,
-    PowerSumsToSchurOmegaAbacusAndComplete,
-    PowerSumsToSchurOmegaComplete,
     PowerSumsToSchurOmegaCharacters,
     PowerSumsToHallLittlewoodQGeneratorLogarithm,
     PowerSumsToHallLittlewoodBGeneratorLogarithm,
@@ -178,36 +198,74 @@
     PowerSumsToForgottenTransition,
     HallLittlewoodNormalization,
     SchurOmegaConjugation,
+    SchurToCompleteJacobiTrudi,
+    SchurOmegaToElementaryJacobiTrudi,
     CompleteToSchurRecursive,
     HallLittlewoodGeneratorToCapitalTriangular
   };
 
-  enum class BasisConversionInputShape
+  // The registry stores complete source-to-target plans. A case formula is an
+  // atomic kernel or a fixed sequence of named plans. A one-plan sequence is
+  // delegation; a longer sequence is mathematical composition.
+  struct BasisConversionPlanId
   {
-    CanonicalExpansion,
-    SingleBasisElement,
-    SingleCyclePowerSumExpansion,
-    MixedCompleteFriendlyPowerSumExpansion
+    std::string value;
+
+    bool operator==(const BasisConversionPlanId& other) const
+    {
+      return value == other.value;
+    }
   };
 
-  struct BasisConversionPlan
+  enum class ConversionFormulaKind
   {
-    std::string_view identifier;
-    int sourceBasisId;
-    int targetBasisId;
-    BasisConversionKernel kernel;
-    BasisConversionInputShape inputShape;
+    AtomicKernel,
+    PlanComposition
   };
 
-  struct BasisConversionPlanSelection
+  struct BasisConversionPlanDefinition;
+
+  struct ConversionFormula
   {
-    std::vector<int> basisComposition;
-    std::vector<BasisConversionPlan> plans;
-    // A later edge may have been provisionally selected from guarantees
-    // because its exact intermediate expression did not yet exist. Such an
-    // edge is reselected from exact facts at its execution stage boundary.
-    // Explicitly forced plans are never reselected.
-    std::vector<bool> reselectFromExactIntermediate;
+    ConversionFormulaKind kind =
+        ConversionFormulaKind::AtomicKernel;
+    BasisConversionKernel kernel =
+        BasisConversionKernel::Unavailable;
+    std::vector<BasisConversionPlanId> childPlans;
+    // Database validation resolves stable identifiers once. Runtime execution
+    // then follows definition pointers and resolves only ring-local basis IDs.
+    mutable std::vector<const BasisConversionPlanDefinition *>
+        resolvedChildPlans;
+  };
+
+  struct BasisConversionPlanCase
+  {
+    ExpressionCondition condition;
+    ConversionFormula formula;
+  };
+
+  struct BasisConversionPlanDefinition
+  {
+    BasisConversionPlanId id;
+    BasisKind sourceBasisKind;
+    BasisKind targetBasisKind;
+    ExpressionCondition applicability;
+    ExpressionPieceKind pieces;
+    std::vector<BasisConversionPlanCase> cases;
+    // Every plan already guarantees a canonical target expansion. This
+    // condition records only a stronger mathematical postcondition, when one
+    // is needed to prove a later child's applicability. always() means that
+    // the plan promises no additional shape/profile condition.
+    ExpressionCondition outputGuarantee = always();
+  };
+
+  struct ResolvedBasisConversionPlan
+  {
+    const BasisConversionPlanDefinition *definition = nullptr;
+    int sourceBasisId = -1;
+    int targetBasisId = -1;
+
+    bool valid() const { return definition != nullptr; }
   };
 
 // ============================================================================
@@ -215,13 +273,55 @@
 // ============================================================================
 // Registration declares mathematical availability without selection policy.
 
-  const std::vector<BasisConversionPlan>&
+  static ConversionFormula kernelFormula(
+      BasisConversionKernel kernel);
+  static ConversionFormula planFormula(
+      BasisConversionPlanId childPlan);
+  static ConversionFormula compositionFormula(
+      std::initializer_list<BasisConversionPlanId> childPlans);
+  static const std::vector<BasisConversionPlanDefinition>&
+  basisConversionPlanDatabase();
+  static const std::map<
+      std::string,
+      const BasisConversionPlanDefinition *>&
+  basisConversionPlansById();
+  static const std::map<
+      std::pair<BasisKind, BasisKind>,
+      std::vector<const BasisConversionPlanDefinition *>>&
+  basisConversionPlansByEndpoints();
+  static const BasisConversionPlanDefinition *
+  basisConversionPlanDefinition(
+      const BasisConversionPlanId& id);
+  struct BasisConversionKernelContract
+  {
+    BasisConversionKernelContract() = default;
+    BasisConversionKernelContract(bool supports)
+        : supportsEndpoints(supports)
+    {
+    }
+    bool supportsEndpoints = false;
+    // Conversion kernels always return canonical target expansions. This
+    // condition records only a stronger mathematical postcondition available
+    // to a following child plan.
+    ExpressionCondition outputGuarantee = always();
+  };
+  static BasisConversionKernelContract basisConversionKernelContract(
+      BasisConversionKernel kernel,
+      BasisKind source,
+      BasisKind target);
+  static void validateBasisConversionPlanDatabase();
+  const std::vector<ResolvedBasisConversionPlan>&
   registeredBasisConversionPlans(
       int sourceBasisId,
       int targetBasisId) const;
-  std::vector<BasisConversionPlan> buildBasisConversionPlans(
-      int sourceBasisId,
-      int targetBasisId) const;
+  ResolvedBasisConversionPlan resolveBasisConversionPlan(
+      const BasisConversionPlanId& id) const;
+  ResolvedBasisConversionPlan resolveBasisConversionPlanDefinition(
+      const BasisConversionPlanDefinition *definition) const;
+  mutable std::map<
+      std::pair<int, int>,
+      std::vector<ResolvedBasisConversionPlan>>
+      resolvedBasisConversionPlanCache;
 
 // ============================================================================
 // Basis-Conversion Applicability And Selection
@@ -229,76 +329,71 @@
 // Applicability is mathematical; costs and pickers own performance policy.
 
   bool basisConversionPlanApplicable(
-      const BasisConversionPlan& plan,
+      const ResolvedBasisConversionPlan& plan,
+      ring_elem expression,
       const ExpressionFacts& facts) const;
   size_t basisConversionPlanCost(
-      const BasisConversionPlan& plan,
+      const ResolvedBasisConversionPlan& plan,
       const ExpressionFacts& facts,
       CombinatorialTags combinatorialTags) const;
-  BasisConversionPlan selectBasisConversionPlan(
+  ResolvedBasisConversionPlan selectBasisConversionPlan(
+      ring_elem expression,
       int sourceBasisId,
       int targetBasisId,
       const ExpressionFacts& facts,
       CombinatorialTags combinatorialTags,
       const std::optional<std::string>& forcedIdentifier =
-          std::nullopt) const;
-  BasisConversionPlanSelection pickBasisConversionPlans(
-      int sourceBasisId,
-      int targetBasisId,
-      const ExpressionFacts& facts,
-      CombinatorialTags combinatorialTags) const;
-
-// ============================================================================
-// Composite Schur Kernels
-// ============================================================================
-
-  ring_elem powerSumsToSchurViaComplete(
-      ring_elem f,
-      int targetBasisId,
-      const std::string& targetDisplay,
-      int targetOrder) const;
-  ring_elem powerSumsToSchurViaAbacusAndComplete(
-      ring_elem f,
-      int targetBasisId,
-      const std::string& targetDisplay,
-      int targetOrder) const;
+          std::nullopt,
+      ExpressionFacts *selectionFacts = nullptr) const;
 
 // ============================================================================
 // Basis-Conversion Execution
 // ============================================================================
 // Executors run selected plans and never choose a replacement.
 
-  ring_elem executeBasisConversionPlan(
-      const BasisConversionPlan& plan,
+  ring_elem executeBasisConversionKernel(
+      BasisConversionKernel kernel,
+      int sourceBasisId,
+      int targetBasisId,
       ring_elem expression,
       CombinatorialTags combinatorialTags,
       ExpressionFacts *resultFacts,
       const std::optional<int>& knownHomogeneousWeight =
           std::nullopt) const;
-  ring_elem executeBasisConversionPlans(
-      const BasisConversionPlanSelection& selection,
+  ring_elem executeBasisConversionFormula(
+      const ConversionFormula& formula,
+      int sourceBasisId,
+      int targetBasisId,
       ring_elem expression,
       CombinatorialTags combinatorialTags,
       const ExpressionFacts& inputFacts,
       ExpressionFacts *resultFacts = nullptr) const;
+  ring_elem executeBasisConversionPlan(
+      const ResolvedBasisConversionPlan& plan,
+      ring_elem expression,
+      CombinatorialTags combinatorialTags,
+      const ExpressionFacts& inputFacts,
+      ExpressionFacts *resultFacts = nullptr) const;
+  bool checkAllApplicableBasisConversionPlans(
+      ring_elem expression,
+      int sourceBasisId,
+      int targetBasisId,
+      CombinatorialTags combinatorialTags,
+      const ExpressionFacts& inputFacts,
+      ring_elem expectedResult) const;
   ring_elem convertCanonicalExpressionToBasis(
       ring_elem f,
       int targetBasisId,
       CombinatorialTags combinatorialTags,
       const ExpressionFacts *knownFacts = nullptr) const;
-  mutable std::map<
-      std::pair<int, int>,
-      std::vector<BasisConversionPlan>>
-      basisConversionPlanRegistryCache;
 
 // ============================================================================
 // Multiplication Plan Contracts
 // ============================================================================
 // A multiplication plan declares every operand conversion and the basis and
-// canonical-form guarantee of its kernel output. Basis compositions are fixed
-// before execution. Data-dependent kernels within those compositions are
-// selected at their stage boundaries from exact realized facts, matching the
-// owning workflow's staged-selection contract.
+// canonical-form guarantee of its kernel output. Operand conversions are fixed
+// before kernel execution; the owning workflow selects a support-dependent
+// post-kernel conversion only after the declared output has been realized.
 
   enum class MultiplicationKernel
   {
@@ -307,9 +402,23 @@
     CanonicalBasisProduct
   };
 
+  enum class MultiplicationPlanId
+  {
+    Unavailable,
+    SchurLittlewoodRichardson,
+    SchurHorizontalPieri,
+    SchurVerticalPieri,
+    SchurBorderStrips,
+    SchurCompatibleFactorRules,
+    MonomialLikeExponentSplittings,
+    HallLittlewoodGenerators,
+    MultiplicativeTarget,
+    PowerSums
+  };
+
   struct MultiplicationPlan
   {
-    std::string_view identifier;
+    MultiplicationPlanId id;
     MultiplicationKernel kernel;
     // A positive operand basis requests an explicit pre-kernel conversion.
     // Structured kernels use -1 because they consume the original compatible
@@ -325,8 +434,8 @@
   struct MultiplicationPlanSelection
   {
     MultiplicationPlan plan;
-    std::optional<BasisConversionPlanSelection> leftConversion;
-    std::optional<BasisConversionPlanSelection> rightConversion;
+    std::optional<ResolvedBasisConversionPlan> leftConversion;
+    std::optional<ResolvedBasisConversionPlan> rightConversion;
   };
 
 // ============================================================================
@@ -342,12 +451,19 @@
       const ExpressionFacts& leftFacts,
       const ExpressionFacts& rightFacts,
       int targetBasisId) const;
+  static bool isSchurCompatibleBasisKind(BasisKind kind);
+  static bool isMonomialLikeCompatibleBasisKind(
+      BasisKind kind, BasisKind target);
+  static std::string_view multiplicationPlanIdentifier(
+      MultiplicationPlanId id);
   bool multiplicationPlanApplicable(
       const MultiplicationPlan& plan,
       const ExpressionFacts& leftFacts,
       const ExpressionFacts& rightFacts,
       int targetBasisId) const;
   MultiplicationPlanSelection selectMultiplicationPlan(
+      ring_elem f,
+      ring_elem g,
       const ExpressionFacts& leftFacts,
       const ExpressionFacts& rightFacts,
       int targetBasisId) const;
@@ -356,7 +472,7 @@
       ring_elem f,
       ring_elem g,
       int targetBasisId) const;
-  ring_elem executeMultiplicationWorkflow(
+  ring_elem runMultiplicationWorkflow(
       const MultiplicationPlanSelection& selection,
       ring_elem f,
       ring_elem g,
@@ -371,11 +487,12 @@
       const ExpressionFacts& rightFacts,
       int targetBasisId,
       bool attachResultFacts) const;
-  ring_elem multiplyBasisElementsToBasis(
-      ring_elem f,
-      ring_elem g,
-      int targetBasisId) const;
-  ring_elem multiplyTermToBasis(
+  struct ResolvedProductTerm
+  {
+    ring_elem expression;
+    ExpressionFacts facts;
+  };
+  ResolvedProductTerm multiplyTermToBasis(
       const SymmetricTerm& term,
       int targetBasisId) const;
   mutable std::map<

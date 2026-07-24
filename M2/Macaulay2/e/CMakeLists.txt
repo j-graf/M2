@@ -175,6 +175,7 @@ set(SRCLIST
   symmetric-rings/presentation
   symmetric-rings/symmetric-engine-ring
   symmetric-rings/expression-inspection
+  symmetric-rings/expression-conditions
   symmetric-rings/basis-coefficient
   symmetric-rings/basis-conversion-policy
   symmetric-rings/basis-conversion
@@ -503,6 +504,8 @@ if(BUILD_TESTING)
     unit-tests/PointArray.cpp
     unit-tests/SubsetTest.cpp
     unit-tests/basics-test.cpp
+    unit-tests/expression-conditions-test.cpp
+    unit-tests/symmetric-conversion-metadata-test.cpp
 
     unit-tests/MatrixIOTest.cpp
     unit-tests/fromStream.cpp

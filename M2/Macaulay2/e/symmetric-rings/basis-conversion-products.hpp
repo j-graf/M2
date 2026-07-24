@@ -85,10 +85,10 @@
           int targetDisplayOrder) const;
 
 // ============================================================================
-// Schur Product Planning And Execution
+// Schur-Compatible Factor Kernel
 // ============================================================================
-// Factor classification selects LR, Pieri, border-strip, or converted-factor
-// methods.
+// This is intrinsic factor-level mathematics inside the selected Schur product
+// kernel. It is not the top-level multiplication-plan picker.
 
   struct SchurCompatibleFactor
   {
@@ -123,15 +123,6 @@
                                       int schurId,
                                       const std::string& schurDisplay,
                                       int schurOrder) const;
-  bool tryBasisElementToSchurFactors(const SymmetricMonomial& monomial,
-                              size_t pos,
-                              int targetBasisId,
-                              std::vector<Partition>& factors) const;
-  bool trySchurProductMonomialToSchurViaLittlewoodRichardson(const SymmetricMonomial& monomial,
-                                       int targetBasisId,
-                                       const std::string& targetDisplay,
-                                       int targetDisplayOrder,
-                                       ring_elem& result) const;
   bool trySchurCompatibleMonomialToSchur(const SymmetricMonomial& monomial,
                                            int targetBasisId,
                                            const std::string& targetDisplay,
@@ -153,11 +144,6 @@
           const std::string& targetDisplay,
           int targetDisplayOrder,
           ring_elem& result) const;
-  bool trySchurCompatibleExpressionToSchur(ring_elem f,
-                              int targetBasisId,
-                              const std::string& targetDisplay,
-                              int targetDisplayOrder,
-                              ring_elem& result) const;
   bool tryProductToSchurViaCompatibleFactors(ring_elem f,
                               ring_elem g,
                               int targetBasisId,

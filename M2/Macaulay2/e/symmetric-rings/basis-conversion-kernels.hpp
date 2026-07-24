@@ -68,8 +68,12 @@
   int popcountMask(size_t mask) const;
   int selectedGreaterThan(size_t mask, size_t col, size_t n) const;
   ring_elem jacobiTrudi(const Partition& outer,
-                            const Partition& inner,
-                            int basisId) const;
+                        const Partition& inner,
+                        int basisId) const;
+  ring_elem canonicalSchurLikeExpressionToGeneratorsViaJacobiTrudi(
+      ring_elem f,
+      int sourceBasisId,
+      int targetBasisId) const;
  public:
   ring_elem jacobiTrudiBasis(int basisId,
                                  const Partition& outer,

@@ -4,6 +4,7 @@
 #define M2_SYMMETRIC_RINGS_SYMMETRIC_ENGINE_RING_HPP_
 
 #include "symmetric-rings/partitions.hpp"
+#include "symmetric-rings/expression-conditions.hpp"
 #include "symmetric-rings/operation-records.hpp"
 #include "symmetric-rings/storage.hpp"
 
@@ -14,6 +15,7 @@
 #include "rings/ringelem.hpp"
 
 #include <array>
+#include <initializer_list>
 #include <map>
 #include <optional>
 #include <string>
@@ -70,6 +72,10 @@ class SymmetricEngineRing : public Ring
   mutable ComputationLimits computationLimits;
   mutable std::map<int, BasisDescriptor> basisDescriptors;
   mutable std::map<BasisKind, int> basisIdsByKind;
+  // Stable declarative plan IDs are process-wide, while their numeric basis
+  // endpoints are ring-local. Cache that final resolution per ring.
+  mutable std::map<std::string, std::pair<int, int>>
+      resolvedBasisConversionEndpointCache;
 
   // Classical and Hall-Littlewood conversion state.
   mutable GCMap<int, ring_elem> completeToPowerSumsCache;
@@ -95,6 +101,9 @@ class SymmetricEngineRing : public Ring
   mutable GCMap<int, CoeffMap> powerSumToBGeneratorMapCache;
   mutable GCMap<int, GCMap<std::string, ring_elem>> monomialToPowerSumCache;
   mutable GCMap<int, GCMap<std::string, ring_elem>> forgottenToPowerSumCache;
+  // A runtime invariant guard: executing a fixed conversion plan may recurse
+  // into named children, but it must never invoke performance selection.
+  mutable size_t basisConversionPlanExecutionDepth = 0;
 
   // Schur conversion and product state.
   mutable std::map<std::string, std::vector<SchurConversionRecipeEntry>>
@@ -127,6 +136,7 @@ class SymmetricEngineRing : public Ring
   bool isMultiplicativeBasis(int basisId) const;
   BasisKind basisKindForId(int basisId) const;
   BasisKind basisKindFromCanonicalKey(const std::string& key) const;
+  static bool isHallLittlewoodCapitalBasisKind(BasisKind kind);
   bool hasBasisKind(int basisId, BasisKind kind) const;
   int basisIdForKind(BasisKind kind) const;
   int registeredPowerSumBasisId() const;
@@ -138,6 +148,8 @@ class SymmetricEngineRing : public Ring
   std::string basisKeyForId(int basisId) const;
   int basisOrderForId(int basisId) const;
   const CharacterTable& characterTable(int degree) const;
+  const std::vector<mpz_class>& characterTableRow(
+      const CharacterTable& table, size_t row) const;
   mpz_class characterTableValue(
       const CharacterTable& table, size_t row, size_t col) const;
   mpz_class characterValueWithinLimits(
@@ -149,8 +161,22 @@ class SymmetricEngineRing : public Ring
   bool estimatedMemoryWithinLimit(
       size_t count, size_t bytesPerItem, const char *operation) const;
   bool determinantStatesWithinLimit(size_t states, const char *operation) const;
-  bool consumeRecursiveState(size_t& states, const char *operation) const;
+  [[noreturn]] void recursiveStateLimitExceeded(
+      const char *operation) const;
+  bool consumeRecursiveState(size_t& states, const char *operation) const
+  {
+    // This check occurs at every node in several combinatorial recursions.
+    // Keep the successful path inline and leave diagnostic construction on
+    // the cold, out-of-line failure path.
+    if (states < computationLimits.maxRecursiveStates)
+      {
+        ++states;
+        return true;
+      }
+    recursiveStateLimitExceeded(operation);
+  }
   void requireCacheEntryCapacity(const char *operation) const;
+  void requireCacheEntryCapacity(size_t count, const char *operation) const;
   void requirePartitionWithinWeightLimit(
       const Partition& index, const char *operation) const;
   void requireWeightWithinLimit(long long weight, const char *operation) const;

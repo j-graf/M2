@@ -498,12 +498,14 @@ ring_elem SymmetricEngineRing::negate(const ring_elem f) const
     const auto *poly = polyValue(f);
     result->combinatorialTags = poly->combinatorialTags;
     result->conversionMetadata = poly->conversionMetadata;
-    // Negation can change the exact coefficient-one single-element fact.
-    if (result->conversionMetadata)
-      result->conversionMetadata->expressionFactsComplete = false;
     result->terms.reserve(poly->terms.size());
     for (const auto& term : poly->terms)
       result->terms.push_back({coefficientRing->negate(term.coeff), term.monomial});
+    // Negation preserves support and canonical form. Refresh the only
+    // coefficient-sensitive exact fact instead of discarding the full profile.
+    if (result->conversionMetadata)
+      refreshSingleBasisElementCoefficientFact(
+          *result->conversionMetadata, result);
     return makePolyValue(result);
   }
 
@@ -515,42 +517,11 @@ ring_elem SymmetricEngineRing::add(const ring_elem f, const ring_elem g) const
       mutablePolyValue(value)->combinatorialTags =
           left->combinatorialTags | right->combinatorialTags;
       if (!left->conversionMetadata || !right->conversionMetadata) return value;
-      const auto& leftMetadata = *left->conversionMetadata;
-      const auto& rightMetadata = *right->conversionMetadata;
-      SymmetricConversionMetadata metadata;
-      if (leftMetadata.pureBasis == rightMetadata.pureBasis)
-        metadata.pureBasis = leftMetadata.pureBasis;
-      if (leftMetadata.expandedBasis == rightMetadata.expandedBasis)
-        metadata.expandedBasis = leftMetadata.expandedBasis;
-      if (leftMetadata.homogeneousWeight == rightMetadata.homogeneousWeight)
-        metadata.homogeneousWeight = leftMetadata.homogeneousWeight;
-      if (leftMetadata.maximumPartitionLength &&
-          rightMetadata.maximumPartitionLength)
-        metadata.maximumPartitionLength = std::max(
-            *leftMetadata.maximumPartitionLength,
-            *rightMetadata.maximumPartitionLength);
-      if (leftMetadata.factorBases && rightMetadata.factorBases)
-        {
-          std::vector<int> factors = *leftMetadata.factorBases;
-          factors.insert(factors.end(),
-                         rightMetadata.factorBases->begin(),
-                         rightMetadata.factorBases->end());
-          std::sort(factors.begin(), factors.end());
-          factors.erase(std::unique(factors.begin(), factors.end()), factors.end());
-          metadata.factorBases = std::move(factors);
-        }
       const auto *resultPoly = polyValue(value);
-      metadata.termCount = resultPoly->terms.size();
-      metadata.singleTerm = resultPoly->terms.size() == 1;
-      metadata.singleBasisElement = resultPoly->terms.size() == 1 &&
-                            !resultPoly->terms[0].monomial.data.empty();
-      if (leftMetadata.noProducts && rightMetadata.noProducts)
-        metadata.noProducts = *leftMetadata.noProducts &&
-                              *rightMetadata.noProducts;
-      metadata.normalized = leftMetadata.normalized && rightMetadata.normalized;
-      metadata.skewFree = leftMetadata.skewFree && rightMetadata.skewFree;
-      metadata.collected = true;
-      mutablePolyValue(value)->conversionMetadata = std::move(metadata);
+      mutablePolyValue(value)->conversionMetadata = metadataAfterAddition(
+          *left->conversionMetadata,
+          *right->conversionMetadata,
+          resultPoly);
       return value;
     };
     if (left->terms.empty()) return copyPolyValue(right);
@@ -605,15 +576,19 @@ SymmetricRingPoly *SymmetricEngineRing::multByCoefficient(ring_elem coeff,
     if (coefficientRing->is_zero(coeff)) return result;
     result->combinatorialTags = poly->combinatorialTags;
     result->conversionMetadata = poly->conversionMetadata;
-    // Only multiplication by one preserves every coefficient-sensitive fact.
-    if (result->conversionMetadata &&
-        !coefficientRing->is_equal(coeff, coefficientRing->one()))
-      result->conversionMetadata->expressionFactsComplete = false;
     result->terms.reserve(poly->terms.size());
     for (const auto& term : poly->terms)
       {
         ring_elem c = coefficientRing->mult(coeff, term.coeff);
         if (!coefficientRing->is_zero(c)) result->terms.push_back({c, term.monomial});
+      }
+    if (result->conversionMetadata)
+      {
+        if (result->terms.size() != poly->terms.size())
+          invalidateExactExpressionFacts(result->conversionMetadata);
+        else
+          refreshSingleBasisElementCoefficientFact(
+              *result->conversionMetadata, result);
       }
     return result;
   }
@@ -724,45 +699,11 @@ ring_elem SymmetricEngineRing::mult(const ring_elem f, const ring_elem g) const
     auto preserveProductMetadata = [&](ring_elem value) {
       mutablePolyValue(value)->combinatorialTags = productTags;
       if (!left->conversionMetadata || !right->conversionMetadata) return value;
-      const auto& leftMetadata = *left->conversionMetadata;
-      const auto& rightMetadata = *right->conversionMetadata;
-      SymmetricConversionMetadata metadata;
-      if (leftMetadata.pureBasis &&
-          leftMetadata.pureBasis == rightMetadata.pureBasis)
-        metadata.pureBasis = leftMetadata.pureBasis;
-      if (leftMetadata.homogeneousWeight && rightMetadata.homogeneousWeight)
-        metadata.homogeneousWeight = *leftMetadata.homogeneousWeight +
-                                     *rightMetadata.homogeneousWeight;
-      if (leftMetadata.maximumPartitionLength &&
-          rightMetadata.maximumPartitionLength)
-        metadata.maximumPartitionLength = std::max(
-            *leftMetadata.maximumPartitionLength,
-            *rightMetadata.maximumPartitionLength);
-      if (leftMetadata.factorBases && rightMetadata.factorBases)
-        {
-          std::vector<int> factors = *leftMetadata.factorBases;
-          factors.insert(factors.end(),
-                         rightMetadata.factorBases->begin(),
-                         rightMetadata.factorBases->end());
-          std::sort(factors.begin(), factors.end());
-          factors.erase(std::unique(factors.begin(), factors.end()), factors.end());
-          metadata.factorBases = std::move(factors);
-        }
-      metadata.normalized = leftMetadata.normalized && rightMetadata.normalized;
-      metadata.skewFree = leftMetadata.skewFree && rightMetadata.skewFree;
-      if (metadata.pureBasis && isMultiplicativeBasis(*metadata.pureBasis) &&
-          metadata.skewFree)
-        {
-          metadata.expandedBasis = metadata.pureBasis;
-          metadata.noProducts = true;
-        }
       const auto *resultPoly = polyValue(value);
-      metadata.termCount = resultPoly->terms.size();
-      metadata.singleTerm = resultPoly->terms.size() == 1;
-      metadata.singleBasisElement = resultPoly->terms.size() == 1 &&
-                            !resultPoly->terms[0].monomial.data.empty();
-      metadata.collected = true;
-      mutablePolyValue(value)->conversionMetadata = std::move(metadata);
+      mutablePolyValue(value)->conversionMetadata = metadataAfterProduct(
+          *left->conversionMetadata,
+          *right->conversionMetadata,
+          resultPoly);
       return value;
     };
     if (getScalar(left, scalar)) return makePolyValue(multByCoefficient(scalar, right));
@@ -848,14 +789,9 @@ bool SymmetricEngineRing::promoteCollectedExpansion(
       {
         auto& metadata = *target->conversionMetadata;
         if (!supportPreserved)
-          metadata.expressionFactsComplete = false;
-        else if (metadata.singleBasisElement &&
-                 *metadata.singleBasisElement &&
-                 target->terms.size() == 1)
-          metadata.singleBasisElementCoefficientOne =
-              coefficientRing->is_equal(
-                  target->terms.front().coeff,
-                  coefficientRing->one());
+          invalidateExactExpressionFacts(target->conversionMetadata);
+        else
+          refreshSingleBasisElementCoefficientFact(metadata, target);
       }
     result = makePolyValue(target);
     return true;
@@ -919,14 +855,9 @@ bool SymmetricEngineRing::liftCollectedExpansion(
       {
         auto& metadata = *target->conversionMetadata;
         if (!supportPreserved)
-          metadata.expressionFactsComplete = false;
-        else if (metadata.singleBasisElement &&
-                 *metadata.singleBasisElement &&
-                 target->terms.size() == 1)
-          metadata.singleBasisElementCoefficientOne =
-              coefficientRing->is_equal(
-                  target->terms.front().coeff,
-                  coefficientRing->one());
+          invalidateExactExpressionFacts(target->conversionMetadata);
+        else
+          refreshSingleBasisElementCoefficientFact(metadata, target);
       }
     result = makePolyValue(target);
     return true;

@@ -54,6 +54,15 @@ SymmetricEngineRing::basisKindFromCanonicalKey(const std::string& key) const
     return found == kinds.end() ? BasisKind::Custom : found->second;
   }
 
+bool SymmetricEngineRing::isHallLittlewoodCapitalBasisKind(
+    BasisKind kind)
+{
+    return kind == BasisKind::HallLittlewoodQ ||
+           kind == BasisKind::HallLittlewoodB ||
+           kind == BasisKind::HallLittlewoodP ||
+           kind == BasisKind::HallLittlewoodPOmega;
+  }
+
 bool SymmetricEngineRing::hasBasisKind(int basisId, BasisKind kind) const
 {
     return basisKindForId(basisId) == kind;
@@ -120,11 +129,21 @@ void SymmetricEngineRing::rememberBasesFrom(const SymmetricEngineRing *R) const
           basisDescriptors[item.first] = item.second;
           changed = true;
         }
-    for (const auto& item : R->basisIdsByKind) basisIdsByKind[item.first] = item.second;
+    for (const auto& item : R->basisIdsByKind)
+      {
+        auto found = basisIdsByKind.find(item.first);
+        if (found == basisIdsByKind.end() ||
+            found->second != item.second)
+          {
+            basisIdsByKind[item.first] = item.second;
+            changed = true;
+          }
+      }
     if (changed)
       {
-        basisConversionPlanRegistryCache.clear();
         multiplicationPlanRegistryCache.clear();
+        resolvedBasisConversionEndpointCache.clear();
+        resolvedBasisConversionPlanCache.clear();
       }
   }
 
@@ -171,28 +190,59 @@ const CharacterTable& SymmetricEngineRing::characterTable(int degree) const
     return inserted.first->second;
   }
 
-mpz_class SymmetricEngineRing::characterTableValue(
-    const CharacterTable& table, size_t row, size_t col) const
+const std::vector<mpz_class>&
+SymmetricEngineRing::characterTableRow(
+    const CharacterTable& table,
+    size_t row) const
 {
-    const auto key = std::make_pair(row, col);
-    auto cached = table.values.find(key);
-    if (cached != table.values.end()) return cached->second;
-    if (characterCacheEntryCount >= computationLimits.maxCharacterCacheEntries)
+    if (row >= table.partitions.size())
+      throw exc::engine_error(
+          "character-table index is out of range");
+    auto cached = table.rows.find(row);
+    if (cached != table.rows.end())
+      return cached->second;
+    const size_t rowSize = table.partitions.size();
+    if (rowSize >
+        computationLimits.maxCharacterCacheEntries -
+            std::min(
+                characterCacheEntryCount,
+                computationLimits.maxCharacterCacheEntries))
       throw exc::engine_error(
           "character cache entry limit exceeded; increase MaxCharacterCacheEntries in the symmetricRing ComputationLimits option");
     bool recursiveLimitExceeded = false;
-    mpz_class value = characterValueWithLimit(
+    std::vector<mpz_class> values = characterRowWithLimit(
         table.partitions[row],
-        table.partitions[col],
+        table.partitions,
         computationLimits.maxRecursiveStates,
         recursiveLimitExceeded);
     if (recursiveLimitExceeded)
       throw exc::engine_error(
           "character recursion state limit exceeded; increase MaxRecursiveStates in the symmetricRing ComputationLimits option");
-    requireCacheEntryCapacity("character-value cache");
-    table.values.emplace(key, value);
-    ++characterCacheEntryCount;
-    return value;
+    requireCacheEntryCapacity(
+        rowSize, "character-row cache");
+    auto inserted =
+        table.rows.emplace(row, std::move(values));
+    characterCacheEntryCount += rowSize;
+    return inserted.first->second;
+  }
+
+mpz_class SymmetricEngineRing::characterTableValue(
+    const CharacterTable& table, size_t row, size_t col) const
+{
+    if (row >= table.partitions.size() ||
+        col >= table.partitions.size())
+      throw exc::engine_error(
+          "character-table index is out of range");
+    // Column-oriented p -> Schur work generally requests only a few cycle
+    // types. Do not materialize a complete row for each lambda in that case:
+    // doing so turns a sparse O(rows * requested-columns) request into the
+    // full character table. Reuse a row if S -> p work already cached it.
+    auto cached = table.rows.find(row);
+    if (cached != table.rows.end())
+      return cached->second[col];
+    return characterValueWithinLimits(
+        table.partitions[row],
+        table.partitions[col]);
   }
 
 mpz_class SymmetricEngineRing::characterValueWithinLimits(
@@ -261,25 +311,33 @@ bool SymmetricEngineRing::determinantStatesWithinLimit(
     return estimatedMemoryWithinLimit(states, 2 * sizeof(ring_elem), operation);
   }
 
-bool SymmetricEngineRing::consumeRecursiveState(
-    size_t& states, const char *operation) const
+void SymmetricEngineRing::recursiveStateLimitExceeded(
+    const char *operation) const
 {
-    if (states >= computationLimits.maxRecursiveStates)
-      throw exc::engine_error(
-          std::string(operation) +
-          " exceeds the recursion-state limit; increase MaxRecursiveStates in the symmetricRing ComputationLimits option");
-    ++states;
-    return true;
+    throw exc::engine_error(
+        std::string(operation) +
+        " exceeds the recursion-state limit; increase MaxRecursiveStates in the symmetricRing ComputationLimits option");
   }
 
 void SymmetricEngineRing::requireCacheEntryCapacity(
     const char *operation) const
 {
-    if (computationCacheEntryCount >= computationLimits.maxCacheEntries)
+    requireCacheEntryCapacity(1, operation);
+  }
+
+void SymmetricEngineRing::requireCacheEntryCapacity(
+    size_t count,
+    const char *operation) const
+{
+    if (count >
+        computationLimits.maxCacheEntries -
+            std::min(
+                computationCacheEntryCount,
+                computationLimits.maxCacheEntries))
       throw exc::engine_error(
           std::string(operation) +
           " exceeds MaxCacheEntries in the symmetricRing ComputationLimits option");
-    ++computationCacheEntryCount;
+    computationCacheEntryCount += count;
   }
 
 void SymmetricEngineRing::requireWeightWithinLimit(
@@ -326,14 +384,31 @@ void SymmetricEngineRing::requireMonomialWithinWeightLimit(
 
 ring_elem SymmetricEngineRing::rationalCoefficient(long numerator, long denominator) const
 {
-    return rationalCoefficient(
-        mpz_class(numerator), mpz_class(denominator));
+    mpq_t q;
+    mpq_init(q);
+    mpq_set_si(q, numerator, denominator);
+    mpq_canonicalize(q);
+    ring_elem result;
+    if (!coefficientRing->from_rational(q, result))
+      {
+        ERROR("coefficient division failed during basis conversion; use a "
+              "coefficient ring where the required denominators are "
+              "invertible, for example frac(QQ[t]) instead of QQ[t]");
+        result = coefficientRing->zero();
+      }
+    mpq_clear(q);
+    return result;
   }
 
 ring_elem SymmetricEngineRing::rationalCoefficient(
     const mpz_class& numerator,
     const mpz_class& denominator) const
 {
+    if (mpz_fits_slong_p(numerator.get_mpz_t()) &&
+        mpz_fits_slong_p(denominator.get_mpz_t()) &&
+        denominator > 0)
+      return rationalCoefficient(
+          numerator.get_si(), denominator.get_si());
     mpq_t q;
     mpq_init(q);
     mpz_set(mpq_numref(q), numerator.get_mpz_t());
@@ -441,7 +516,13 @@ ring_elem SymmetricEngineRing::basisPartElement(int basisId, int n) const
 
 SymmetricEngineRing::SymmetricEngineRing(const Ring *A)
       : coefficientRing(A), hallLittlewoodParameter(A->from_long(0))
-{}
+{
+    // Plan definitions and their policy-free indices are process-wide. Build
+    // and validate them while the ring itself is being created, before a
+    // user's first timed conversion pays that one-time initialization cost.
+    validateBasisConversionPlanDatabase();
+    (void) basisConversionPlansByEndpoints();
+  }
 
 SymmetricEngineRing *SymmetricEngineRing::create(const Ring *A)
 {
@@ -483,10 +564,20 @@ void SymmetricEngineRing::rememberBasisMetadata(int basisId,
     else
       {
         basisDescriptors.emplace(basisId, std::move(descriptor));
-        basisConversionPlanRegistryCache.clear();
         multiplicationPlanRegistryCache.clear();
+        resolvedBasisConversionPlanCache.clear();
       }
-    if (kind != BasisKind::Custom) basisIdsByKind[kind] = basisId;
+    if (kind != BasisKind::Custom)
+      {
+        auto foundKind = basisIdsByKind.find(kind);
+        if (foundKind == basisIdsByKind.end() ||
+            foundKind->second != basisId)
+          {
+            basisIdsByKind[kind] = basisId;
+            resolvedBasisConversionEndpointCache.clear();
+            resolvedBasisConversionPlanCache.clear();
+          }
+      }
   }
 
 bool SymmetricEngineRing::setHallLittlewoodParameter(const RingElement *t) const

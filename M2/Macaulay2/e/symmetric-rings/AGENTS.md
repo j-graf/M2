@@ -26,10 +26,11 @@ both the mathematical operation and the programmatic role clear.
 
 Use these forms consistently:
 
-- `build<Operation>Plans` constructs the policy-free catalog of mathematical
-  plans for one operation.
-- `select<Operation>Plan` or `pick<Operation>Plans` examines exact facts and
-  returns a complete plan or composition without performing algebra.
+- `<operation>PlanDatabase` returns the policy-free declarative catalog when
+  plan definitions are static. `build<Operation>Plans` is reserved for
+  operation catalogs that genuinely depend on runtime context.
+- `select<Operation>Plan` examines exact facts and returns one complete
+  top-level plan without performing algebra.
 - `trace<Operation>Selection` reports a selection without performing algebra.
 - `execute<Operation>Plan` executes a previously selected plan without making
   another hidden choice.
@@ -41,19 +42,20 @@ Use these forms consistently:
 - `try<Operation>` checks whether a route applies and, on success, produces its
   result. Add `Via<Algorithm>` when the probe is specific to one algorithm.
   Example: `tryProductToSchurViaCompatibleFactors`.
-- `<source>To<target>Via<Algorithm>` executes one named conversion algorithm or
-  composed intermediate-basis route. It must not make a hidden method choice.
+- `<source>To<target>Via<Algorithm>` executes one named atomic conversion
+  algorithm. Declarative compositions belong in the plan database and must
+  not make a hidden method choice.
 
 Registries and pickers for important source-target pairs should live in an
 obvious place. A general conversion picker should use one plan contract rather
 than nested target-specific route enums. Its conditions should make it possible
-to read when the power-sum-to-target picker chooses each of:
+to read when the selected power-sum-to-target plan executes each of:
 
 - `powerSumsToSchurViaBorderStrips`
 - `powerSumsToSchurViaAbacusRimHooks`
-- `ViaSchurDegreeBlocks`, executed by `runPowerSumsToSchurDegreeBlockPipeline`
-- `powerSumsToSchurViaComplete`
 - `powerSumsToSchurViaCharacters`
+- the homogeneous-component `PowerSum->Schur:default-policy`
+- the term-level `PowerSum->Schur:complete-friendly-hybrid-plan`
 - `powerSumSingleCycleTermsToHallLittlewoodViaGreenPolynomials`
 - `powerSumIndexToHallLittlewoodViaGreenPolynomialsAndDuality`
 
@@ -64,7 +66,7 @@ Every substantial conversion family should therefore have the same visible
 structure:
 
 ```text
-build<Operation>Plans
+<operation>PlanDatabase
 <operation>PlanApplicable
 <operation>PlanCost
 select<Operation>Plan
@@ -95,6 +97,8 @@ raw dispatch entry points.
 ## File Organization
 
 - `basis-conversion-policy.*`: reusable performance-only selector facts.
+- `expression-conditions.*`: inspectable mathematical conditions, their
+  evaluator, and ordered expression-piece partitioning.
 - `basis-conversion.*`: expression facts, plan registries, selectors, executors,
   and conversion/multiplication workflows.
 - `basis-coefficient.*`: targeted coefficient routes and their default

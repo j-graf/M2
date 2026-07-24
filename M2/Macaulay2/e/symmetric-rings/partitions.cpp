@@ -9,8 +9,58 @@
 #include <functional>
 #include <limits>
 #include <sstream>
+#include <variant>
 
 namespace symmetric_rings {
+
+namespace {
+
+// Most combinatorial coefficients at practical weights fit in a machine
+// integer. Keep those recursive states allocation-free and promote exactly
+// when a checked multiply or add overflows. Public results remain mpz_class,
+// so this changes representation cost without changing mathematical range.
+class CheckedExactInteger
+{
+ public:
+  CheckedExactInteger(long value = 0) : value_(value) {}
+
+  void addMultiple(long multiplier, const CheckedExactInteger& other)
+  {
+    if (std::holds_alternative<long>(value_) &&
+        std::holds_alternative<long>(other.value_))
+      {
+        long product = 0;
+        long sum = 0;
+        if (!__builtin_mul_overflow(
+                multiplier,
+                std::get<long>(other.value_),
+                &product) &&
+            !__builtin_add_overflow(
+                std::get<long>(value_), product, &sum))
+          {
+            value_ = sum;
+            return;
+          }
+      }
+    mpz_class sum = asMpz();
+    mpz_class contribution = other.asMpz();
+    contribution *= multiplier;
+    sum += contribution;
+    value_ = std::move(sum);
+  }
+
+  mpz_class asMpz() const
+  {
+    return std::holds_alternative<long>(value_)
+        ? mpz_class(std::get<long>(value_))
+        : std::get<mpz_class>(value_);
+  }
+
+ private:
+  std::variant<long, mpz_class> value_;
+};
+
+} // namespace
 
 // ============================================================================
 // Basic Partition Operations
@@ -72,6 +122,34 @@ bool hasNegativeTailWeight(const Partition& index)
 bool isPartitionIndex(const Partition& p)
 {
   return trimTrailingZerosPartition(p) == normalizePartition(p);
+}
+
+bool isHookPartition(const Partition& p)
+{
+  if (!isPartitionIndex(p)) return false;
+  const Partition index = trimTrailingZerosPartition(p);
+  if (index.empty()) return false;
+  for (size_t i = 1; i < index.size(); ++i)
+    if (index[i] > 1) return false;
+  return true;
+}
+
+bool isRectanglePartition(const Partition& p)
+{
+  if (!isPartitionIndex(p)) return false;
+  const Partition index = trimTrailingZerosPartition(p);
+  if (index.empty()) return false;
+  return std::all_of(
+      index.begin(),
+      index.end(),
+      [&](int part) { return part == index.front(); });
+}
+
+bool isSelfConjugatePartition(const Partition& p)
+{
+  if (!isPartitionIndex(p)) return false;
+  const Partition index = trimTrailingZerosPartition(p);
+  return conjugatePartition(index) == index;
 }
 
 int partitionPart(const Partition& p, size_t i)
@@ -205,28 +283,31 @@ std::vector<Partition> partitionsOf(int n)
   return result;
 }
 
-mpz_class assignmentCountRec(
+CheckedExactInteger assignmentCountRec(
     const Partition& parts,
     size_t pos,
     const Partition& targets,
-    std::map<std::pair<size_t, Partition>, mpz_class>& memo,
+    std::map<
+        std::pair<size_t, Partition>,
+        CheckedExactInteger>& memo,
     size_t maxStates,
     size_t& states,
     bool& limitExceeded)
 {
-  if (limitExceeded) return 0;
+  if (limitExceeded) return CheckedExactInteger{};
   if (states >= maxStates)
     {
       limitExceeded = true;
-      return 0;
+      return CheckedExactInteger{};
     }
   ++states;
-  if (pos == parts.size()) return targets.empty() ? 1 : 0;
+  if (pos == parts.size())
+    return CheckedExactInteger(targets.empty() ? 1 : 0);
   auto key = std::make_pair(pos, targets);
   auto cached = memo.find(key);
   if (cached != memo.end()) return cached->second;
 
-  mpz_class total = 0;
+  CheckedExactInteger total;
   int part = parts[pos];
   size_t i = 0;
   while (i < targets.size())
@@ -239,16 +320,18 @@ mpz_class assignmentCountRec(
         next[i] -= part;
         std::sort(next.begin(), next.end(), std::greater<int>());
         while (!next.empty() && next.back() == 0) next.pop_back();
-        total += mpz_class(j - i) *
-                 assignmentCountRec(
-                     parts,
-                     pos + 1,
-                     next,
-                     memo,
-                     maxStates,
-                     states,
-                     limitExceeded);
-        if (limitExceeded) return 0;
+        CheckedExactInteger child =
+            assignmentCountRec(
+                parts,
+                pos + 1,
+                next,
+                memo,
+                maxStates,
+                states,
+                limitExceeded);
+        if (limitExceeded) return CheckedExactInteger{};
+        total.addMultiple(
+            static_cast<long>(j - i), child);
       }
       i = j;
     }
@@ -266,16 +349,19 @@ mpz_class pToMonomialCoefficientWithLimit(
   Partition normalizedLambda = normalizePartition(lambda);
   Partition normalizedMu = normalizePartition(mu);
   if (partitionWeight(normalizedLambda) != partitionWeight(normalizedMu)) return 0;
-  std::map<std::pair<size_t, Partition>, mpz_class> memo;
+  std::map<
+      std::pair<size_t, Partition>,
+      CheckedExactInteger> memo;
   size_t states = 0;
   return assignmentCountRec(
-      normalizedLambda,
-      0,
-      normalizedMu,
-      memo,
-      maxStates,
-      states,
-      limitExceeded);
+             normalizedLambda,
+             0,
+             normalizedMu,
+             memo,
+             maxStates,
+             states,
+             limitExceeded)
+      .asMpz();
 }
 
 mpz_class zValue(const Partition& lambda)
@@ -455,25 +541,27 @@ std::vector<RimHookRemoval> rimHookRemovals(
   return result;
 }
 
-mpz_class characterValueMemo(const Partition& lambda,
-                             const Partition& mu,
-                             std::map<std::string, mpz_class>& memo,
-                             size_t maxStates,
-                             size_t& states,
-                             bool& limitExceeded)
+CheckedExactInteger characterValueMemo(
+    const Partition& lambda,
+    const Partition& mu,
+    std::map<std::string, CheckedExactInteger>& memo,
+    size_t maxStates,
+    size_t& states,
+    bool& limitExceeded)
 {
-  if (limitExceeded) return 0;
+  if (limitExceeded) return CheckedExactInteger{};
   if (states >= maxStates)
     {
       limitExceeded = true;
-      return 0;
+      return CheckedExactInteger{};
     }
   ++states;
-  if (mu.empty()) return lambda.empty() ? 1 : 0;
+  if (mu.empty())
+    return CheckedExactInteger(lambda.empty() ? 1 : 0);
   std::string key = partitionKey(lambda) + "|" + partitionKey(mu);
   auto it = memo.find(key);
   if (it != memo.end()) return it->second;
-  mpz_class total = 0;
+  CheckedExactInteger total;
   int hookSize = mu.front();
   Partition rest(mu.begin() + 1, mu.end());
   for (const auto& removal :
@@ -485,16 +573,22 @@ mpz_class characterValueMemo(const Partition& lambda,
            limitExceeded))
     {
       int sign = (removal.height % 2 == 0) ? 1 : -1;
-      total += sign * characterValueMemo(
-          removal.remaining,
-          rest,
-          memo,
-          maxStates,
-          states,
-          limitExceeded);
-      if (limitExceeded) return 0;
+      CheckedExactInteger child =
+          characterValueMemo(
+              removal.remaining,
+              rest,
+              memo,
+              maxStates,
+              states,
+              limitExceeded);
+      if (limitExceeded) return CheckedExactInteger{};
+      total.addMultiple(sign, child);
     }
-  memo[key] = total;
+  // A row may reuse more distinct subproblems in aggregate than the
+  // per-character state limit. Once the shared memo reaches that limit,
+  // continue without adding entries; the state counter above remains the
+  // authoritative limit for each requested character value.
+  if (memo.size() < maxStates) memo[key] = total;
   return total;
 }
 
@@ -503,11 +597,47 @@ mpz_class characterValueWithLimit(const Partition& lambda,
                                   size_t maxStates,
                                   bool& limitExceeded)
 {
-  std::map<std::string, mpz_class> memo;
+  std::map<std::string, CheckedExactInteger> memo;
   size_t states = 0;
   limitExceeded = false;
   return characterValueMemo(
-      lambda, mu, memo, maxStates, states, limitExceeded);
+             lambda, mu, memo, maxStates, states, limitExceeded)
+      .asMpz();
+}
+
+std::vector<mpz_class> characterRowWithLimit(
+    const Partition& lambda,
+    const std::vector<Partition>& cycleTypes,
+    size_t maxStatesPerValue,
+    bool& limitExceeded)
+{
+  // Recursive character subproblems are independent of the coefficient ring.
+  // Share them across the complete row while retaining the configured
+  // per-character recursion bound used by characterValueWithLimit.
+  std::map<std::string, CheckedExactInteger> memo;
+  std::vector<mpz_class> result;
+  result.reserve(cycleTypes.size());
+  limitExceeded = false;
+  for (const auto& mu : cycleTypes)
+    {
+      size_t states = 0;
+      bool valueLimitExceeded = false;
+      result.push_back(
+          characterValueMemo(
+              lambda,
+              mu,
+              memo,
+              maxStatesPerValue,
+              states,
+              valueLimitExceeded)
+              .asMpz());
+      if (valueLimitExceeded)
+        {
+          limitExceeded = true;
+          return {};
+        }
+    }
+  return result;
 }
 
 

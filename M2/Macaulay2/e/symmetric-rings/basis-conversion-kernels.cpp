@@ -488,8 +488,8 @@ int SymmetricEngineRing::selectedGreaterThan(size_t mask, size_t col, size_t n) 
   }
 
 ring_elem SymmetricEngineRing::jacobiTrudi(const Partition& outer,
-                        const Partition& inner,
-                        int basisId) const
+                                            const Partition& inner,
+                                            int basisId) const
 {
     requireBasis(basisId);
     auto& cache = basisKindForId(basisId) == BasisKind::Elementary
@@ -547,6 +547,51 @@ ring_elem SymmetricEngineRing::jacobiTrudi(const Partition& outer,
     requireCacheEntryCapacity("Jacobi-Trudi cache");
     cache[cacheKey] = result;
     return copyPolyValue(polyValue(result));
+  }
+
+ring_elem
+SymmetricEngineRing::
+canonicalSchurLikeExpressionToGeneratorsViaJacobiTrudi(
+    ring_elem f,
+    int sourceBasisId,
+    int targetBasisId) const
+{
+    // Jacobi--Trudi converts Schur to complete and Schur Omega to elementary.
+    // Both targets are multiplicative, so canonical storage compresses every
+    // determinant monomial into one target-basis atom. Accumulate all source
+    // terms before collecting so a multi-term expansion pays that cost once.
+    VECTOR(SymmetricTerm) resultTerms;
+    for (const auto& term : polyValue(f)->terms)
+      {
+        if (term.monomial.data.empty())
+          {
+            appendTermIfNonZero(
+                resultTerms, term.coeff, term.monomial);
+            continue;
+          }
+        if (atomLengthAt(term.monomial, 0) !=
+                term.monomial.data.size() ||
+            atomBasisIdAt(term.monomial, 0) != sourceBasisId ||
+            atomIsSkewAt(term.monomial, 0))
+          {
+            ERROR("Jacobi-Trudi conversion requires a canonical "
+                  "non-skew Schur-like expansion");
+            return zero();
+          }
+        const Partition index =
+            basisElementIndex(term.monomial, 0);
+        ring_elem expanded =
+            jacobiTrudi(index, Partition{}, targetBasisId);
+        if (error()) return zero();
+        for (const auto& expandedTerm :
+             polyValue(expanded)->terms)
+          appendTermIfNonZero(
+              resultTerms,
+              coefficientRing->mult(
+                  term.coeff, expandedTerm.coeff),
+              expandedTerm.monomial);
+      }
+    return fromTermVector(resultTerms, false);
   }
 
 ring_elem SymmetricEngineRing::jacobiTrudiBasis(int basisId,
@@ -959,14 +1004,29 @@ ring_elem SymmetricEngineRing::schurLikeToPowerSumsViaCharacters(
     else
       {
         size_t row = lambdaRow->second;
+        const auto& characterRow =
+            characterTableRow(table, row);
         for (size_t col = 0; col < table.partitions.size(); ++col)
           {
-            mpz_class chi = characterTableValue(table, row, col);
+            const mpz_class& chi =
+                characterRow[col];
             if (chi == 0) continue;
-            if (omegaStyle &&
-                ((n - static_cast<int>(table.partitions[col].size())) % 2 == 1))
-              chi = -chi;
-            ring_elem coeff = rationalCoefficient(chi, table.zValues[col]);
+            const bool negative =
+                omegaStyle &&
+                ((n - static_cast<int>(
+                           table.partitions[col].size())) %
+                     2 ==
+                 1);
+            ring_elem coeff;
+            if (negative)
+              {
+                mpz_class signedChi = -chi;
+                coeff = rationalCoefficient(
+                    signedChi, table.zValues[col]);
+              }
+            else
+              coeff = rationalCoefficient(
+                  chi, table.zValues[col]);
             if (error()) return zero();
             addCoeff(coefficients, table.partitions[col], coeff);
           }
@@ -1286,14 +1346,14 @@ ring_elem SymmetricEngineRing::monomialToPowerSumsViaTransitionMatrix(
                 rhs = coefficientRing->subtract(
                     rhs,
                     coefficientRing->mult(
-                        coefficientRing->from_int(transition.get_mpz_t()),
+                        cachedInteger(transition),
                         coeffs[col]));
               }
             mpz_class diagonal =
                 pToMonomialCoefficientWithinLimits(
                     parts[row], parts[row]);
             coeffs[row] = coefficientQuotient(
-                rhs, coefficientRing->from_int(diagonal.get_mpz_t()));
+                rhs, cachedInteger(diagonal));
             if (error()) return zero();
           }
         CoeffMap coefficients;
@@ -1732,6 +1792,11 @@ ring_elem SymmetricEngineRing::skewPOrPOmegaToPowerSums(
     const Partition& mu,
     bool omega) const
 {
+    // Skew expansion is part of normalization: the input is not a canonical
+    // single-source expansion and therefore cannot enter the X -> Y plan
+    // registry yet. The named formulas below are policy-free normalization
+    // helpers; ordinary conversion resumes through the shared registry after
+    // the skew atom has been eliminated.
     ring_elem skewCapital = skewQOrBFunction(lambda, mu, omega);
     if (error()) return zero();
     const BasisKind coordinateKind =
@@ -2299,6 +2364,10 @@ ring_elem SymmetricEngineRing::straightenBasisElement(
       case BasisKind::HallLittlewoodP:
       case BasisKind::HallLittlewoodPOmega:
         {
+        // Straightening precedes conversion-plan selection. A nonpartition
+        // index violates the registry's canonical-input contract, so this
+        // normalization formula may pass through power sums directly without
+        // creating a competing public conversion workflow.
         if (isPartitionIndex(index))
           return basisElementFromIndex(basisId, index);
         const BasisKind capitalKind = basisKind == BasisKind::HallLittlewoodP

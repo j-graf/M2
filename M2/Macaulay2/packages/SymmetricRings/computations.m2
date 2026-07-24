@@ -92,6 +92,40 @@ needsM2PowerSumConversion = F -> (
     any(rawTerms F, term -> any(term#1, atom -> atomNeedsM2PowerSumConversion(R0, atom)))
     )
 
+-- Inspects the M2-owned conversion boundary once.  The profile records only
+-- facts needed to choose between custom hooks, the native engine, and the
+-- constant-QQ working ring; mathematical plan selection remains in C++.
+conversionDispatchProfile = (f, B) -> (
+    R0 := ring f;
+    sourceId := rawSymmetricRingsSingleBasisId raw f;
+    sourceBasis := if sourceId > 0 then basisWithId(R0, sourceId) else null;
+    needsPowerSumHook := if sourceBasis =!= null then
+        sourceBasis#"ToPowerSums" =!= null
+        else any(rawTerms f, term -> any(term#1, atom ->
+                atomNeedsM2PowerSumConversion(R0, atom)));
+    preferConstantQQ := false;
+    if coefficientRing R0 =!= QQ then (
+        targetKey := basisKey B;
+        sourceKey := if sourceBasis === null then "" else basisKey sourceBasis;
+        preferConstantQQ =
+            hasPlethysmConversionProvenance f or
+            (targetKey == "Schur" and sourceKey == "PowerSum" and
+                rawSymmetricRingsTermCount(raw f) >= 8) or
+            (targetKey == "PowerSum" and
+                member(sourceKey, {"Complete", "Elementary"}) and
+                rawSymmetricRingsElementWeight(raw f) >= 30);
+        );
+    hashTable {
+        "Ring" => R0,
+        "TargetBasis" => B,
+        "SourceBasisId" => sourceId,
+        "SourceBasis" => sourceBasis,
+        "NeedsPowerSumHook" => needsPowerSumHook,
+        "TargetHasFromPowerSumsHook" => B#"FromPowerSums" =!= null,
+        "PreferConstantQQ" => preferConstantQQ
+        }
+    )
+
 -- These helpers preserve M2-defined custom-basis hooks while
 -- keeping all built-in engine conversion on the shared entry point.
 atomToPowerSums = (R0, atom) -> (
@@ -302,11 +336,11 @@ tryConstantQQOperation = (R0, inputs, compute) -> (
 
 -- Fallback policy for toBasis. Custom basis hooks remain in M2;
 -- all built-in conversion uses the shared engine workflow.
-toBasisFallback = (f, target) -> (
-    R0 := ring f;
-    B := targetBasisOnRing(R0, target);
+toBasisFallbackWithProfile = (f, dispatchData) -> (
+    R0 := dispatchData#"Ring";
+    B := dispatchData#"TargetBasis";
     P := basis(R0, p);
-    if needsM2PowerSumConversion f then (
+    if dispatchData#"NeedsPowerSumHook" then (
         FP := elementToPowerSumsM2 f;
         if B#"BasisId" == P#"BasisId" then return FP;
         if B#"FromPowerSums" =!= null then return (B#"FromPowerSums")(FP, B);
@@ -317,6 +351,12 @@ toBasisFallback = (f, target) -> (
     engineToBasis(f, B)
     )
 
+toBasisFallback = (f, target) -> (
+    R0 := ring f;
+    B := targetBasisOnRing(R0, target);
+    toBasisFallbackWithProfile(f, conversionDispatchProfile(f, B))
+    )
+
 -- Product-aware multiplication followed by conversion to a target basis.
 multiplyToBasis = method()
 
@@ -324,8 +364,12 @@ multiplyToBasis(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, tar
     R0 := ring f;
     if ring g =!= R0 then error "expected elements in the same symmetric ring";
     B := targetBasisOnRing(R0, target);
-    if needsM2PowerSumConversion f or needsM2PowerSumConversion g or
-       B#"FromPowerSums" =!= null then return toBasisFallback(f*g, B);
+    leftProfile := conversionDispatchProfile(f, B);
+    rightProfile := conversionDispatchProfile(g, B);
+    if leftProfile#"NeedsPowerSumHook" or
+       rightProfile#"NeedsPowerSumHook" or
+       leftProfile#"TargetHasFromPowerSumsHook" then
+        return toBasisFallback(f*g, B);
     userSymmetricElement(R0, rawSymmetricRingsMultiplyToBasis(
         raw f, raw g, B#"BasisId"))
     )
@@ -336,35 +380,6 @@ tryConstantQQBasisConversion = (R0, f, B) -> tryConstantQQOperation(R0, {f}, (Rq
         toBasis(inputsQQ#0, Bqq)
         ))
 
--- Constant-coefficient p -> S conversions amortize the lift/promotion cost
--- once the p-support is moderately large. This is deliberately independent
--- of combinatorial tags: multiplication replaces the Plethysm tag even though
--- its resulting p-expansion can still benefit from computation over QQ.
-preferConstantQQForPowerSumsToSchur = (R0, f, B) -> (
-    if coefficientRing R0 === QQ then return false;
-    P := basis(R0, p);
-    Schur := basis(R0, S);
-    if B#"BasisId" != Schur#"BasisId" then return false;
-    if rawSymmetricRingsSingleBasisId(raw f) != P#"BasisId" then return false;
-    rawSymmetricRingsTermCount(raw f) >= 8
-    )
-
--- Large complete/elementary expansions use coefficient-independent formulas
--- but create many rational coefficients.  Computing those coefficients over
--- QQ and promoting the collected result is cheaper than performing all
--- arithmetic in a fraction field.  The weight cutoff is deliberately
--- conservative: cold crossover sweeps favor the shadow consistently from 30.
-preferConstantQQForOrdinaryToPowerSums = (R0, f, B) -> (
-    if coefficientRing R0 === QQ then return false;
-    P := basis(R0, p);
-    if B#"BasisId" != P#"BasisId" then return false;
-    sourceId := rawSymmetricRingsSingleBasisId raw f;
-    if sourceId <= 0 then return false;
-    sourceKey := basisKey(basisWithId(R0, sourceId));
-    if not member(sourceKey, {"Complete", "Elementary"}) then return false;
-    rawSymmetricRingsElementWeight(raw f) >= 30
-    )
-
 -- Converts a symmetric function to the requested basis. Plethysm provenance
 -- and moderately large pure-p support make the constant-QQ shadow the first
 -- choice; other inputs remain native-first and use it only after native failure.
@@ -373,20 +388,18 @@ toBasis = method()
 toBasis(SymmetricRingElement, Thing) := (f, target) -> (
     R0 := ring f;
     B := targetBasisOnRing(R0, target);
-    preferConstantQQ := coefficientRing R0 =!= QQ and
-        (hasPlethysmConversionProvenance f or
-         preferConstantQQForPowerSumsToSchur(R0, f, B) or
-         preferConstantQQForOrdinaryToPowerSums(R0, f, B));
+    dispatchData := conversionDispatchProfile(f, B);
+    preferConstantQQ := dispatchData#"PreferConstantQQ";
     if preferConstantQQ then (
         preferredQQ := tryConstantQQBasisConversion(R0, f, B);
         if preferredQQ =!= null then return preferredQQ;
         );
-    native := try toBasisFallback(f, B) else null;
+    native := try toBasisFallbackWithProfile(f, dispatchData) else null;
     if native =!= null then return native;
     if debugLevel > 0 then stderr << "SymmetricRings conversion: native route failed; trying QQ shadow" << endl;
     constantQQ := if preferConstantQQ then null else tryConstantQQBasisConversion(R0, f, B);
     if constantQQ =!= null then return constantQQ;
-    toBasisFallback(f, B)
+    toBasisFallbackWithProfile(f, dispatchData)
     )
 
 -- ============================================================================
@@ -431,9 +444,14 @@ toFF SymmetricRingElement := g -> toBasis(g, ff)
 
 -- Finds global basis data by numeric engine id.
 basisDataWithId = basisId -> (
-    hits := select(availableSymmetricBases, B -> B#"BasisId" == basisId);
-    if #hits == 0 then error("unknown symmetric function basis id: ", toString basisId);
-    hits#0
+    -- Basis ids are allocated monotonically and refreshAvailableBases retains
+    -- that installation order, so the combined registry is its own compact
+    -- id index. Transactional registration restores both together.
+    position := basisId - 1;
+    if position < 0 or position >= #availableSymmetricBases or
+       (availableSymmetricBases#position)#"BasisId" != basisId then
+        error("unknown symmetric function basis id: ", toString basisId);
+    availableSymmetricBases#position
     )
 
 -- Looks up a ring-attached basis by numeric engine id.

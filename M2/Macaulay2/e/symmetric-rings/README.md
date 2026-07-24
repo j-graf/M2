@@ -46,6 +46,7 @@ The principal files are:
 | `partitions.*` | Partition utilities and combinatorial enumeration |
 | `arithmetic.*` | Addition, multiplication, scalar operations, and product tagging |
 | `expression-inspection.cpp` | Shared expression-shape and coefficient-map inspection |
+| `expression-conditions.*` | Inspectable plan conditions and ordered expression-piece partitioning |
 | `basis-conversion-policy.*` | Reusable performance-only selection facts |
 | `basis-conversion.*` | Expression facts, shared conversion-plan registry, and conversion/multiplication workflows |
 | `basis-coefficient.*` | Targeted scalar transitions and default full-conversion fallback |
@@ -171,7 +172,7 @@ explicit pairing.
 
 | Operation | Preserved request structure | High-level decision | Broad fallback |
 |---|---|---|---|
-| Basis conversion | Expression, exact source/target facts, and tags | Select a complete composition from the shared plan registry | Convert general terms through supported source-to-power-sum and power-sum-to-target plans |
+| Basis conversion | Expression, exact source/target facts, and tags | Select one complete source-to-target plan from the shared registry | Convert general terms through named source-to-power-sum and power-sum-to-target child plans |
 | Product-aware conversion | Left factor, right factor, and output basis | Choose a combinatorial product rule or factorwise conversion | Multiply or convert factors through general conversion |
 | Plethysm to a basis | Outer operand, inner operand, and target basis | Choose a specialized combined route or materialize in power sums | Adams-operation plethysm followed by general conversion |
 | Inner product | Two operand profiles, pairing context, and registered metadata | Choose a diagonal, single-element, or structured-coordinate workflow | Convert both operands to power sums and apply the pairing |
@@ -192,10 +193,10 @@ M2_SYMMETRIC_RINGS_TRACE_CONVERSION=1 \
   -e 'needsPackage "SymmetricRings"; R=symmetricRing QQ; F=p_{3,1}+2*p_{2,1,1}; G=toS F; exit 0'
 ```
 
-Trace messages are written to standard error. The conversion trace
-reports metadata bypasses, selected basis compositions, direct plans, and
-multiplication plans. Some kernels additionally emit lower-level diagnostic
-lines, such as the method selected for individual Schur factors.
+Trace messages are written to standard error. The conversion trace reports
+metadata bypasses, selected complete conversion plans and their fixed child
+plans, and multiplication plans. Some kernels additionally emit lower-level
+diagnostic lines, such as the method selected for individual Schur factors.
 
 For an interactive session, either prefix the M2 command in the same way or
 export the variable first:
@@ -216,25 +217,28 @@ Plan identifiers printed by the conversion trace can be forced in a
 fresh process with:
 
 ```sh
-M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN='p->S:grouped-characters'
-M2_SYMMETRIC_RINGS_FORCE_CONVERSION_COMPOSITION='via-power-sums'
-M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLANS='Complete->PowerSum:classical-formula,p->S:grouped-characters'
+M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN='PowerSum->Schur:grouped-characters'
+M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN='Complete->Schur:via-PowerSum-default'
 M2_SYMMETRIC_RINGS_FORCE_MULTIPLICATION_PLAN='product:power-sums'
 ```
 
-An unknown or inapplicable forced plan is an explicit error. Conversion
-forcing with the singular variable requires that plan to occur in the selected
-composition. The plural variable supplies an ordered, comma-separated plan
-identifier for every adjacent pair. Multiplication forcing applies to the
-complete binary product plan.
-Composition forcing accepts `direct`, `via-power-sums`, or an exact canonical
-key chain such as `Complete->PowerSum->Schur`. A requested composition must be
-available and applicable; it never silently falls back to another composition.
+An unknown conversion plan, a plan with the wrong endpoints, or an
+inapplicable forced plan is an explicit error. Conversion forcing names exactly
+one complete top-level plan. If that plan is a composition, its definition
+already fixes all child plan identifiers; neither forcing nor execution makes
+another choice. Multiplication forcing likewise applies to the complete binary
+product plan.
 The development check
 `Macaulay2/packages/SymmetricRings/extras/benchmarks/test-plan-forcing.sh`
-asserts both forced and automatic selections, including arbitrary
-compositions, weight blocks, hybrid and Hall--Littlewood conversion, every
-registered direct conversion plan family, and every multiplication plan.
+asserts both forced and automatic selections, including direct, composition,
+term-hybrid, component-hybrid, Hall--Littlewood, broad fallback, and
+multiplication plans.
+
+For development-only differential validation, defining
+`M2_SYMMETRIC_RINGS_CHECK_ALL_CONVERSION_PLANS` executes every applicable
+registered plan for each requested source/target group and checks that all
+canonical results agree. This mode is intended for small test inputs, not
+benchmarks.
 
 It reports the inner-product context and selected pipeline, followed by the
 route, operand orientation, estimated cost, and relevant cache state.
@@ -284,7 +288,7 @@ resolve product and skew terms
 group canonical terms by source basis and weight
         |
         v
-select complete basis compositions
+select one complete registered plan per source group
         |
         v
 execute selected plans and combine results
@@ -295,9 +299,10 @@ attach exact output facts and preserve semantic tags
 
 `ExpressionFacts` carries canonical form, basis composition, weights, term and
 factor counts, skew counts, single-element shape, and provenance. Expensive
-selector-only profiles are computed lazily. The picker chooses a direct plan
-or a composition through registered intermediate bases. Execution never
-silently changes that selection.
+selector-only profiles are computed lazily. The picker chooses one complete
+registered source-to-target plan. A selected plan may contain fixed
+compositions of named child plans; execution never changes that selection or
+calls the picker.
 
 ### Worked example: converting `p -> S`
 
@@ -311,7 +316,7 @@ toBasis(F,S)
 exact power-sum metadata bypass
     |
     v
-composition and plan picker
+complete-plan picker
     `-- PowerSum -> Schur                 [selected]
             |
             v
@@ -323,18 +328,22 @@ composition and plan picker
 ```
 
 The metadata bypass applies because no source conversion or normalization is
-needed. The shared picker chooses the applicable mathematical plan expected to
-work best for the exact support. Competing plans remain available for
+needed. Automatic routing chooses the named default power-sum-to-Schur plan;
+that plan's ordered component cases choose the fixed formula appropriate to
+the realized support. Competing complete plans remain available for
 independent checking and forced diagnostics.
 
-The selector may use coarse properties of the expression, its coefficient
-ring, and combinatorial tags.  Nonhomogeneous inputs are handled degree by
-degree.  These are performance choices only: every route computes the same
-Schur expansion, and conversion preserves the expression's semantic tags.
+The default plan's ordered conditions may use coarse properties of each
+homogeneous component, its coefficient ring, and combinatorial tags.
+Nonhomogeneous inputs are handled degree by degree. These are performance
+choices only: every case computes the same Schur expansion, and conversion
+preserves the expression's semantic tags.
 
-The conversion trace described above shows the selected composition and plan
-identifiers. Exact heuristics and thresholds belong in the plan picker and in
-benchmark evidence, rather than being duplicated in this overview.
+The conversion trace described above shows the selected stable top-level plan
+identifier and any fixed children executed by its formula. Exact component
+heuristics and thresholds belong in the declarative default plan, while the
+picker only chooses among complete top-level plans. Neither is duplicated in
+this overview.
 
 ### Coefficient rings and the constant-QQ shadow ring
 
@@ -359,8 +368,10 @@ A new conversion algorithm normally fits into the existing structure:
    `basis-conversion-kernels.*`, with its domain and assumptions documented.
 2. Add its contract and stable plan identifier to the default registry in
    `basis-conversion.*`.
-3. Put mathematical applicability in the plan contract and performance policy
-   in the picker; add reusable policy facts to `basis-conversion-policy.*`.
+3. Put mathematical applicability in the plan contract. Put piecewise
+   performance conditions owned by one default plan in that plan, and
+   top-level competition policy in the picker; add reusable policy facts to
+   `basis-conversion-policy.*`.
 4. Add an executor case that calls the kernel without selecting another route.
 5. Retain an independent broad plan and add forced and automatic differential
    tests across boundary cases and coefficient rings.
