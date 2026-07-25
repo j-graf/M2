@@ -70,9 +70,10 @@ The pieces $f_i$ are disjoint and cover all of $f$, and every named plan is
 fixed by the parent definition rather than selected during execution.
 
 This distinction keeps correctness and cost separate. Plan applicability
-records where a conversion is mathematically valid. The picker may inspect
-degree, support, index shape, coefficient ring, or known provenance only to
-choose among valid complete plans.
+records where a conversion is mathematically valid. Fixed cases within a plan
+may inspect degree, support, index shape, coefficient ring, or provenance to
+choose a formula for each piece. The picker uses the same kinds of facts only
+to choose among valid complete plans.
 
 #### Representative examples
 
@@ -124,9 +125,10 @@ more general input uses the corresponding triangular-reduction plan. Both
 plans describe valid coordinate changes, while the picker records which is
 expected to be cheaper for the observed expression.
 
-The hard-coded mathematical plans live in `basis-conversion-plans.cpp`; the
-separate performance choices live in `basis-conversion-picker.cpp`. Custom
-and transformed-basis formulas remain owned by the M2 layer. Equal source and
+The hard-coded mathematical plans and their fixed piecewise formula policies
+live in `basis-conversion-plans.cpp`; top-level performance choices among
+complete plans live in `basis-conversion-picker.cpp`. Custom and
+transformed-basis formulas remain owned by the M2 layer. Equal source and
 target bases require no conversion plan.
 
 ## Basis conversion
@@ -582,10 +584,10 @@ grouped with their own mathematics.
   composition, diagnostics, and ordered expression-piece partitioning.
 - `basis-conversion.hpp` declares expression facts, plan contracts,
   database indexes, pickers, executors, and public engine entry points.
-- `basis-conversion-plans.cpp` is the policy-free inventory of complete named
-  conversion plans.
-- `basis-conversion-picker.cpp` is the complete inventory of endpoint
-  performance choices.
+- `basis-conversion-plans.cpp` inventories complete named conversion plans and
+  any fixed piecewise formula policies inside them.
+- `basis-conversion-picker.cpp` inventories top-level endpoint performance
+  choices among complete plans.
 - `basis-conversion.cpp` implements preparation, metadata, plan indexing and
   validation, generic execution, product resolution, and conversion and
   multiplication workflows.

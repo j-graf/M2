@@ -8,6 +8,9 @@
 #include "exceptions.hpp"
 #include "ring-elements/ring-element.hpp"
 
+#include <optional>
+#include <string>
+
 namespace symmetric_rings {
 
 namespace {
@@ -246,6 +249,37 @@ const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
       const auto *S = symmetricRingFromElement(f);
       if (error()) return nullptr;
       ring_elem result = S->toBasis(f->get_value(), targetBasisId);
+      if (error()) return nullptr;
+      return RingElement::make_raw(S, result);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+const RingElement *rawSymmetricRingsToBasisBench(
+    const RingElement *f,
+    int targetBasisId,
+    M2_string conversionPlan,
+    bool traceConversion)
+{
+  try
+    {
+      const std::string requestedPlan =
+          fromM2String(conversionPlan);
+      const std::optional<std::string> forcedPlan =
+          requestedPlan.empty()
+              ? std::nullopt
+              : std::optional<std::string>(requestedPlan);
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      ring_elem result = S->toBasisBench(
+          f->get_value(),
+          targetBasisId,
+          forcedPlan,
+          traceConversion);
       if (error()) return nullptr;
       return RingElement::make_raw(S, result);
     }

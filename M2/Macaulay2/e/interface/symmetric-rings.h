@@ -63,6 +63,11 @@ const RingElement *rawSymmetricRingsJacobiTrudi(const Ring *R,
 
 const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
                                             int targetBasisId);
+const RingElement *rawSymmetricRingsToBasisBench(
+    const RingElement *f,
+    int targetBasisId,
+    M2_string conversionPlan,
+    bool traceConversion);
 const RingElement *rawSymmetricRingsMultiplyToBasis(
     const RingElement *f,
     const RingElement *g,

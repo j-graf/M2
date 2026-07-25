@@ -1167,6 +1167,35 @@ TEST ///
 TEST ///
     debug needsPackage "SymmetricRings"
     R0 = symmetricRing QQ
+    benchInput = p_{4,2} + 2*p_{3,2,1}
+    benchReport = toBasisBench(
+        benchInput,
+        S,
+        "Plans" => {
+            "Automatic",
+            "PowerSum->Schur:abacus-rim-hooks",
+            "PowerSum->Schur:via-complete-basis"
+            },
+        "Repetitions" => 1,
+        "Warmups" => 0)
+    assert(benchReport#"Verified")
+    assert(#(benchReport#"Plans") == 3)
+    assert(#((benchReport#"Timings")#"Automatic") == 1)
+    assert(
+        (benchReport#"Results")#"Automatic" ==
+        (benchReport#"Results")#"PowerSum->Schur:abacus-rim-hooks")
+    singleBenchReport = toBasisBench(
+        benchInput,
+        S,
+        "Plans" => "PowerSum->Schur:Frobenius-character-formula",
+        "Repetitions" => 1,
+        "Warmups" => 0)
+    assert(singleBenchReport#"Result" == toBasis(benchInput, S))
+///
+
+TEST ///
+    debug needsPackage "SymmetricRings"
+    R0 = symmetricRing QQ
     assert(toBasis(S_{5,3,2}*S_{4,3,1}, S) == toBasis(toBasis(S_{5,3,2}*S_{4,3,1}, p), S))
     assert(toBasis(S_{5,3,2}*S_{4,3,1}*h_1, S) == toBasis(toBasis(S_{5,3,2}*S_{4,3,1}*h_1, p), S))
     assert(toBasis(S_{3,2}*h_{3,2}, S) == toBasis(toBasis(S_{3,2}*h_{3,2}, p), S))

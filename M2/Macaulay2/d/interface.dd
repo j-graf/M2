@@ -345,6 +345,31 @@ export rawSymmetricRingsToBasis(e:Expr):Expr := (
 	     else WrongNumArgs(2));
 setupfun("rawSymmetricRingsToBasis", rawSymmetricRingsToBasis);
 
+export rawSymmetricRingsToBasisBench(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 4 then return WrongNumArgs(4);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is targetBasisId:ZZcell do (
+		    if !isInt(targetBasisId) then return WrongArgSmallInteger(2);
+		    when s.2
+		    is conversionPlan:stringCell do (
+			 when s.3
+			 is traceConversion:Boolean do (
+			      toExpr(Ccode(RawRingElementOrNull,
+				   "rawSymmetricRingsToBasisBench(",
+				   f.p, ", ", toInt(targetBasisId), ", ",
+				   conversionPlan.v, ", ",
+				   toBoolean(s.3), ")")))
+			 else WrongArg(4, "a Boolean"))
+		    else WrongArg(3, "a string"))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(4));
+setupfun("rawSymmetricRingsToBasisBench", rawSymmetricRingsToBasisBench);
+
 export rawSymmetricRingsMultiplyToBasis(e:Expr):Expr := (
      when e
      is s:Sequence do (

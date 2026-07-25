@@ -67,6 +67,7 @@ importFrom(Core, {
     "rawSymmetricRingsProduct",
     "rawSymmetricRingsJacobiTrudi",
     "rawSymmetricRingsToBasis",
+    "rawSymmetricRingsToBasisBench",
     "rawSymmetricRingsMultiplyToBasis",
     "rawSymmetricRingsPlethysm",
     "rawSymmetricRingsPlethysmToBasis",

@@ -161,15 +161,16 @@ and a fresh `BUILD/build/M2` process per repetition; see README for a template.
 Tracing changes timing and remains diagnostic:
 
 ```sh
-M2_SYMMETRIC_RINGS_TRACE_CONVERSION=1
 M2_SYMMETRIC_RINGS_TRACE_INNER_PRODUCT=1
 ```
 
-Conversion registry plans use the
-`M2_SYMMETRIC_RINGS_FORCE_CONVERSION_*` controls documented in README.
+Use private `toBasisBench` from a development-mode M2 session for conversion
+plan forcing, tracing, repetitions, and agreement checks. Ordinary `toBasis`
+ignores ambient conversion diagnostics.
 
-Run each forced route in a separate cold process. Avoid grouped characters on
-medium or large inputs without a timeout. Forced routes never become records.
+Run each forced multiplication or inner-product route in a separate cold
+process. Avoid grouped characters on medium or large inputs without a timeout.
+Forced routes never become records.
 
 Other forced Hall--Littlewood and inner-product controls are documented in
 README; treat them as diagnostic in the same way.

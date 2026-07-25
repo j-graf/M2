@@ -303,8 +303,8 @@ The suite is divided into small components for maintainability:
   reporting;
 - `update-latest.awk` updates per-device most recent verified medians;
 - `test-history.sh` checks record retention and latest-result replacement;
-- `test-plan-forcing.sh` checks forced conversion and multiplication plans
-  against unforced results in fresh processes;
+- `test-plan-forcing.sh` checks private conversion-plan comparisons and forced
+  multiplication plans against automatic results;
 - estimation prefers latest per-case medians and predicts duration without
   running cases;
 - system, condition, and calibration code describe the environment;

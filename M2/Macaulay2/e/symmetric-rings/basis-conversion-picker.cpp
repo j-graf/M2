@@ -2,7 +2,6 @@
 
 #include "symmetric-rings/symmetric-engine-ring.hpp"
 
-#include <cstdlib>
 #include <utility>
 
 namespace symmetric_rings {
@@ -425,16 +424,8 @@ SymmetricEngineRing::selectBasisConversionPlan(
         basisKindForId(sourceBasisId);
     const BasisKind targetKind =
         basisKindForId(targetBasisId);
-    std::optional<std::string> requested =
+    const std::optional<std::string>& requested =
         forcedIdentifier;
-    if (!requested)
-      {
-        const char *forced =
-            std::getenv(
-                "M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN");
-        if (forced != nullptr)
-          requested = forced;
-      }
     ExpressionFacts selectionProfile = facts;
     selectionProfile.combinatorialTags = combinatorialTags;
     auto publishSelectionFacts = [&] {

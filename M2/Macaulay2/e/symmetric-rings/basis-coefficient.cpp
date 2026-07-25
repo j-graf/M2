@@ -8,7 +8,6 @@
 #include "rings/ZZ.hpp"
 
 #include <cstdio>
-#include <cstdlib>
 
 namespace symmetric_rings {
 
@@ -106,7 +105,7 @@ void SymmetricEngineRing::traceBasisCoefficientSelection(
     const std::string& targetDisplay,
     const Partition& targetIndex) const
 {
-    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr)
+    if (!basisConversionTraceEnabled())
       return;
     std::fprintf(
         stderr,

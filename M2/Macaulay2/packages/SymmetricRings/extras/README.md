@@ -9,6 +9,41 @@ The intended audience is package maintainers, including mathematicians who
 want to test a proposed formula or compare algorithms before changing the
 engine.
 
+## Interactive conversion-plan comparisons
+
+Load the package in development mode to use the private `toBasisBench`
+function from an ordinary M2 session:
+
+```m2
+debug needsPackage "SymmetricRings";
+R = symmetricRing QQ;
+F = p_{8,4,2} + 2*p_{7,4,3} + p_{6,5,3};
+report = toBasisBench(
+    F, S,
+    "Plans" => {
+        "Automatic",
+        "PowerSum->Schur:abacus-rim-hooks",
+        "PowerSum->Schur:via-complete-basis"
+        },
+    "Repetitions" => 5,
+    "Warmups" => 1,
+    "Track" => true);
+report#"Summary"
+```
+
+The function compares only built-in engine conversions. It verifies that the
+requested plans agree, rotates their timed order, and returns all CPU and wall
+measurements together with median summaries. Tracking is performed in separate
+untimed executions. These are warm-session diagnostic measurements and never
+update the systematic benchmark history. A forced-plan comparison requires a
+product-free expansion in one source basis, so the named top-level plan cannot
+accidentally affect a nested multiplication conversion.
+
+Ordinary `toBasis` has no benchmark mode and ignores ambient conversion
+forcing, conversion tracing, exhaustive-plan checking, and forced
+multiplication settings. All conversion-plan controls above are explicit and
+local to the `toBasisBench` call.
+
 ## What belongs here
 
 Use `extras` for work such as:

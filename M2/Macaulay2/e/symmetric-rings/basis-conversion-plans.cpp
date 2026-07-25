@@ -11,7 +11,9 @@ namespace symmetric_rings {
 // ============================================================================
 // This is the single contributor-facing list of mathematically complete
 // formulas. Each ordered expression piece uses either one kernel or a fixed
-// composition of one or more named plans.
+// composition of one or more named plans. Piecewise plans may contain fixed
+// formula policy, but this database never chooses among complete plans with
+// the same endpoints.
 
 // ============================================================================
 // Plan-Formula Constructors
@@ -111,6 +113,189 @@ SymmetricEngineRing::genericPowerSumFallbackPlanIdentifier()
     static const BasisConversionPlanId id{
         "u->v:via-power-sums"};
     return id;
+  }
+
+// ============================================================================
+// Power Sums To Schur Component Formula Policy
+// ============================================================================
+// Write one homogeneous component as
+//
+//              f^(n) = sum_{lambda |- n} a_lambda p_lambda,
+//
+// let t_n be the number of nonzero terms, and let q_n be the number of
+// partitions of n. The two support predicates below mean
+//
+//              component density       = t_n / q_n,
+//              support-square ratio    = t_n^2 / q_n.
+//
+// These quantities do not restrict mathematical applicability: every formula
+// below computes the same Schur expansion. They are empirical predictors for
+// whether the shared work and collection in p -> h -> S are cheaper than
+// applying the abacus rim-hook formula to the component. Weight and term-count
+// cutoffs ensure that a predicted saving is large enough to repay composition
+// or term-partitioning overhead.
+//
+// The constants are benchmark crossover points, not mathematical constants.
+// Retuning them requires forced comparisons of the complete, abacus, and
+// short-cycle plans on both sides of each proposed boundary, over QQ and a
+// representative non-QQ coefficient ring and with ordinary, product, and
+// plethysm provenance.
+
+std::vector<SymmetricEngineRing::BasisConversionPlanCase>
+SymmetricEngineRing::powerSumsToSchurComponentFormulaCases()
+{
+    constexpr size_t denseComponentNumerator = 1;
+    constexpr size_t denseComponentDenominator = 4;
+    constexpr size_t denseSupportSquareNumerator = 35;
+    constexpr size_t denseSupportSquareDenominator = 2;
+    constexpr int plethysmWeightThreshold = 7;
+    constexpr int littlewoodRichardsonWeightThreshold = 6;
+    constexpr int pieriWeightThreshold = 7;
+    constexpr int largeBorderStripWeightThreshold = 15;
+    constexpr int commonOneBorderStripWeightThreshold = 7;
+    constexpr int shortCycleWeightThreshold = 13;
+    constexpr size_t minimumMultipleTerms = 2;
+    constexpr size_t minimumBroadSupportTerms = 8;
+    constexpr int qqSmallCommonCyclePercent = 36;
+    constexpr int nonQQSmallCommonCyclePercent = 41;
+    constexpr size_t shortCycleFractionNumerator = 1;
+    constexpr size_t shortCycleFractionDenominator = 4;
+
+    const auto viaCompleteBasis =
+        composePlans({
+            {"PowerSum->Complete:logarithm-formula"},
+            {"Complete->Schur:horizontal-Pieri"}});
+    const auto viaAbacusRimHooks =
+        useKernel(
+            "PowerSum->Schur:abacus-rim-hooks",
+            &SymmetricEngineRing::
+                powerSumsToSchurViaAbacusRimHooks);
+    const auto shortCycleHybrid =
+        composePlans({
+            {"PowerSum->Schur:"
+             "short-cycle-hybrid"}});
+    const uint32_t plethysmTag =
+        combinatorialTagMask(
+            CombinatorialTag::Plethysm);
+    const uint32_t littlewoodRichardsonTag =
+        combinatorialTagMask(
+            CombinatorialTag::
+                LittlewoodRichardson);
+    const uint32_t horizontalPieriTag =
+        combinatorialTagMask(
+            CombinatorialTag::HorizontalPieri);
+    const uint32_t verticalPieriTag =
+        combinatorialTagMask(
+            CombinatorialTag::VerticalPieri);
+    const uint32_t borderStripsTag =
+        combinatorialTagMask(
+            CombinatorialTag::BorderStrips);
+
+    const auto supportIsDenseForCompleteConversion =
+        componentSupportSquareRatioAtLeast(
+            denseSupportSquareNumerator,
+            denseSupportSquareDenominator);
+    const auto useCompleteForOrdinaryComponent =
+        !coefficientRingIsQQ() ||
+        componentDensityAtLeast(
+            denseComponentNumerator,
+            denseComponentDenominator) ||
+        supportIsDenseForCompleteConversion;
+
+    // Provenance distinguishes workloads with different support growth.
+    // Within each workload, the numerical conditions only decide which
+    // mathematically equivalent component formula is expected to be cheaper.
+    const auto useCompleteForPlethysm =
+        hasCombinatorialTag(plethysmTag) &&
+        (supportIsDenseForCompleteConversion ||
+         (componentWeightGreaterThan(
+              plethysmWeightThreshold) &&
+          componentTermCountAtLeast(
+              minimumMultipleTerms)));
+    const auto useCompleteForLittlewoodRichardson =
+        !hasCombinatorialTag(plethysmTag) &&
+        hasCombinatorialTag(
+            littlewoodRichardsonTag) &&
+        componentWeightGreaterThan(
+            littlewoodRichardsonWeightThreshold) &&
+        useCompleteForOrdinaryComponent;
+    const auto useCompleteForPieri =
+        !hasCombinatorialTag(plethysmTag) &&
+        !hasCombinatorialTag(
+            littlewoodRichardsonTag) &&
+        (hasCombinatorialTag(horizontalPieriTag) ||
+         hasCombinatorialTag(verticalPieriTag)) &&
+        componentWeightGreaterThan(
+            pieriWeightThreshold) &&
+        useCompleteForOrdinaryComponent;
+
+    // A common power-sum part is "small" when its size is at most the stated
+    // percentage of the component weight. The separate QQ and non-QQ
+    // crossovers reflect the different coefficient-arithmetic costs.
+    const auto hasSmallCommonCycle =
+        (coefficientRingIsQQ() &&
+         componentHasCommonPowerSumPartAtMostPercentOfWeight(
+             qqSmallCommonCyclePercent)) ||
+        (!coefficientRingIsQQ() &&
+         componentHasCommonPowerSumPartAtMostPercentOfWeight(
+             nonQQSmallCommonCyclePercent));
+    const auto useCompleteForLargeBorderStrip =
+        combinatorialTagsEqual(borderStripsTag) &&
+        componentWeightGreaterThan(
+            largeBorderStripWeightThreshold) &&
+        componentTermCountAtLeast(
+            minimumBroadSupportTerms) &&
+        !componentHasCommonPowerSumPartOne() &&
+        hasSmallCommonCycle;
+    const auto useCompleteForBorderStripWithCommonOne =
+        combinatorialTagsEqual(borderStripsTag) &&
+        componentWeightGreaterThan(
+            commonOneBorderStripWeightThreshold) &&
+        componentTermCountAtLeast(
+            minimumBroadSupportTerms) &&
+        componentHasCommonPowerSumPartOne() &&
+        useCompleteForOrdinaryComponent;
+
+    const auto ordinaryOrBorderStrip =
+        combinatorialTagsEqual(0) ||
+        combinatorialTagsEqual(borderStripsTag);
+    const auto useCompleteForMostlyShortCycleTerms =
+        ordinaryOrBorderStrip &&
+        componentWeightGreaterThan(
+            shortCycleWeightThreshold) &&
+        componentTermCountAtLeast(
+            minimumMultipleTerms) &&
+        componentAllPowerSumIndicesHaveMostlyShortCycles();
+    const auto useTermwiseHybrid =
+        ordinaryOrBorderStrip &&
+        componentWeightGreaterThan(
+            shortCycleWeightThreshold) &&
+        componentTermCountAtLeast(
+            minimumBroadSupportTerms) &&
+        componentMostlyShortCycleFractionAtLeast(
+            shortCycleFractionNumerator,
+            shortCycleFractionDenominator,
+            minimumBroadSupportTerms) &&
+        componentHasBothMostlyShortCycleAndOtherTerms();
+
+    return {
+        {useCompleteForPlethysm,
+         viaCompleteBasis},
+        {useCompleteForLittlewoodRichardson,
+         viaCompleteBasis},
+        {useCompleteForPieri,
+         viaCompleteBasis},
+        {useCompleteForLargeBorderStrip,
+         viaCompleteBasis},
+        {useCompleteForBorderStripWithCommonOne,
+         viaCompleteBasis},
+        {useCompleteForMostlyShortCycleTerms,
+         viaCompleteBasis},
+        // Use the fixed term-level hybrid for this component. That named
+        // component plan partitions its realized input without re-entering
+        // the picker.
+        {useTermwiseHybrid, shortCycleHybrid},
+        {otherwise(), viaAbacusRimHooks}};
   }
 
 const std::vector<SymmetricEngineRing::BasisConversionPlanDefinition>&
@@ -417,128 +602,22 @@ SymmetricEngineRing::basisConversionPlanDatabase()
       // The complete formula applies independently to each homogeneous
       // component of a nonhomogeneous power-sum expansion. Its ordered cases
       // fix one formula for every component, so execution makes no additional
-      // plan choice.
-      auto powerSumsToSchurHomogeneousCases = [&] {
-            const auto viaCompleteBasis =
-                composePlans({
-                    {"PowerSum->Complete:logarithm-formula"},
-                    {"Complete->Schur:horizontal-Pieri"}});
-            const auto viaAbacusRimHooks =
-                useKernel(
-                    "PowerSum->Schur:abacus-rim-hooks",
-                    &SymmetricEngineRing::
-                        powerSumsToSchurViaAbacusRimHooks);
-            const auto shortCycleHybrid =
-                composePlans({
-                    {"PowerSum->Schur:"
-                     "short-cycle-hybrid"}});
-            const uint32_t plethysmTag =
-                combinatorialTagMask(
-                    CombinatorialTag::Plethysm);
-            const uint32_t littlewoodRichardsonTag =
-                combinatorialTagMask(
-                    CombinatorialTag::
-                        LittlewoodRichardson);
-            const uint32_t horizontalPieriTag =
-                combinatorialTagMask(
-                    CombinatorialTag::HorizontalPieri);
-            const uint32_t verticalPieriTag =
-                combinatorialTagMask(
-                    CombinatorialTag::VerticalPieri);
-            const uint32_t borderStripsTag =
-                combinatorialTagMask(
-                    CombinatorialTag::BorderStrips);
-
-            const auto supportIsDenseForCompleteConversion =
-                componentSupportSquareRatioAtLeast(35, 2);
-            const auto useCompleteForOrdinaryComponent =
-                !coefficientRingIsQQ() ||
-                componentDensityAtLeast(1, 4) ||
-                supportIsDenseForCompleteConversion;
-            const auto useCompleteForPlethysm =
-                hasCombinatorialTag(plethysmTag) &&
-                (supportIsDenseForCompleteConversion ||
-                 (componentWeightGreaterThan(7) &&
-                  componentTermCountAtLeast(2)));
-            const auto useCompleteForLittlewoodRichardson =
-                !hasCombinatorialTag(plethysmTag) &&
-                hasCombinatorialTag(
-                    littlewoodRichardsonTag) &&
-                componentWeightGreaterThan(6) &&
-                useCompleteForOrdinaryComponent;
-            const auto useCompleteForPieri =
-                !hasCombinatorialTag(plethysmTag) &&
-                !hasCombinatorialTag(
-                    littlewoodRichardsonTag) &&
-                (hasCombinatorialTag(horizontalPieriTag) ||
-                 hasCombinatorialTag(verticalPieriTag)) &&
-                componentWeightGreaterThan(7) &&
-                useCompleteForOrdinaryComponent;
-            const auto hasSmallCommonCycle =
-                (coefficientRingIsQQ() &&
-                 componentHasCommonPowerSumPartAtMostPercentOfWeight(36)) ||
-                (!coefficientRingIsQQ() &&
-                 componentHasCommonPowerSumPartAtMostPercentOfWeight(41));
-            const auto useCompleteForLargeBorderStrip =
-                combinatorialTagsEqual(borderStripsTag) &&
-                componentWeightGreaterThan(15) &&
-                componentTermCountAtLeast(8) &&
-                !componentHasCommonPowerSumPartOne() &&
-                hasSmallCommonCycle;
-            const auto useCompleteForBorderStripWithCommonOne =
-                combinatorialTagsEqual(borderStripsTag) &&
-                componentWeightGreaterThan(7) &&
-                componentTermCountAtLeast(8) &&
-                componentHasCommonPowerSumPartOne() &&
-                useCompleteForOrdinaryComponent;
-            const auto ordinaryOrBorderStrip =
-                combinatorialTagsEqual(0) ||
-                combinatorialTagsEqual(borderStripsTag);
-            const auto useCompleteForMostlyShortCycleTerms =
-                ordinaryOrBorderStrip &&
-                componentWeightGreaterThan(13) &&
-                componentTermCountAtLeast(2) &&
-                componentAllPowerSumIndicesHaveMostlyShortCycles();
-            const auto useTermwiseHybrid =
-                ordinaryOrBorderStrip &&
-                componentWeightGreaterThan(13) &&
-                componentTermCountAtLeast(8) &&
-                componentMostlyShortCycleFractionAtLeast(
-                    1, 4, 8) &&
-                componentHasBothMostlyShortCycleAndOtherTerms();
-
-            return std::vector<BasisConversionPlanCase>{
-                {useCompleteForPlethysm,
-                 viaCompleteBasis},
-                {useCompleteForLittlewoodRichardson,
-                 viaCompleteBasis},
-                {useCompleteForPieri,
-                 viaCompleteBasis},
-                {useCompleteForLargeBorderStrip,
-                 viaCompleteBasis},
-                {useCompleteForBorderStripWithCommonOne,
-                 viaCompleteBasis},
-                {useCompleteForMostlyShortCycleTerms,
-                 viaCompleteBasis},
-                // Use the fixed term-level hybrid for this component. That
-                // named plan partitions its realized input without
-                // re-entering the picker.
-                {useTermwiseHybrid, shortCycleHybrid},
-                {otherwise(), viaAbacusRimHooks}};
-          };
+      // plan choice. The named helper above owns the empirical component
+      // policy and documents the meaning of every numerical threshold.
       plans.push_back({
           {"PowerSum->Schur:homogeneous-component-formulas"},
           BasisKind::PowerSum,
           BasisKind::Schur,
           always(),
           ExpressionPieceKind::HomogeneousComponents,
-          powerSumsToSchurHomogeneousCases()});
+          powerSumsToSchurComponentFormulaCases()});
 
       // ======================================================================
       // Named Schur Compositions And Hybrids
       // ======================================================================
       // Named compositions and hybrids use the same plan representation as
-      // direct kernels. Child identifiers completely determine execution.
+      // direct kernels. Component-plan identifiers completely determine
+      // execution.
       plans.push_back({
           {"PowerSum->Schur:via-complete-basis"},
           BasisKind::PowerSum,

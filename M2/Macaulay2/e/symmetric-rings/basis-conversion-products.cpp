@@ -9,7 +9,6 @@
 
 #include <algorithm>
 #include <cstdio>
-#include <cstdlib>
 #include <functional>
 #include <map>
 #include <sstream>
@@ -935,7 +934,7 @@ void SymmetricEngineRing::traceSchurFactorMethod(
     SchurFactorMethod method,
     const SchurCompatibleFactor& factor) const
 {
-    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr) return;
+    if (!basisConversionTraceEnabled()) return;
     std::fprintf(stderr,
                  "SymmetricRings Schur factor: weight=%d method=%s\n",
                  factor.weight,

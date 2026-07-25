@@ -18,11 +18,11 @@ The engine separates three questions:
 2. **Which available algorithm is appropriate for this input?**
 3. **How does that algorithm carry out the mathematics?**
 
-The public raw interface answers the first question, plan databases and
-pickers answer the second, and kernels answer the third. Keeping those roles
-separate is important. A new mathematical algorithm normally needs a kernel
-and a plan in an existing database; it normally does not need a new public raw
-function.
+The public raw interface frames the first question, plan collections and
+route selectors answer the second, and kernels answer the third. Keeping those
+roles separate is important. A new mathematical algorithm normally adds a
+kernel and an entry in its operation's existing plan or route collection; it
+normally does not need a new public raw function.
 
 The same distinction applies to metadata.  Combinatorial tags describe the
 dominant structure of the user's operation, such as a Schur product or
@@ -41,20 +41,21 @@ The principal files are:
 | Files | Responsibility |
 |---|---|
 | `symmetric-engine-ring.*` | The engine ring and its central data types |
+| `operation-records.hpp` | Compact records shared between engine state and operation modules |
 | `storage.*` | Canonical storage, term collection, and representation helpers |
-| `presentation.cpp` | Stable presentation ordering and string rendering |
+| `presentation.*` | Stable presentation ordering and string rendering |
 | `partitions.*` | Partition utilities and combinatorial enumeration |
 | `arithmetic.*` | Addition, multiplication, scalar operations, and product tagging |
-| `expression-inspection.cpp` | Shared expression-shape and coefficient-map inspection |
+| `expression-inspection.*` | Shared expression-shape and coefficient-map inspection |
 | `expression-conditions.*` | Inspectable plan conditions and ordered expression-piece partitioning |
 | `basis-conversion-policy.*` | Reusable performance-only selection facts |
-| `basis-conversion-plans.cpp` | Policy-free complete conversion plans using kernels, named plans, and compositions |
+| `basis-conversion-plans.cpp` | Policy-free complete conversion plans whose cases use a kernel or a nonempty fixed composition |
 | `basis-conversion-picker.cpp` | Ordered performance policy for choosing among complete plans |
 | `basis-conversion.*` | Expression facts, plan validation and execution, and conversion/multiplication workflows |
 | `basis-coefficient.*` | Targeted scalar transitions and default full-conversion fallback |
 | `basis-conversion-kernels.*` | Basis-family formulas, Jacobi--Trudi, characters, Hall--Littlewood transitions, and straightening |
 | `basis-conversion-products.*` | Littlewood--Richardson, Pieri, border-strip, and monomial-like product mathematics |
-| `inner-product-dispatch.*` | Inner-product context resolution and route selection |
+| `inner-product-dispatch.*` | Inner-product requests, profiles, cost selection, tracing, orchestration, and public entry points |
 | `inner-product-kernels.*` | Mathematical inner-product algorithms |
 | `plethysm.*` | Plethysm workflows and their kernels |
 | `omega.*` | The omega involution and omega-assisted conversions |
@@ -127,92 +128,64 @@ shared-plan workflows used by the public operations.
 
 ## Pipeline architecture
 
-The purpose of a workflow is to make useful assumptions and guarantees
-explicit. Exact metadata can justify bypassing discovery or normalization;
-otherwise the workflow establishes the same postconditions before selection.
-The broad fallback is designed to work for every supported input.
+An engine workflow owns one mathematical request from input preparation
+through final contract validation. Exact metadata may prove that preparation
+is already complete; otherwise the workflow normalizes and inspects the
+realized input before selecting an algorithm.
 
-Three levels of responsibility are used throughout the engine:
+Three roles remain separate:
 
-- A **workflow** owns a public calculation from input preparation through
-  result validation.
-- A **plan** is one applicable mathematical path selected from a plan database.
-- A **kernel** performs the algebra or combinatorics for a selected plan and
-  contains no selection policy.
+- A **workflow** owns the request and its final result.
+- A **plan** is one complete applicable mathematical algorithm.
+- A **kernel** implements one formula without selection policy.
 
-Workflows share plan databases and kernels when their contracts apply. They
-differ in their operands, the facts available at entry, and the structure that
-must remain visible during the calculation.
+A selected plan is total over its declared domain: execution cannot decline
+and choose a replacement. Kernels may rely on structural guarantees proved by
+their containing plans, but those preconditions must be explicit.
 
-Abstractly, a structured operation follows this pattern:
+The operations preserve different mathematical structure:
 
-```text
-public mathematical operation
-        |
-        v
-request containing operands, context, and known structure
-        |
-        v
-prepare exact facts
-        |-- use a metadata-backed bypass
-        `-- normalize and inspect the input
-        |
-        v
-plan picker
-        |-- a direct combinatorial formula
-        |-- coefficient extraction or diagonal pairing
-        |-- a fixed named-plan composition
-        `-- the operation's broad fallback
-        |
-        v
-selected kernel or composed plan
-        |
-        v
-result
+| Operation | Structure preserved for selection | Broad method |
+|---|---|---|
+| Basis conversion | Source expansion, target basis, exact facts, and provenance | Fixed composition through power sums |
+| Multiplication to a basis | Both operands, their basis families, and the requested target | Convert to a multiplicative basis, with power sums always available |
+| Plethysm to a basis | Outer operand, inner operand, and target basis | Adams-operation plethysm in power sums followed by conversion |
+| Hall inner product | Both operand profiles and an explicit pairing context | Convert both operands to power sums and apply the diagonal pairing |
+| Basis coefficient | The source expansion and one requested target basis element | Perform one complete basis conversion and look up the coefficient |
+
+The implemented stages, bypasses, and plan-execution contracts are documented
+in [`README-pipelines.md`](README-pipelines.md).
+
+## Development diagnostics
+
+Ordinary `toBasis` always uses automatic production selection. It deliberately
+ignores conversion forcing, conversion tracing, exhaustive-plan checks, and
+forced multiplication settings from the process environment.
+
+Conversion-plan comparison belongs to the private M2 function `toBasisBench`,
+available after loading the package in development mode:
+
+```m2
+debug needsPackage "SymmetricRings";
+R = symmetricRing QQ;
+F = p_{4,2} + p_{3,2,1};
+report = toBasisBench(
+    F, S,
+    "Plans" => {
+        "Automatic",
+        "PowerSum->Schur:abacus-rim-hooks",
+        "PowerSum->Schur:via-complete-basis"
+        },
+    "Repetitions" => 3,
+    "Warmups" => 1,
+    "Track" => true);
+report#"Summary"
 ```
 
-What counts as useful structure depends on the operation.  Conversion cares
-about source and target representations; multiplication cares about separate
-factors and their combinatorial types; plethysm cares about its outer and
-inner operands; and an inner product cares about two operand profiles and an
-explicit pairing.
-
-| Operation | Preserved request structure | High-level decision | Broad fallback |
-|---|---|---|---|
-| Basis conversion | Expression, exact source/target facts, and tags | Select one complete source-to-target plan from the shared plan database | Convert general terms through a fixed composition of source-to-power-sum and power-sum-to-target plans |
-| Multiplication to a basis | Left operand, right operand, and output basis | Select one multiplication plan, including operand conversions and a product kernel | Convert through power sums and multiply there |
-| Plethysm to a basis | Outer operand, inner operand, and target basis | Choose a specialized combined route or materialize in power sums | Adams-operation plethysm followed by general conversion |
-| Inner product | Two operand profiles, pairing context, and registered metadata | Choose a diagonal, single-element, or structured-coordinate workflow | Convert both operands to power sums and apply the pairing |
-
-A selected plan must be total over its declared domain; execution does not
-decline and choose a replacement. A kernel need not repeat structural
-discovery guaranteed by its caller, but its preconditions must be explicit.
-
-## Tracing and forcing pipeline selection
-
-Pipeline tracing shows which workflow and route the ordinary selectors choose.
-Enable conversion tracing by defining the environment variable before starting
-Macaulay2.  From the nested source tree, a complete one-command example is:
-
-```sh
-M2_SYMMETRIC_RINGS_TRACE_CONVERSION=1 \
-  BUILD/build/M2 --no-preload --silent --stop -q \
-  -e 'needsPackage "SymmetricRings"; R=symmetricRing QQ; F=p_{3,1}+2*p_{2,1,1}; G=toS F; exit 0'
-```
-
-Trace messages are written to standard error. The conversion trace reports
-metadata bypasses, selected complete conversion plans and their fixed component
-plans, and multiplication plans. Some kernels additionally emit lower-level
-diagnostic lines, such as the method selected for individual Schur factors.
-
-For an interactive session, either prefix the M2 command in the same way or
-export the variable first:
-
-```sh
-export M2_SYMMETRIC_RINGS_TRACE_CONVERSION=1
-BUILD/build/M2
-unset M2_SYMMETRIC_RINGS_TRACE_CONVERSION
-```
+The explicit benchmark request scopes plan forcing and tracing to its own
+engine call. Tracking reports the selected complete plan and its fixed
+component plans on standard error, in separate untimed executions. Unknown,
+endpoint-incompatible, and inapplicable plan identifiers are errors.
 
 Inner-product selection has a separate trace:
 
@@ -220,39 +193,20 @@ Inner-product selection has a separate trace:
 M2_SYMMETRIC_RINGS_TRACE_INNER_PRODUCT=1 BUILD/build/M2
 ```
 
-Plan identifiers printed by the conversion trace can be forced in a
-fresh process with:
-
-```sh
-M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN='PowerSum->Schur:Frobenius-character-formula'
-M2_SYMMETRIC_RINGS_FORCE_CONVERSION_PLAN='Complete->Schur:horizontal-Pieri'
-M2_SYMMETRIC_RINGS_FORCE_MULTIPLICATION_PLAN='product:via-power-sums'
-```
-
-An unknown conversion plan, a plan with the wrong endpoints, or an
-inapplicable forced plan is an explicit error. Conversion forcing names exactly
-one complete top-level plan. If that plan is a composition, its definition
-already fixes all component-plan identifiers; neither forcing nor execution
-makes another choice. Multiplication forcing likewise applies to the complete
-binary product plan.
-The development check
-`Macaulay2/packages/SymmetricRings/extras/benchmarks/test-plan-forcing.sh`
-asserts both forced and automatic selections, including direct, composition,
-term-hybrid, component-hybrid, Hall--Littlewood, broad fallback, and
-multiplication plans.
-
-For development-only differential validation, defining
-`M2_SYMMETRIC_RINGS_CHECK_ALL_CONVERSION_PLANS` executes every applicable
-available plan for each requested source/target group and checks that all
-canonical results agree. This mode is intended for small test inputs, not
-benchmarks.
-
 It reports the inner-product context and selected pipeline, followed by the
 route, operand orientation, estimated cost, and relevant cache state.
 
-Tracing observes normal automatic selection and does not itself force a route.
-To compare algorithms on the same input, set a forcing variable and enable the
-corresponding trace at the same time.
+Multiplication-plan forcing remains a separate development control:
+
+```sh
+M2_SYMMETRIC_RINGS_FORCE_MULTIPLICATION_PLAN='product:via-power-sums'
+```
+
+Multiplication forcing applies to one complete binary product plan.
+The development check
+`Macaulay2/packages/SymmetricRings/extras/benchmarks/test-plan-forcing.sh`
+uses `toBasisBench` for conversion-plan agreement and the multiplication
+control for multiplication-plan agreement.
 
 Other focused controls follow the same runtime pattern:
 
@@ -261,9 +215,9 @@ Other focused controls follow the same runtime pattern:
 | `M2_SYMMETRIC_RINGS_FORCE_INNER_PRODUCT_PIPELINE` | `fallback-power-sums` | Bypass specialized inner-product pipelines |
 | `M2_SYMMETRIC_RINGS_FORCE_INNER_PRODUCT_ROUTE` | A route name printed by the inner-product trace | Select that route from the applicable candidates; an inapplicable route is an error |
 
-These controls are read at runtime, so changing a trace or forced-route value
-does not require rebuilding the package.  Start a fresh M2 process with the
-desired environment for each comparison.
+These non-conversion controls are read at runtime, so changing one does not
+require rebuilding the package. Start a fresh M2 process with the desired
+environment for each comparison.
 
 The implementation tests whether a trace variable is present, not whether its
 value is numerically true.  Thus setting a trace to `0` still enables it; unset
@@ -287,6 +241,10 @@ kernel or a nonempty fixed composition of named plans. For example, the default
 components and can use the abacus formula, conversion through complete
 functions, or a fixed term-level hybrid. Every case computes the same Schur
 expansion.
+
+The two formula representations are `KernelPlan` and `CompositionPlan`.
+A one-plan `CompositionPlan` delegates to that exact, possibly piecewise
+plan; a longer composition passes through intermediate bases.
 
 The picker chooses only among complete available plans with the requested
 endpoints. It does not construct new intermediate-basis paths, and the generic
@@ -353,74 +311,57 @@ fallback pattern to different kinds of mathematical structure.
 
 ### Product-aware multiplication
 
-Ordinary multiplication and product-aware conversion have related but
-different responsibilities.  `mult` constructs the algebraic product and
-attaches one dominant combinatorial tag.  Once expanded, the expression still
-remembers that it arose from LR, Pieri, or border-strip structure, but no
-longer retains the original two operands.
+For expansions $F$ and $G$, multiplication is the bilinear extension of
+products of canonical basis elements. `mult` constructs the algebraic product
+and records its dominant LR, Pieri, or border-strip provenance.
+`multiplyToBasis(F,G,v)` instead preserves the two operands and target basis
+until it has selected one complete multiplication plan.
 
-`multiplyToBasis(f,g,B)` instead preserves both operands until it has selected
-one complete multiplication plan. The public wrapper accepts product-free
-linear combinations and distributes over their terms. For each nonscalar term
-pair, its strict binary helper sees two canonical basis elements and selects
-the operand conversions and product kernel together. Available kernels include
-Littlewood--Richardson, horizontal and vertical Pieri, border strips,
-compatible Schur factor rules, monomial-like products, and the broad
-power-sum product.
-
-Selection fixes every operand conversion before execution. A
-support-dependent final conversion is selected only after the kernel's actual
-normalized output exists. This preserves the useful factorization without
-placing conversion policy inside a product kernel. The outer multiplication
-attaches its mathematical tag regardless of whether the implementation
-literally enumerated LR tableaux or reached the same expansion by another
-justified formula. See the
-[multiplication diagrams](README-pipelines.md#multiplication) for the public
-distribution, strict binary workflow, and one-term product resolver.
+Multiplication plans fix operand conversions, one policy-free product kernel,
+and the kernel's mathematical output basis. A final conversion is selected
+only after that canonical product exists. Available formulas include
+Littlewood--Richardson, Pieri, border strips, monomial-like products,
+Hall--Littlewood generator multiplication, multiplicative target bases, and
+the broad power-sum product. See the
+[multiplication summary and diagrams](README-pipelines.md#multiplication).
 
 ### Plethysm
 
-Plain `plethysm(f,g)` uses power sums as its natural interchange basis and
-implements substitution through Adams operations.  A combined request such as
-the engine path used by `@` retains `f`, `g`, and the target basis separately
-and chooses one complete plethysm-to-basis route before calculation.
+Plethysm is determined by $p_r[g]=\psi_r(g)$, so plain `plethysm(f,g)` uses
+power sums and Adams operations. `plethysmToBasis(f,g,v)` either uses the
+applicable fused Schur recurrence or computes this broad power-sum result and
+passes its exact facts and `Plethysm` provenance to `toBasis`.
 
-The selector chooses the specialized Schur plethysm-to-Schur route when its
-shape restrictions and benchmarked crossover permit it. Otherwise it computes
-plain plethysm in power sums, attaches exact facts and `Plethysm` provenance,
-and calls the default `toBasis` workflow.
-
-See the [plethysm diagram](README-pipelines.md#plethysm) for the two current
-routes and their shared output contract.
-
-When extending plethysm, keep four concerns separate: the Adams-operation
-definition, the intermediate basis, conversion to the requested output basis,
-and metadata attached at the explicit plethysm boundary.  A specialized probe
-needs exact mathematical preconditions and must be able to decline cleanly to
-the general power-sum path.
+New plethysm formulas must keep Adams substitution, target conversion, and
+metadata ownership separate. See the
+[plethysm summary and diagram](README-pipelines.md#plethysm).
 
 ### Inner products
 
-Inner products have a separate dispatcher because the result depends not just
-on two bases but on an explicit pairing context.  The request contains the
-ordinary Hall, Hall--Littlewood, or other supported context, its power-sum
-pairing, registered dual/diagonal metadata, and a profile of each operand.
+For the ordinary Hall pairing,
+$\langle p_\lambda,p_\mu\rangle=\delta_{\lambda\mu}z_\lambda$; other
+supported contexts supply their corresponding diagonal power-sum weights.
+The request therefore preserves both operand profiles, an explicit pairing
+context, and registered dual or diagonal metadata.
 
-The engine can pair registered diagonal bases, extract a coefficient in a dual
-basis, apply Kostka or conjugate-Kostka formulas, evaluate weighted Schur
-characters, use the power-sum diagonal directly, or convert both complete
-operands to power sums. The current dispatcher organizes those opportunities
-into four top-level pipelines and compares applicable scalar-route candidates
-inside the selected pipeline. See the
-[Hall-inner-product diagram](README-pipelines.md#hall-inner-products) for the
-current selection order and broad fallback.
+The current dispatcher has four top-level pipelines and specialized scalar
+routes for diagonal bases, coefficient extraction, Kostka formulas, and
+weighted characters. Converting both complete operands to power sums is the
+broad route. The M2 layer resolves the pairing context explicitly; the engine
+never infers it from display symbols. See the
+[Hall-inner-product summary and diagram](README-pipelines.md#hall-inner-products).
 
-The Macaulay2 layer resolves the intended inner-product context explicitly;
-the engine must not infer it from display symbols or merely from which bases
-happen to be registered.  A new shortcut should supply an independently
-testable kernel, a route candidate with exact preconditions, a defensible cost
-estimate when it competes with other candidates, and a comparison with the
-power-sum fallback.
+A new scalar shortcut needs an independently testable kernel, exact
+preconditions, a defensible cost estimate, and agreement with the power-sum
+route.
+
+### Targeted basis coefficients
+
+For a target basis element $v_\lambda$, `basisCoefficient` asks only for
+$[v_\lambda]f$. Direct lookup and targeted power-sum formulas avoid
+constructing the complete $v$-expansion when possible; otherwise the operation
+calls `toBasis` once and reads the coefficient. See the
+[basis-coefficient summary](README-pipelines.md#basis-coefficients).
 
 Not every engine operation needs a named pipeline family.  If an operation has
 one clear route and no representation-level workflow to preserve, a direct

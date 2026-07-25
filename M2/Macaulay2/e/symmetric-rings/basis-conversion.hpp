@@ -161,8 +161,9 @@
 // Basis-Conversion Plan Contracts
 // ============================================================================
 // A plan is one complete source-to-target conversion. The plan database is
-// policy-free, the picker chooses one top-level plan, and the generic
-// executor follows that plan's fixed formulas without choosing a replacement.
+// free of top-level selection, the picker chooses one complete plan, and the
+// generic executor follows that plan's fixed piecewise formulas without
+// choosing a replacement.
 
   // The database stores complete source-to-target plans. A case uses either
   // one kernel or a nonempty fixed composition of named plans.
@@ -213,8 +214,8 @@
     std::vector<BasisConversionPlanCase> cases;
     // Every plan already guarantees a canonical target expansion. This
     // condition records only a stronger mathematical postcondition, when one
-    // is needed to prove a later child's applicability. always() means that
-    // the plan promises no additional shape/profile condition.
+    // is needed to prove a later component plan's applicability. always()
+    // means that the plan promises no additional shape/profile condition.
     ExpressionCondition outputGuarantee = always();
   };
 
@@ -258,7 +259,9 @@
 // ============================================================================
 // Basis-Conversion Plan Database
 // ============================================================================
-// Plan declarations record mathematical availability without selection policy.
+// Plan declarations record mathematical availability and any fixed piecewise
+// formula policy. They do not choose among complete plans with the same
+// endpoints.
 
   static BasisConversionPlanFormula useKernel(
       std::string name,
@@ -272,6 +275,8 @@
   powerSumFallbackPlanDatabase();
   static const BasisConversionPlanId&
   genericPowerSumFallbackPlanIdentifier();
+  static std::vector<BasisConversionPlanCase>
+  powerSumsToSchurComponentFormulaCases();
   static const std::map<
       std::string,
       const BasisConversionPlanDefinition *>&
@@ -307,7 +312,9 @@
 // ============================================================================
 // Basis-Conversion Applicability And Selection
 // ============================================================================
-// Applicability is mathematical; costs and pickers own performance policy.
+// Applicability is mathematical. Fixed plan cases may choose formulas for
+// individual pieces by cost, while pickers own performance choices among
+// complete plans.
 
   struct BasisConversionPreference
   {
@@ -371,13 +378,11 @@
       CombinatorialTags combinatorialTags,
       const ExpressionFacts& inputFacts,
       ExpressionFacts *resultFacts = nullptr) const;
-  bool checkAllApplicableBasisConversionPlans(
-      ring_elem expression,
-      int sourceBasisId,
-      int targetBasisId,
-      CombinatorialTags combinatorialTags,
-      const ExpressionFacts& inputFacts,
-      ring_elem expectedResult) const;
+  // The development benchmark installs an explicit diagnostic context.
+  // Ordinary conversion installs a non-diagnostic context so ambient
+  // environment variables cannot alter its selection or timing.
+  bool basisConversionContextActive() const;
+  bool basisConversionTraceEnabled() const;
   ring_elem convertCanonicalExpressionToBasis(
       ring_elem f,
       int targetBasisId,
@@ -498,6 +503,37 @@
       multiplicationPlansCache;
 
 // ============================================================================
+// Basis-Conversion Workflow Stages
+// ============================================================================
+// Preparation produces normalized, skew-free factors and exact facts. Product
+// resolution then produces the product-free expression on which linear
+// source-basis decomposition is mathematically valid.
+
+  struct PreparedBasisConversionInput
+  {
+    ring_elem expression;
+    ExpressionFacts facts;
+    std::vector<size_t> factorsPerTerm;
+    CombinatorialTags combinatorialTags = 0;
+  };
+
+  struct ProductFreeBasisConversionInput
+  {
+    ring_elem expression;
+    std::optional<ExpressionFacts> exactFacts;
+    // True means product resolution itself completed the requested conversion:
+    // every surviving term is already a canonical target-basis term.
+    bool productResolutionCompletedInTarget = false;
+  };
+
+  PreparedBasisConversionInput prepareBasisConversionInput(
+      ring_elem expression,
+      int targetBasisId) const;
+  ProductFreeBasisConversionInput resolveProductsForBasisConversion(
+      PreparedBasisConversionInput prepared,
+      int targetBasisId) const;
+
+// ============================================================================
 // Public Conversion And Multiplication Entry Points
 // ============================================================================
 // Definitions follow dependency order: multiplication helpers precede
@@ -509,6 +545,12 @@
       ring_elem g,
       int targetBasisId) const;
   ring_elem toBasis(ring_elem f, int targetBasisId) const;
+  // Development-only raw entry used by private M2 benchmark tooling.
+  ring_elem toBasisBench(
+      ring_elem f,
+      int targetBasisId,
+      const std::optional<std::string>& forcedPlanIdentifier,
+      bool traceConversion) const;
 
 #endif
 

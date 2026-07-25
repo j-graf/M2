@@ -9,7 +9,6 @@
 
 #include <algorithm>
 #include <cstdio>
-#include <cstdlib>
 #include <functional>
 #include <map>
 #include <sstream>
@@ -284,7 +283,7 @@ void SymmetricEngineRing::tracePlethysmToBasisSelection(
     PlethysmToBasisRoute route,
     int targetBasisId) const
 {
-    if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_CONVERSION") == nullptr)
+    if (!basisConversionTraceEnabled())
       return;
     std::fprintf(
         stderr,

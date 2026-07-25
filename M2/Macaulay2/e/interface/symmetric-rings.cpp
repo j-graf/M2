@@ -113,6 +113,19 @@ const RingElement *rawSymmetricRingsToBasis(const RingElement *f,
   return symmetric_rings::rawSymmetricRingsToBasis(f, targetBasisId);
 }
 
+const RingElement *rawSymmetricRingsToBasisBench(
+    const RingElement *f,
+    int targetBasisId,
+    M2_string conversionPlan,
+    bool traceConversion)
+{
+  return symmetric_rings::rawSymmetricRingsToBasisBench(
+      f,
+      targetBasisId,
+      conversionPlan,
+      traceConversion);
+}
+
 const RingElement *rawSymmetricRingsMultiplyToBasis(
     const RingElement *f,
     const RingElement *g,
