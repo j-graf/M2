@@ -18,11 +18,12 @@ The engine separates three questions:
 2. **Which available algorithm is appropriate for this input?**
 3. **How does that algorithm carry out the mathematics?**
 
-The public raw interface frames the first question, plan collections and
-route selectors answer the second, and kernels answer the third. Keeping those
-roles separate is important. A new mathematical algorithm normally adds a
-kernel and an entry in its operation's existing plan or route collection; it
-normally does not need a new public raw function.
+The public raw interface frames the first question, operation-specific pickers
+answer the second, and kernels answer the third. Basis conversion uses complete
+plans because a conversion may be piecewise or composed. Strict binary
+multiplication instead selects one complete combinatorial kernel directly.
+Keeping those roles separate is important, and a new mathematical algorithm
+normally needs no public raw function.
 
 The same distinction applies to metadata.  Combinatorial tags describe the
 dominant structure of the user's operation, such as a Schur product or
@@ -51,10 +52,15 @@ The principal files are:
 | `basis-conversion-policy.*` | Reusable performance-only selection facts |
 | `basis-conversion-plans.cpp` | Policy-free complete conversion plans whose cases use a kernel or a nonempty fixed composition |
 | `basis-conversion-picker.cpp` | Ordered performance policy for choosing among complete plans |
-| `basis-conversion.*` | Expression facts, plan validation and execution, and conversion/multiplication workflows |
+| `basis-conversion.*` | Expression facts, plan validation and execution, and conversion workflow |
 | `basis-coefficient.*` | Targeted scalar transitions and default full-conversion fallback |
-| `basis-conversion-kernels.*` | Basis-family formulas, Jacobi--Trudi, characters, Hall--Littlewood transitions, and straightening |
-| `basis-conversion-products.*` | Littlewood--Richardson, Pieri, border-strip, and monomial-like product mathematics |
+| `basis-conversion-kernels.*` | Basis-family formulas, Jacobi--Trudi, characters, Hall--Littlewood transitions, and straightening recurrences |
+| `basis-normalization.*` | Declarative straightening and skew-expansion rules and their generic workflow |
+| `multiplication-kernels.*` | Littlewood--Richardson, Pieri, border-strip, and monomial/forgotten product mathematics |
+| `multiplication-picker.*` | Commutative binary-kernel declarations, applicability, and performance policy |
+| `multiplication-folds.*` | Declarative target-closed multifactor families and closure validation |
+| `binary-multiplication.*` | Strict multiplication of two canonical basis terms |
+| `multiplication.*` | Bilinear extension and complete product-term strategies |
 | `inner-product-dispatch.*` | Inner-product requests, profiles, cost selection, tracing, orchestration, and public entry points |
 | `inner-product-kernels.*` | Mathematical inner-product algorithms |
 | `plethysm.*` | Plethysm workflows and their kernels |
@@ -124,7 +130,7 @@ sums to Schur functions should extend the conversion plan database, not add a
 parallel raw API.
 
 `rawSymmetricRingsToBasis` and `rawSymmetricRingsMultiplyToBasis` expose the
-shared-plan workflows used by the public operations.
+conversion and multiplication workflows used by the public operations.
 
 ## Pipeline architecture
 
@@ -133,15 +139,16 @@ through final contract validation. Exact metadata may prove that preparation
 is already complete; otherwise the workflow normalizes and inspects the
 realized input before selecting an algorithm.
 
-Three roles remain separate:
+Every operation has a **workflow** that owns its request and final result.
+Basis conversion then distinguishes a complete **plan** from the formula
+**kernels** used by that plan. Strict binary multiplication has no plan layer:
+its commutative picker selects a complete direct kernel, while its workflow
+owns the multiplicative-target and power-sum alternatives.
 
-- A **workflow** owns the request and its final result.
-- A **plan** is one complete applicable mathematical algorithm.
-- A **kernel** implements one formula without selection policy.
-
-A selected plan is total over its declared domain: execution cannot decline
-and choose a replacement. Kernels may rely on structural guarantees proved by
-their containing plans, but those preconditions must be explicit.
+A selected conversion plan is total over its declared domain: execution cannot
+decline and choose a replacement. A selected multiplication kernel is likewise
+total on the strict pair proved by its applicability condition. In both
+systems, preconditions are explicit and execution does not reselect.
 
 The operations preserve different mathematical structure:
 
@@ -158,9 +165,9 @@ in [`README-pipelines.md`](README-pipelines.md).
 
 ## Development diagnostics
 
-Ordinary `toBasis` always uses automatic production selection. It deliberately
-ignores conversion forcing, conversion tracing, exhaustive-plan checks, and
-forced multiplication settings from the process environment.
+Ordinary `toBasis` and `multiplyToBasis` always use automatic production
+selection. Diagnostic forcing and tracing are explicit private benchmark
+requests, not process-environment state.
 
 Conversion-plan comparison belongs to the private M2 function `toBasisBench`,
 available after loading the package in development mode:
@@ -196,17 +203,34 @@ M2_SYMMETRIC_RINGS_TRACE_INNER_PRODUCT=1 BUILD/build/M2
 It reports the inner-product context and selected pipeline, followed by the
 route, operand orientation, estimated cost, and relevant cache state.
 
-Multiplication-plan forcing remains a separate development control:
+Strict binary kernels are compared with the private
+`multiplyToBasisBench` helper:
 
-```sh
-M2_SYMMETRIC_RINGS_FORCE_MULTIPLICATION_PLAN='product:via-power-sums'
+```m2
+debug needsPackage "SymmetricRings";
+R = symmetricRing QQ;
+report = multiplyToBasisBench(
+    S_{4,2}, h_3, S,
+    "Kernels" => {
+        "Automatic",
+        "Schur*Complete->Schur:horizontal-Pieri",
+        "PowerSumReference"
+        },
+    "Repetitions" => 3,
+    "Warmups" => 1,
+    "Track" => true);
+report#"Summary"
 ```
 
-Multiplication forcing applies to one complete binary product plan.
-The development check
-`Macaulay2/packages/SymmetricRings/extras/benchmarks/test-plan-forcing.sh`
-uses `toBasisBench` for conversion-plan agreement and the multiplication
-control for multiplication-plan agreement.
+The forced identifier, independent power-sum reference, and trace flag are
+scoped to that engine call. Unknown endpoints and inapplicable kernels are
+errors. Reversing the two factors reaches the same commutative picker.
+The systematic `BinaryMultiplication` cases record automatic strict
+selection, while `MultiplicationWorkflow` cases time complete bilinear and
+factor-list strategies.  Their diagnostic
+`SYMRINGS_BENCH_TRACE_WORKFLOW=1` mode reports the selected outer strategy and
+whether it invoked strict binary multiplication; it is explicit benchmark
+state and is not consulted by ordinary package calls.
 
 Other focused controls follow the same runtime pattern:
 
@@ -312,17 +336,17 @@ fallback pattern to different kinds of mathematical structure.
 ### Product-aware multiplication
 
 For expansions $F$ and $G$, multiplication is the bilinear extension of
-products of canonical basis elements. `mult` constructs the algebraic product
-and records its dominant LR, Pieri, or border-strip provenance.
-`multiplyToBasis(F,G,v)` instead preserves the two operands and target basis
-until it has selected one complete multiplication plan.
+products of canonical basis elements. A strict direct kernel computes one
+commutative map $\{u,v\}\to w$ and already returns its answer in $w$.
+`multiplyToBasis(F,G,w)` distributes only when every nonscalar term pair has
+such an automatic kernel. Otherwise it multiplies both complete expansions in
+power sums and converts once.
 
-Multiplication plans fix operand conversions, one policy-free product kernel,
-and the kernel's mathematical output basis. A final conversion is selected
-only after that canonical product exists. Available formulas include
-Littlewood--Richardson, Pieri, border strips, monomial-like products,
-Hall--Littlewood generator multiplication, multiplicative target bases, and
-the broad power-sum product. See the
+A stored term with many factors is handled separately. Multiplicative targets
+use a balanced product tree. A declaratively registered target-closed family
+uses one generic fold: start with a target-native factor when possible, then
+apply the total direct $\{w,u\}\to w$ kernels declared for its allowed factor
+bases. Every other term uses one complete power-sum fallback. See the
 [multiplication summary and diagrams](README-pipelines.md#multiplication).
 
 ### Plethysm
@@ -400,9 +424,12 @@ Littlewood--Richardson tag for the new outer operation, without tagging every
 term of the plethysm expansion.  The tag is expression metadata; it is not a
 claim that the LR tableau algorithm was literally executed.
 
-Product algorithms belong in `basis-conversion-products.*`; the owning
-conversion and multiplication workflows remain in `basis-conversion.*`.
-Ordinary conversion kernels should neither infer nor mutate tags.
+Product algorithms belong in `multiplication-kernels.*`; their commutative
+selection policy belongs in `multiplication-picker.*`. Explicit mathematical
+closure of a complete factor family belongs in `multiplication-folds.*`.
+Strict orchestration and outer expression management remain separated in
+`binary-multiplication.*` and `multiplication.*`. Ordinary conversion kernels
+should neither infer nor mutate tags.
 
 ## Correctness and performance work
 

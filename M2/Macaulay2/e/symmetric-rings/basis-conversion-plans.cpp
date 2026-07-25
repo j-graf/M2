@@ -21,12 +21,12 @@ namespace symmetric_rings {
 
 SymmetricEngineRing::BasisConversionPlanFormula
 SymmetricEngineRing::useKernel(
-    std::string name,
+    std::string identifier,
     BasisConversionKernel kernel,
     ExpressionCondition outputGuarantee)
 {
     return KernelPlan{
-        std::move(name),
+        std::move(identifier),
         kernel,
         std::move(outputGuarantee)};
   }
@@ -690,7 +690,7 @@ SymmetricEngineRing::basisConversionPlanDatabase()
 // identified. The generic executor therefore treats it exactly like a
 // composition written explicitly in the database.
 
-SymmetricEngineRing::RingBasisConversionPlan
+SymmetricEngineRing::ResolvedBasisConversionPlan
 SymmetricEngineRing::basisConversionViaPowerSumsPlan(
     int sourceBasisId,
     int targetBasisId) const
@@ -768,7 +768,7 @@ SymmetricEngineRing::basisConversionViaPowerSumsPlan(
                 always(),
                 ExpressionPieceKind::WholeExpression,
                 {{otherwise(), std::move(formula)}}});
-    RingBasisConversionPlan result{
+    ResolvedBasisConversionPlan result{
         instantiatedDefinition.get(),
         sourceBasisId,
         targetBasisId,

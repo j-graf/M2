@@ -137,6 +137,35 @@ const RingElement *rawSymmetricRingsMultiplyToBasis(
       targetBasisId);
 }
 
+const RingElement *rawSymmetricRingsMultiplyToBasisBench(
+    const RingElement *f,
+    const RingElement *g,
+    int targetBasisId,
+    M2_string forcedKernel,
+    bool usePowerSumReference,
+    bool traceWorkflow)
+{
+  return symmetric_rings::rawSymmetricRingsMultiplyToBasisBench(
+      f,
+      g,
+      targetBasisId,
+      forcedKernel,
+      usePowerSumReference,
+      traceWorkflow);
+}
+
+const RingElement *rawSymmetricRingsMultiplyExpressionsToBasisBench(
+    const RingElement *f,
+    const RingElement *g,
+    int targetBasisId,
+    M2_string strategy,
+    bool traceWorkflow)
+{
+  return symmetric_rings::
+      rawSymmetricRingsMultiplyExpressionsToBasisBench(
+          f, g, targetBasisId, strategy, traceWorkflow);
+}
+
 const RingElement *rawSymmetricRingsPlethysm(const RingElement *f,
                                              const RingElement *g)
 {

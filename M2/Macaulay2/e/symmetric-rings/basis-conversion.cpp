@@ -19,17 +19,17 @@ namespace symmetric_rings {
 
 // Contributor map:
 //   1. exact expression facts and persistent metadata;
-//   2. normalization and condition-piece pieceFacts;
+//   2. condition-driven expression-piece facts;
 //   3. plan indexing, structural contracts, and generic execution;
 //   4. canonical source-group conversion;
-//   5. multiplication plans and the three multiplication workflows;
-//   6. the sole public built-in conversion workflow, toBasis.
+//   5. the sole public built-in conversion workflow, toBasis.
 //
 // The matching declaration fragment follows the same order. Mathematical
-// formulas live in basis-conversion-kernels.cpp, complete conversion plans in
+// formulas live in basis-conversion-kernels.cpp, normalization rules in
+// basis-normalization.cpp, complete conversion plans in
 // basis-conversion-plans.cpp, and endpoint policy in
-// basis-conversion-picker.cpp. Product combinatorics live in
-// basis-conversion-products.cpp; this file owns shared orchestration.
+// basis-conversion-picker.cpp. Binary kernels, their commutative picker, and
+// multiplication workflows live in the corresponding multiplication files.
 
 namespace {
 
@@ -141,11 +141,6 @@ SymmetricEngineRing::inferExpressionFacts(
                     facts.factorBases.end(),
                     basisId) == facts.factorBases.end())
               facts.factorBases.push_back(basisId);
-            facts.factorKindMask |=
-                uint32_t{1} << static_cast<size_t>(
-                    basisKindForId(basisId));
-            ++facts.factorCount;
-
             if (atomIsSkewAt(term.monomial, pos))
               {
                 facts.skewFree = false;
@@ -241,10 +236,10 @@ SymmetricEngineRing::inferCanonicalExpansionFacts(
     int basisId,
     const std::optional<int>& knownHomogeneousWeight) const
 {
-    // A conversion or multiplication plan promises one normalized,
-    // non-skew target atom per nonscalar term. Derive the common output facts
-    // from that contract and inspect only support that cannot be predicted,
-    // rather than running the general multi-factor analyzer.
+    // A conversion plan or strict binary-kernel contract promises one
+    // normalized, non-skew target atom per nonscalar term. Derive the common
+    // output facts from that guarantee and inspect only support that cannot be
+    // predicted, rather than running the general multi-factor analyzer.
     ExpressionFacts facts;
     const auto *poly = polyValue(f);
     facts.combinatorialTags = poly->combinatorialTags;
@@ -294,10 +289,6 @@ SymmetricEngineRing::inferCanonicalExpansionFacts(
     if (facts.singleFactorTermCount != 0)
       {
         facts.factorBases = {basisId};
-        facts.factorKindMask =
-            uint32_t{1} << static_cast<size_t>(
-                basisKindForId(basisId));
-        facts.factorCount = facts.singleFactorTermCount;
         facts.pureBasis = basisId;
         facts.expandedBasis = basisId;
       }
@@ -331,10 +322,6 @@ SymmetricEngineRing::basisElementFactsFromAtom(
     facts.singleFactorTermCount = 1;
     facts.maximumFactorsPerTerm = 1;
     facts.factorBases = {basisId};
-    facts.factorKindMask =
-        uint32_t{1} << static_cast<size_t>(
-            basisKindForId(basisId));
-    facts.factorCount = 1;
     facts.pureBasis = basisId;
     facts.expandedBasis = basisId;
     facts.singleBasisElementId = basisId;
@@ -370,107 +357,95 @@ SymmetricEngineRing::basisElementFactsFromAtom(
     return facts;
   }
 
-void SymmetricEngineRing::enrichBasisConversionPlanSelectionFacts(
-    ring_elem f,
-    int targetBasisId,
-    ExpressionFacts& facts) const
+SymmetricEngineRing::PowerSumSupportFacts
+SymmetricEngineRing::inspectPowerSumSupportFacts(
+    ring_elem expression,
+    const std::vector<size_t>& termPositions,
+    ExpressionFactRequirements requirements) const
 {
-    if (facts.planSelectionTargetBasisId == targetBasisId)
-      return;
-    if (!facts.expandedBasis ||
-        basisKindForId(*facts.expandedBasis) != BasisKind::PowerSum)
-      return;
-    BasisKind targetKind = basisKindForId(targetBasisId);
-    const bool schurTarget =
-        targetKind == BasisKind::Schur ||
-        targetKind == BasisKind::SchurOmega;
-    const bool hallLittlewoodTarget =
-        isHallLittlewoodCapitalBasisKind(targetKind);
-    if (!schurTarget && !hallLittlewoodTarget) return;
-    facts.planSelectionTargetBasisId = targetBasisId;
-
-    if (facts.singleBasisElementIndex &&
-        facts.singleBasisElement())
-      {
-        // Strict basis-element entry points already decoded the one index.
-        // Derive every relevant p profile from that cached shape instead of
-        // reparsing the expression immediately afterward.
-        const Partition& index = *facts.singleBasisElementIndex;
-        if (hallLittlewoodTarget)
-          {
-            facts.allPowerSumTermsSingleCycles =
-                index.size() == 1;
-          }
-        if (schurTarget)
-          {
-            facts.mostlyShortCyclePowerSumTermCount =
-                powerSumIndexHasMostlyShortCycles(
-                    index, partitionWeight(index))
-                    ? 1
-                    : 0;
-            std::vector<int> commonParts(index.begin(), index.end());
-            std::sort(commonParts.begin(), commonParts.end());
-            commonParts.erase(
-                std::unique(commonParts.begin(), commonParts.end()),
-                commonParts.end());
-            facts.commonPowerSumParts = std::move(commonParts);
-          }
-        return;
-      }
-
+    PowerSumSupportFacts result;
+    if (requirements == noExpressionFactRequirements)
+      return result;
+    const auto& terms = polyValue(expression)->terms;
     bool allSingleCycles = true;
     size_t nonscalarTerms = 0;
     size_t mostlyShortCycleTerms = 0;
     std::vector<int> commonParts;
     bool firstIndex = true;
-    for (const auto& term : polyValue(f)->terms)
+    bool allTermsArePowerSums = true;
+    for (size_t position : termPositions)
       {
-        Partition index;
-        if (!powerSumIndexFromMonomial(term.monomial, index))
+        if (position >= terms.size())
           {
-            allSingleCycles = false;
-            continue;
+            allTermsArePowerSums = false;
+            break;
+          }
+        Partition index;
+        if (!powerSumIndexFromMonomial(
+                terms[position].monomial, index))
+          {
+            allTermsArePowerSums = false;
+            break;
           }
         if (index.empty()) continue;
         ++nonscalarTerms;
-        if (index.size() != 1)
+        if ((requirements &
+             requirePowerSumSingleCycleFacts) != 0 &&
+            index.size() != 1)
           allSingleCycles = false;
-        if (!schurTarget) continue;
-        if (powerSumIndexHasMostlyShortCycles(
+        if ((requirements &
+             requirePowerSumShortCycleFacts) != 0 &&
+            powerSumIndexHasMostlyShortCycles(
                 index, partitionWeight(index)))
           ++mostlyShortCycleTerms;
-
-        std::vector<int> distinctParts(index.begin(), index.end());
-        std::sort(distinctParts.begin(), distinctParts.end());
-        distinctParts.erase(
-            std::unique(distinctParts.begin(), distinctParts.end()),
-            distinctParts.end());
-        if (firstIndex)
+        if ((requirements &
+             requirePowerSumCommonPartFacts) != 0)
           {
-            commonParts = std::move(distinctParts);
-            firstIndex = false;
-          }
-        else
-          {
-            std::vector<int> intersection;
-            std::set_intersection(
-                commonParts.begin(),
-                commonParts.end(),
+            std::vector<int> distinctParts(
+                index.begin(), index.end());
+            std::sort(
                 distinctParts.begin(),
-                distinctParts.end(),
-                std::back_inserter(intersection));
-            commonParts = std::move(intersection);
+                distinctParts.end());
+            distinctParts.erase(
+                std::unique(
+                    distinctParts.begin(),
+                    distinctParts.end()),
+                distinctParts.end());
+            if (firstIndex)
+              {
+                commonParts =
+                    std::move(distinctParts);
+                firstIndex = false;
+              }
+            else
+              {
+                std::vector<int> intersection;
+                std::set_intersection(
+                    commonParts.begin(),
+                    commonParts.end(),
+                    distinctParts.begin(),
+                    distinctParts.end(),
+                    std::back_inserter(intersection));
+                commonParts =
+                    std::move(intersection);
+              }
           }
       }
-    if (nonscalarTerms == 0) return;
-    if (hallLittlewoodTarget)
-      facts.allPowerSumTermsSingleCycles = allSingleCycles;
-    if (schurTarget)
-      {
-        facts.mostlyShortCyclePowerSumTermCount =
-            mostlyShortCycleTerms;
-        facts.commonPowerSumParts = std::move(commonParts);
-      }
+    if (!allTermsArePowerSums ||
+        nonscalarTerms == 0)
+      return result;
+    if ((requirements &
+         requirePowerSumSingleCycleFacts) != 0)
+      result.allTermsAreSingleCycles =
+          allSingleCycles;
+    if ((requirements &
+         requirePowerSumShortCycleFacts) != 0)
+      result.mostlyShortCycleTermCount =
+          mostlyShortCycleTerms;
+    if ((requirements &
+         requirePowerSumCommonPartFacts) != 0)
+      result.commonParts = std::move(commonParts);
+    return result;
   }
 
 std::optional<SymmetricEngineRing::ExpressionFacts>
@@ -491,21 +466,17 @@ SymmetricEngineRing::expressionFactsFromMetadata(ring_elem f) const
     facts.combinatorialTags = poly->combinatorialTags;
     facts.termCount = *metadata.termCount;
     if (!metadata.scalarTermCount ||
-        !metadata.singleFactorTermCount ||
-        !metadata.productTermCount ||
-        !metadata.maximumFactorsPerTerm)
+        !metadata.singleFactorTermCount)
       return std::nullopt;
     facts.scalarTermCount = *metadata.scalarTermCount;
     facts.singleFactorTermCount = *metadata.singleFactorTermCount;
-    facts.productTermCount = *metadata.productTermCount;
-    facts.maximumFactorsPerTerm = *metadata.maximumFactorsPerTerm;
+    facts.productTermCount = 0;
+    facts.maximumFactorsPerTerm =
+        facts.singleFactorTermCount == 0 ? 0 : 1;
     if (facts.termCount != poly->terms.size() ||
         facts.scalarTermCount + facts.singleFactorTermCount +
             facts.productTermCount != facts.termCount ||
-        facts.productTermCount != 0 ||
-        facts.maximumFactorsPerTerm !=
-            (facts.singleFactorTermCount == 0 ? 0 : 1) ||
-        metadata.skewFactorCount.value_or(0) != 0)
+        facts.productTermCount != 0)
       return std::nullopt;
     // A zero or scalar expansion has no distinguished basis. Every
     // nonscalar canonical expansion must name its unique source basis.
@@ -523,15 +494,7 @@ SymmetricEngineRing::expressionFactsFromMetadata(ring_elem f) const
         (facts.factorBases.size() != 1 ||
          facts.factorBases.front() != *metadata.expandedBasis))
       return std::nullopt;
-    if (metadata.expandedBasis &&
-        facts.singleFactorTermCount != 0)
-      {
-        facts.factorKindMask =
-            uint32_t{1} << static_cast<size_t>(
-                basisKindForId(*metadata.expandedBasis));
-        facts.factorCount = facts.singleFactorTermCount;
-      }
-    facts.skewFactorCount = metadata.skewFactorCount.value_or(0);
+    facts.skewFactorCount = 0;
     facts.homogeneousWeight = metadata.homogeneousWeight;
     facts.maximumPartitionLength =
         metadata.maximumPartitionLength.value_or(0);
@@ -582,7 +545,6 @@ void SymmetricEngineRing::refreshSingleBasisElementCoefficientFact(
         metadata.termCount.value_or(0) == 1 &&
         metadata.singleFactorTermCount.value_or(0) == 1 &&
         metadata.scalarTermCount.value_or(0) == 0 &&
-        metadata.productTermCount.value_or(0) == 0 &&
         poly->terms.size() == 1 &&
         !poly->terms.front().monomial.data.empty();
     if (!singleBasisElement)
@@ -698,9 +660,6 @@ void SymmetricEngineRing::attachExpressionFacts(
     metadata.expressionFactsComplete = true;
     metadata.scalarTermCount = facts.scalarTermCount;
     metadata.singleFactorTermCount = facts.singleFactorTermCount;
-    metadata.productTermCount = facts.productTermCount;
-    metadata.maximumFactorsPerTerm = facts.maximumFactorsPerTerm;
-    metadata.skewFactorCount = facts.skewFactorCount;
     metadata.singleBasisElementId = facts.singleBasisElementId;
     metadata.singleBasisElementIndex = facts.singleBasisElementIndex;
     metadata.singleBasisElementCoefficientOne =
@@ -708,142 +667,6 @@ void SymmetricEngineRing::attachExpressionFacts(
     auto *poly = mutablePolyValue(f);
     poly->combinatorialTags = combinatorialTags;
     poly->conversionMetadata = std::move(metadata);
-  }
-
-// ============================================================================
-// Canonicalization And Skew Expansion
-// ============================================================================
-// Normalization straightens every index and replaces every skew atom by a
-// mathematically equivalent non-skew expansion. Products may remain; resolving
-// them belongs to multiplyTermToBasis, the next owning workflow stage.
-
-ring_elem SymmetricEngineRing::expressionFromAtom(
-    const SymmetricMonomial& monomial,
-    size_t pos) const
-{
-    VECTOR(SymmetricTerm) terms{
-        {coefficientRing->one(),
-         monomialFromKey(atomBlockAt(monomial, pos))}};
-    return fromTermVector(terms, true);
-  }
-
-ring_elem SymmetricEngineRing::skewBasisElementExpansion(
-    const SymmetricMonomial& monomial,
-    size_t pos) const
-{
-    if (!atomIsSkewAt(monomial, pos))
-      {
-        ERROR("the skew-expansion helper requires a skew basis element");
-        return zero();
-      }
-
-    BasisKind kind = basisKindForId(atomBasisIdAt(monomial, pos));
-    Partition outer = basisElementOuterIndex(monomial, pos);
-    Partition inner = basisElementInnerIndex(monomial, pos);
-    if (kind == BasisKind::Schur ||
-        kind == BasisKind::SchurOmega)
-      {
-        // Jacobi--Trudi naturally returns products in h or e. Leaving those
-        // products visible lets the ordinary product-resolution stage choose
-        // the target-aware multiplication workflow.
-        BasisKind generatorKind =
-            kind == BasisKind::Schur
-                ? BasisKind::Complete
-                : BasisKind::Elementary;
-        int generatorId = requiredBasisIdForKind(generatorKind);
-        if (error()) return zero();
-        return jacobiTrudi(outer, inner, generatorId);
-      }
-    if (isHallLittlewoodCapitalBasisKind(kind))
-      return skewHallLittlewoodToPowerSums(outer, inner, kind);
-
-    ERROR("the normalization stage cannot expand this skew basis kind");
-    return zero();
-  }
-
-ring_elem SymmetricEngineRing::normalizeExpression(
-    ring_elem f,
-    ExpressionFacts& resultFacts,
-    std::vector<size_t> *termFactorCounts) const
-{
-    // Canonical engine expressions are immutable.  Inspect once and retain the
-    // original value when no straightening or skew expansion is required,
-    // rather than copying, sorting, and then inspecting the same terms again.
-    resultFacts = inferExpressionFacts(f, termFactorCounts);
-    if (resultFacts.normalized &&
-        resultFacts.skewFree &&
-        resultFacts.collected)
-      return f;
-
-    VECTOR(SymmetricTerm) normalizedTerms;
-    for (const auto& term : polyValue(f)->terms)
-      {
-        const ring_elem straightened =
-            scaled(term.coeff, straightenMonomial(term.monomial));
-        if (error()) return zero();
-        for (const auto& straightenedTerm : polyValue(straightened)->terms)
-          {
-            bool hasSkewFactor = false;
-            size_t position = 0;
-            while (position < straightenedTerm.monomial.data.size())
-              {
-                hasSkewFactor =
-                    hasSkewFactor ||
-                    atomIsSkewAt(straightenedTerm.monomial, position);
-                position +=
-                    atomLengthAt(straightenedTerm.monomial, position);
-              }
-            if (!hasSkewFactor)
-              {
-                normalizedTerms.push_back(straightenedTerm);
-                continue;
-              }
-
-            ring_elem expanded = fromCoeff(straightenedTerm.coeff);
-            position = 0;
-            while (position < straightenedTerm.monomial.data.size())
-              {
-                ring_elem factor;
-                if (!atomIsSkewAt(straightenedTerm.monomial, position))
-                  factor = expressionFromAtom(
-                      straightenedTerm.monomial, position);
-                else
-                  factor = skewBasisElementExpansion(
-                      straightenedTerm.monomial, position);
-                if (error()) return zero();
-                expanded = mult(expanded, factor);
-                if (error()) return zero();
-                position +=
-                    atomLengthAt(straightenedTerm.monomial, position);
-              }
-            const auto *expandedPoly = polyValue(expanded);
-            normalizedTerms.insert(
-                normalizedTerms.end(),
-                expandedPoly->terms.begin(),
-                expandedPoly->terms.end());
-          }
-      }
-    ring_elem result = fromTermVector(normalizedTerms, false);
-    mutablePolyValue(result)->combinatorialTags =
-        polyValue(f)->combinatorialTags;
-    resultFacts = inferExpressionFacts(result, termFactorCounts);
-    if (!resultFacts.normalized ||
-        !resultFacts.skewFree ||
-        !resultFacts.collected)
-      {
-        ERROR("the normalization stage did not establish its "
-              "canonical-factor contract");
-        return zero();
-      }
-    if (basisConversionTraceEnabled())
-      std::fprintf(
-          stderr,
-          "SymmetricRings conversion-stage: stage=normalize "
-          "input-terms=%zu output-terms=%zu products=%zu\n",
-          polyValue(f)->terms.size(),
-          resultFacts.termCount,
-          resultFacts.productTermCount);
-    return result;
   }
 
 // ============================================================================
@@ -857,7 +680,8 @@ std::vector<ExpressionPieceFacts>
 SymmetricEngineRing::inspectExpressionPieces(
     ring_elem expression,
     ExpressionPieceKind pieceKind,
-    const ExpressionFacts& facts) const
+    const ExpressionFacts& facts,
+    ExpressionFactRequirements requirements) const
 {
     const auto& terms = polyValue(expression)->terms;
     auto commonPieceFacts = [&](ExpressionPieceKind kind) {
@@ -880,10 +704,17 @@ SymmetricEngineRing::inspectExpressionPieces(
         piece.weight = facts.homogeneousWeight;
         piece.termCount = facts.termCount;
         piece.singleBasisElement = facts.singleBasisElement();
+        const PowerSumSupportFacts support =
+            inspectPowerSumSupportFacts(
+                expression,
+                piece.termPositions,
+                requirements);
         piece.allPowerSumTermsSingleCycles =
-            facts.allPowerSumTermsSingleCycles;
+            support.allTermsAreSingleCycles;
         piece.mostlyShortCyclePowerSumTermCount =
-            facts.mostlyShortCyclePowerSumTermCount;
+            support.mostlyShortCycleTermCount;
+        piece.commonPowerSumParts =
+            support.commonParts;
         piece.index = facts.singleBasisElementIndex;
         std::optional<int> firstWeight;
         bool multipleWeights = false;
@@ -922,12 +753,14 @@ SymmetricEngineRing::inspectExpressionPieces(
                 Partition index =
                     basisElementIndex(term.monomial, 0);
                 piece.index = index;
-                if (basisKindForId(
-                        atomBasisIdAt(term.monomial, 0)) ==
-                    BasisKind::PowerSum)
+                const PowerSumSupportFacts support =
+                    inspectPowerSumSupportFacts(
+                        expression,
+                        piece.termPositions,
+                        requirements);
+                if (support.mostlyShortCycleTermCount)
                   piece.powerSumIndexHasMostlyShortCycles =
-                      powerSumIndexHasMostlyShortCycles(
-                          index, partitionWeight(index));
+                      *support.mostlyShortCycleTermCount == 1;
               }
             result.push_back(std::move(piece));
           }
@@ -949,54 +782,17 @@ SymmetricEngineRing::inspectExpressionPieces(
         piece.termCount = piece.termPositions.size();
         piece.possibleTermCount =
             partitionCountForConversionSelection(item.first);
-        size_t mostlyShortCycleTerms = 0;
-        std::vector<int> commonParts;
-        bool firstPowerSumIndex = true;
-        bool allTermsArePowerSums = true;
-        for (size_t position : piece.termPositions)
-          {
-            Partition index;
-            if (!powerSumIndexFromMonomial(
-                    terms[position].monomial, index))
-              {
-                allTermsArePowerSums = false;
-                break;
-              }
-            if (index.empty()) continue;
-            if (powerSumIndexHasMostlyShortCycles(
-                    index, partitionWeight(index)))
-              ++mostlyShortCycleTerms;
-            std::vector<int> distinctParts(
-                index.begin(), index.end());
-            std::sort(
-                distinctParts.begin(), distinctParts.end());
-            distinctParts.erase(
-                std::unique(
-                    distinctParts.begin(), distinctParts.end()),
-                distinctParts.end());
-            if (firstPowerSumIndex)
-              {
-                commonParts = std::move(distinctParts);
-                firstPowerSumIndex = false;
-              }
-            else
-              {
-                std::vector<int> intersection;
-                std::set_intersection(
-                    commonParts.begin(),
-                    commonParts.end(),
-                    distinctParts.begin(),
-                    distinctParts.end(),
-                    std::back_inserter(intersection));
-                commonParts = std::move(intersection);
-              }
-          }
-        if (allTermsArePowerSums)
-          {
-            piece.mostlyShortCyclePowerSumTermCount =
-                mostlyShortCycleTerms;
-            piece.commonPowerSumParts = std::move(commonParts);
-          }
+        const PowerSumSupportFacts support =
+            inspectPowerSumSupportFacts(
+                expression,
+                piece.termPositions,
+                requirements);
+        piece.allPowerSumTermsSingleCycles =
+            support.allTermsAreSingleCycles;
+        piece.mostlyShortCyclePowerSumTermCount =
+            support.mostlyShortCycleTermCount;
+        piece.commonPowerSumParts =
+            support.commonParts;
         result.push_back(std::move(piece));
       }
     return result;
@@ -1072,20 +868,28 @@ void SymmetricEngineRing::validateBasisConversionPlanDatabase()
       // The concrete plans together with the one generic u -> p -> v plan
       // cover the complete directed graph of built-in bases. Identity arrows
       // remain a generic workflow bypass.
-      const std::vector<BasisKind> builtInConversionBases{
-          BasisKind::PowerSum,
-          BasisKind::Complete,
-          BasisKind::Elementary,
-          BasisKind::Monomial,
-          BasisKind::Forgotten,
-          BasisKind::Schur,
-          BasisKind::SchurOmega,
-          BasisKind::HallLittlewoodQGenerator,
-          BasisKind::HallLittlewoodBGenerator,
-          BasisKind::HallLittlewoodQ,
-          BasisKind::HallLittlewoodB,
-          BasisKind::HallLittlewoodP,
-          BasisKind::HallLittlewoodPOmega};
+      // The fallback descriptors are the registry of conversion-supported
+      // built-in bases. Deriving the coverage universe from them prevents a
+      // new basis from being listed once for fallback and again in validator
+      // infrastructure.
+      std::vector<BasisKind> builtInConversionBases{
+          BasisKind::PowerSum};
+      for (const auto& fallback :
+           powerSumFallbackPlanDatabase())
+        builtInConversionBases.push_back(
+            fallback.basisKind);
+      std::sort(
+          builtInConversionBases.begin(),
+          builtInConversionBases.end(),
+          [](BasisKind left, BasisKind right) {
+            return static_cast<int>(left) <
+                   static_cast<int>(right);
+          });
+      builtInConversionBases.erase(
+          std::unique(
+              builtInConversionBases.begin(),
+              builtInConversionBases.end()),
+          builtInConversionBases.end());
       for (BasisKind source : builtInConversionBases)
         for (BasisKind target : builtInConversionBases)
           if (source != target)
@@ -1212,7 +1016,7 @@ void SymmetricEngineRing::validateBasisConversionPlanDatabase()
                       std::get_if<KernelPlan>(
                           &item.formula))
                 {
-                  if (kernelCase->name.empty() ||
+                  if (kernelCase->identifier.empty() ||
                       kernelCase->kernel == nullptr ||
                       !expressionConditionImplies(
                           kernelCase->outputGuarantee,
@@ -1329,8 +1133,8 @@ void SymmetricEngineRing::validateBasisConversionPlanDatabase()
                   "basis-conversion plan dependencies are cyclic at " +
                   id);
             state[id] = VisitState::Active;
-            for (const auto& child : dependencies[id])
-              visit(child);
+            for (const auto& dependency : dependencies[id])
+              visit(dependency);
             state[id] = VisitState::Complete;
           };
       for (const auto& plan : database)
@@ -1340,12 +1144,12 @@ void SymmetricEngineRing::validateBasisConversionPlanDatabase()
     (void) validated;
   }
 
-const std::vector<SymmetricEngineRing::RingBasisConversionPlan>&
+const std::vector<SymmetricEngineRing::ResolvedBasisConversionPlan>&
 SymmetricEngineRing::basisConversionPlansFor(
     int sourceBasisId,
     int targetBasisId) const
 {
-    static const std::vector<RingBasisConversionPlan> empty;
+    static const std::vector<ResolvedBasisConversionPlan> empty;
     requireBasis(sourceBasisId);
     requireBasis(targetBasisId);
     if (error()) return empty;
@@ -1358,7 +1162,7 @@ SymmetricEngineRing::basisConversionPlansFor(
     validateBasisConversionPlanDatabase();
     const BasisKind source = basisKindForId(sourceBasisId);
     const BasisKind target = basisKindForId(targetBasisId);
-    std::vector<RingBasisConversionPlan> result;
+    std::vector<ResolvedBasisConversionPlan> result;
     const auto& plansBySourceAndTarget =
         basisConversionPlansBySourceAndTarget();
     auto found = plansBySourceAndTarget.find({source, target});
@@ -1375,7 +1179,7 @@ SymmetricEngineRing::basisConversionPlansFor(
     return inserted.first->second;
   }
 
-SymmetricEngineRing::RingBasisConversionPlan
+SymmetricEngineRing::ResolvedBasisConversionPlan
 SymmetricEngineRing::basisConversionPlanForRing(
     const BasisConversionPlanId& id) const
 {
@@ -1391,7 +1195,7 @@ SymmetricEngineRing::basisConversionPlanForRing(
     return basisConversionPlanForRing(definition);
   }
 
-SymmetricEngineRing::RingBasisConversionPlan
+SymmetricEngineRing::ResolvedBasisConversionPlan
 SymmetricEngineRing::basisConversionPlanForRing(
     const BasisConversionPlanDefinition *definition) const
 {
@@ -1485,7 +1289,7 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlanFormula(
                     targetBasisId))
               {
                 ERROR("basis-conversion kernel ",
-                      kernelCase->name.c_str(),
+                      kernelCase->identifier.c_str(),
                       " violated its canonical target contract");
                 return zero();
               }
@@ -1497,14 +1301,16 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlanFormula(
                 inspectExpressionPieces(
                     result,
                     ExpressionPieceKind::WholeExpression,
-                    kernelFacts);
+                    kernelFacts,
+                    expressionFactRequirements(
+                        kernelCase->outputGuarantee));
             if (pieceFacts.size() != 1 ||
                 !expressionConditionHolds(
                     kernelCase->outputGuarantee,
                     pieceFacts.front()))
               {
                 ERROR("basis-conversion kernel ",
-                      kernelCase->name.c_str(),
+                      kernelCase->identifier.c_str(),
                       " violated its declared output guarantee");
                 return zero();
               }
@@ -1528,7 +1334,7 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlanFormula(
                     "before a component plan was identified");
               return false;
             }
-          RingBasisConversionPlan componentPlan =
+          ResolvedBasisConversionPlan componentPlan =
               basisConversionPlanForRing(
                   componentDefinition);
           if (error()) return false;
@@ -1589,7 +1395,7 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlanFormula(
   }
 
 ring_elem SymmetricEngineRing::executeBasisConversionPlan(
-    const RingBasisConversionPlan& plan,
+    const ResolvedBasisConversionPlan& plan,
     ring_elem expression,
     CombinatorialTags combinatorialTags,
     const ExpressionFacts& inputFacts,
@@ -1621,20 +1427,6 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
             ExpressionConditionKind::Otherwise;
     ExpressionFacts executionFacts = inputFacts;
     executionFacts.combinatorialTags = combinatorialTags;
-    const bool needsSelectionProfiles =
-        plan.definition->applicability.kind !=
-            ExpressionConditionKind::Always ||
-        (plan.definition->pieceKind ==
-             ExpressionPieceKind::WholeExpression &&
-         !wholeExpressionOtherwise);
-    // Term and homogeneous-component pieceFacts derive their own profiles from
-    // the realized pieces. Only whole-expression conditions consume the
-    // endpoint-specific profile stored on ExpressionFacts.
-    if (needsSelectionProfiles)
-      enrichBasisConversionPlanSelectionFacts(
-          expression,
-          plan.targetBasisId,
-          executionFacts);
     if (!basisConversionPlanApplicable(
             plan, expression, executionFacts))
       {
@@ -1690,7 +1482,10 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
                     inspectExpressionPieces(
                         directResult,
                         ExpressionPieceKind::WholeExpression,
-                        directFacts);
+                        directFacts,
+                        expressionFactRequirements(
+                            plan.definition->
+                                outputGuarantee));
                 if (outputPieceFacts.size() != 1 ||
                     !expressionConditionHolds(
                         plan.definition->outputGuarantee,
@@ -1720,15 +1515,16 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
     PlanCaseAssignments partition;
     try
       {
-        pieces = inspectExpressionPieces(
-            expression,
-            plan.definition->pieceKind,
-            executionFacts);
         std::vector<ExpressionCondition> conditions;
         conditions.reserve(
             plan.definition->cases.size());
         for (const auto& item : plan.definition->cases)
           conditions.push_back(item.condition);
+        pieces = inspectExpressionPieces(
+            expression,
+            plan.definition->pieceKind,
+            executionFacts,
+            expressionFactRequirements(conditions));
         partition = assignExpressionPiecesToCases(
             pieces,
             conditions,
@@ -1830,7 +1626,10 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
                 inspectExpressionPieces(
                     result,
                     ExpressionPieceKind::WholeExpression,
-                    finalFacts);
+                    finalFacts,
+                    expressionFactRequirements(
+                        plan.definition->
+                            outputGuarantee));
             if (outputPieceFacts.size() != 1 ||
                 !expressionConditionHolds(
                     plan.definition->outputGuarantee,
@@ -1856,6 +1655,35 @@ ring_elem SymmetricEngineRing::executeBasisConversionPlan(
     return result;
   }
 
+ring_elem SymmetricEngineRing::executeNamedBasisConversionPlan(
+    const BasisConversionPlanId& planIdentifier,
+    ring_elem expression,
+    ExpressionFacts *resultFacts) const
+{
+    const ResolvedBasisConversionPlan plan =
+        basisConversionPlanForRing(planIdentifier);
+    if (error() || !plan.valid()) return zero();
+    ExpressionFacts inputFacts =
+        inferCanonicalExpansionFacts(
+            expression, plan.sourceBasisId);
+    inputFacts.combinatorialTags =
+        polyValue(expression)->combinatorialTags;
+    if (!inputFacts.canonicalExpansionInBasis(
+            plan.sourceBasisId))
+      {
+        ERROR("named basis-conversion plan ",
+              planIdentifier.value.c_str(),
+              " received a noncanonical source expansion");
+        return zero();
+      }
+    return executeBasisConversionPlan(
+        plan,
+        expression,
+        inputFacts.combinatorialTags,
+        inputFacts,
+        resultFacts);
+  }
+
 // ============================================================================
 // Canonical Group Conversion Helper
 // ============================================================================
@@ -1869,6 +1697,12 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
     CombinatorialTags combinatorialTags,
     const ExpressionFacts *knownFacts) const
 {
+    if (binaryMultiplicationKernelExecutionDepth != 0)
+      {
+        ERROR("a binary multiplication kernel attempted to invoke "
+              "basis conversion");
+        return zero();
+      }
     const bool trace = basisConversionTraceEnabled();
 
     // Exact zero/scalar metadata satisfies the target contract without basis
@@ -1900,15 +1734,14 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
         else
           {
             ExpressionFacts selectedInputFacts = *knownFacts;
-            RingBasisConversionPlan selection =
+            ResolvedBasisConversionPlan selection =
                 selectBasisConversionPlan(
                     f,
                     sourceBasisId,
                     targetBasisId,
                     *knownFacts,
                     combinatorialTags,
-                    forcedBasisConversionPlanIdentifier(),
-                    &selectedInputFacts);
+                    forcedBasisConversionPlanIdentifier());
             if (error()) return zero();
             result = executeBasisConversionPlan(
                 selection,
@@ -1936,7 +1769,7 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
     {
       ring_elem expression;
       ExpressionFacts facts;
-      std::optional<RingBasisConversionPlan> selection;
+      std::optional<ResolvedBasisConversionPlan> selection;
     };
 
     std::vector<std::pair<int, VECTOR(SymmetricTerm)>> groups;
@@ -1972,7 +1805,7 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
     auto prepareGroup = [&](int sourceBasisId,
                             ring_elem expression,
                             ExpressionFacts facts) {
-      std::optional<RingBasisConversionPlan> selection;
+      std::optional<ResolvedBasisConversionPlan> selection;
       if (sourceBasisId != targetBasisId)
         {
           selection = selectBasisConversionPlan(
@@ -1981,8 +1814,7 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
               targetBasisId,
               facts,
               combinatorialTags,
-              forcedBasisConversionPlanIdentifier(),
-              &facts);
+              forcedBasisConversionPlanIdentifier());
           if (error()) return;
         }
       preparedConversions.push_back({
@@ -2049,1056 +1881,6 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
         resultFacts,
         targetBasisId,
         combinatorialTags);
-    return result;
-  }
-
-// ============================================================================
-// Multiplication Plans
-// ============================================================================
-// Plans are listed from most structured to broadest. The final power-sum plan
-// is the independent correctness path for every built-in operand pair.
-//
-// Multiplication occupies the remainder of this file before the public
-// toBasis definition because product resolution in toBasis calls these
-// helpers. This dependency order keeps the owning workflow acyclic while the
-// block headers keep conversion and multiplication topics distinct.
-
-bool SymmetricEngineRing::hasSchurFactorFormula(BasisKind kind)
-{
-    return kind == BasisKind::Schur ||
-           kind == BasisKind::Complete ||
-           kind == BasisKind::Elementary ||
-           kind == BasisKind::PowerSum;
-  }
-
-bool SymmetricEngineRing::hasMonomialLikeFactorFormula(
-    BasisKind kind,
-    BasisKind target)
-{
-    return kind == target ||
-           kind == BasisKind::Complete ||
-           kind == BasisKind::Elementary ||
-           kind == BasisKind::PowerSum;
-  }
-
-std::string_view SymmetricEngineRing::multiplicationPlanIdentifier(
-    MultiplicationPlanId id)
-{
-    switch (id)
-      {
-        case MultiplicationPlanId::Unavailable:
-          return "unavailable";
-        case MultiplicationPlanId::SchurLittlewoodRichardson:
-          return "Schur-product:Littlewood-Richardson";
-        case MultiplicationPlanId::SchurHorizontalPieri:
-          return "Schur-product:horizontal-Pieri";
-        case MultiplicationPlanId::SchurVerticalPieri:
-          return "Schur-product:vertical-Pieri";
-        case MultiplicationPlanId::SchurMurnaghanNakayama:
-          return "Schur-product:Murnaghan-Nakayama";
-        case MultiplicationPlanId::SchurMixedPieriAndMurnaghanNakayama:
-          return "Schur-product:mixed-Pieri-and-Murnaghan-Nakayama";
-        case MultiplicationPlanId::MonomialLikeExponentSplittings:
-          return "monomial-like-product:exponent-splittings";
-        case MultiplicationPlanId::ViaHallLittlewoodGenerators:
-          return "Hall-Littlewood-product:via-generator-basis";
-        case MultiplicationPlanId::InTargetBasis:
-          return "product:in-target-basis";
-        case MultiplicationPlanId::ViaPowerSums:
-          return "product:via-power-sums";
-      }
-    return "unavailable";
-  }
-
-const std::vector<SymmetricEngineRing::MultiplicationPlan>&
-SymmetricEngineRing::multiplicationPlansFor(
-    const ExpressionFacts& leftFacts,
-    const ExpressionFacts& rightFacts,
-    int targetBasisId) const
-{
-    const int leftBasisId = leftFacts.expandedBasis.value_or(-1);
-    const int rightBasisId = rightFacts.expandedBasis.value_or(-1);
-    const std::tuple<int, int, int> key{
-        leftBasisId, rightBasisId, targetBasisId};
-    auto found = multiplicationPlansCache.find(key);
-    if (found != multiplicationPlansCache.end())
-      return found->second;
-    auto inserted = multiplicationPlansCache.emplace(
-        key,
-        buildMultiplicationPlansFor(
-            leftFacts, rightFacts, targetBasisId));
-    return inserted.first->second;
-  }
-
-std::vector<SymmetricEngineRing::MultiplicationPlan>
-SymmetricEngineRing::buildMultiplicationPlansFor(
-    const ExpressionFacts& leftFacts,
-    const ExpressionFacts& rightFacts,
-    int targetBasisId) const
-{
-    std::vector<MultiplicationPlan> plans;
-    int powerSumBasisId = requiredBasisIdForKind(BasisKind::PowerSum);
-    if (error()) return plans;
-    BasisKind targetKind = basisKindForId(targetBasisId);
-    std::optional<BasisKind> leftKind;
-    std::optional<BasisKind> rightKind;
-    if (leftFacts.expandedBasis)
-      leftKind = basisKindForId(*leftFacts.expandedBasis);
-    if (rightFacts.expandedBasis)
-      rightKind = basisKindForId(*rightFacts.expandedBasis);
-
-    if (targetKind == BasisKind::Schur && leftKind && rightKind)
-      {
-        MultiplicationPlanId planId =
-            MultiplicationPlanId::SchurLittlewoodRichardson;
-        int specializedFactorTypes =
-            static_cast<int>(*leftKind == BasisKind::Complete ||
-                             *rightKind == BasisKind::Complete) +
-            static_cast<int>(*leftKind == BasisKind::Elementary ||
-                             *rightKind == BasisKind::Elementary) +
-            static_cast<int>(*leftKind == BasisKind::PowerSum ||
-                             *rightKind == BasisKind::PowerSum);
-        if (specializedFactorTypes > 1)
-          planId =
-              MultiplicationPlanId::SchurMixedPieriAndMurnaghanNakayama;
-        else if (*leftKind == BasisKind::Complete ||
-                 *rightKind == BasisKind::Complete)
-          planId = MultiplicationPlanId::SchurHorizontalPieri;
-        else if (*leftKind == BasisKind::Elementary ||
-                 *rightKind == BasisKind::Elementary)
-          planId = MultiplicationPlanId::SchurVerticalPieri;
-        else if (*leftKind == BasisKind::PowerSum ||
-                 *rightKind == BasisKind::PowerSum)
-          planId = MultiplicationPlanId::SchurMurnaghanNakayama;
-        plans.push_back({
-            planId,
-            MultiplicationKernel::SchurFactorFormulas,
-            -1,
-            -1,
-            targetBasisId,
-            true});
-      }
-
-    if ((targetKind == BasisKind::Monomial ||
-         targetKind == BasisKind::Forgotten))
-      plans.push_back({
-          MultiplicationPlanId::MonomialLikeExponentSplittings,
-          MultiplicationKernel::MonomialExponentSplittings,
-          -1,
-          -1,
-          targetBasisId,
-          true});
-
-    if (isHallLittlewoodCapitalBasisKind(targetKind))
-      {
-        BasisKind generatorKind =
-            targetKind == BasisKind::HallLittlewoodQ ||
-                    targetKind == BasisKind::HallLittlewoodP
-                ? BasisKind::HallLittlewoodQGenerator
-                : BasisKind::HallLittlewoodBGenerator;
-        int generatorId = requiredBasisIdForKind(generatorKind);
-        if (error()) return plans;
-        plans.push_back({
-            MultiplicationPlanId::ViaHallLittlewoodGenerators,
-            MultiplicationKernel::ProductInSingleBasis,
-            generatorId,
-            generatorId,
-            generatorId,
-            true});
-      }
-
-    if (isMultiplicativeBasis(targetBasisId))
-      plans.push_back({
-          MultiplicationPlanId::InTargetBasis,
-          MultiplicationKernel::ProductInSingleBasis,
-          targetBasisId,
-          targetBasisId,
-          targetBasisId,
-          true});
-    plans.push_back({
-        MultiplicationPlanId::ViaPowerSums,
-        MultiplicationKernel::ProductInSingleBasis,
-        powerSumBasisId,
-        powerSumBasisId,
-        powerSumBasisId,
-        true});
-    return plans;
-  }
-
-// ============================================================================
-// Multiplication-Plan Applicability Contracts
-// ============================================================================
-
-bool SymmetricEngineRing::multiplicationPlanApplicable(
-    const MultiplicationPlan& plan,
-    const ExpressionFacts& leftFacts,
-    const ExpressionFacts& rightFacts,
-    int targetBasisId) const
-{
-    if (!leftFacts.singleBasisElementId ||
-        !rightFacts.singleBasisElementId ||
-        !leftFacts.singleBasisElementCoefficientOne.value_or(false) ||
-        !rightFacts.singleBasisElementCoefficientOne.value_or(false) ||
-        !leftFacts.canonicalExpansionInBasis(
-            *leftFacts.singleBasisElementId) ||
-        !rightFacts.canonicalExpansionInBasis(
-            *rightFacts.singleBasisElementId))
-      return false;
-    const bool schurPlan =
-        plan.id == MultiplicationPlanId::SchurLittlewoodRichardson ||
-        plan.id == MultiplicationPlanId::SchurHorizontalPieri ||
-        plan.id == MultiplicationPlanId::SchurVerticalPieri ||
-        plan.id == MultiplicationPlanId::SchurMurnaghanNakayama ||
-        plan.id == MultiplicationPlanId::SchurMixedPieriAndMurnaghanNakayama;
-    if ((schurPlan &&
-         plan.kernel != MultiplicationKernel::SchurFactorFormulas) ||
-        (plan.id ==
-             MultiplicationPlanId::MonomialLikeExponentSplittings &&
-         plan.kernel != MultiplicationKernel::MonomialExponentSplittings) ||
-        ((plan.id == MultiplicationPlanId::ViaHallLittlewoodGenerators ||
-          plan.id == MultiplicationPlanId::InTargetBasis ||
-          plan.id == MultiplicationPlanId::ViaPowerSums) &&
-         plan.kernel != MultiplicationKernel::ProductInSingleBasis) ||
-        plan.id == MultiplicationPlanId::Unavailable)
-      return false;
-    if (plan.kernel == MultiplicationKernel::SchurFactorFormulas)
-      {
-        if (!leftFacts.expandedBasis || !rightFacts.expandedBasis)
-          return false;
-        BasisKind leftKind = basisKindForId(*leftFacts.expandedBasis);
-        BasisKind rightKind = basisKindForId(*rightFacts.expandedBasis);
-        BasisKind targetKind = basisKindForId(targetBasisId);
-        return plan.productBasisId == targetBasisId &&
-               targetKind == BasisKind::Schur &&
-               hasSchurFactorFormula(leftKind) &&
-               hasSchurFactorFormula(rightKind) &&
-               leftFacts.skewFree && rightFacts.skewFree;
-      }
-    if (plan.kernel == MultiplicationKernel::MonomialExponentSplittings)
-      {
-        if (!leftFacts.expandedBasis || !rightFacts.expandedBasis)
-          return false;
-        BasisKind leftKind = basisKindForId(*leftFacts.expandedBasis);
-        BasisKind rightKind = basisKindForId(*rightFacts.expandedBasis);
-        BasisKind targetKind = basisKindForId(targetBasisId);
-        return plan.productBasisId == targetBasisId &&
-               (targetKind == BasisKind::Monomial ||
-                targetKind == BasisKind::Forgotten) &&
-               hasMonomialLikeFactorFormula(
-                   leftKind, targetKind) &&
-               hasMonomialLikeFactorFormula(
-                   rightKind, targetKind) &&
-               leftFacts.skewFree && rightFacts.skewFree;
-      }
-    if (plan.kernel != MultiplicationKernel::ProductInSingleBasis ||
-        !plan.productIsCanonical ||
-        plan.leftOperandBasisId <= 0 ||
-        plan.rightOperandBasisId <= 0)
-      return false;
-    switch (plan.id)
-      {
-        case MultiplicationPlanId::ViaHallLittlewoodGenerators:
-          {
-            if (!leftFacts.expandedBasis || !rightFacts.expandedBasis)
-              return false;
-            const BasisKind targetKind = basisKindForId(targetBasisId);
-            const BasisKind leftKind =
-                basisKindForId(*leftFacts.expandedBasis);
-            const BasisKind rightKind =
-                basisKindForId(*rightFacts.expandedBasis);
-            return isHallLittlewoodCapitalBasisKind(targetKind) &&
-                   leftKind != BasisKind::Custom &&
-                   rightKind != BasisKind::Custom;
-          }
-        case MultiplicationPlanId::InTargetBasis:
-          return plan.leftOperandBasisId == targetBasisId &&
-                 plan.rightOperandBasisId == targetBasisId &&
-                 plan.productBasisId == targetBasisId &&
-                 isMultiplicativeBasis(targetBasisId);
-        case MultiplicationPlanId::ViaPowerSums:
-          {
-            const int powerSumBasisId =
-                requiredBasisIdForKind(BasisKind::PowerSum);
-            return !error() &&
-                   plan.leftOperandBasisId == powerSumBasisId &&
-                   plan.rightOperandBasisId == powerSumBasisId &&
-                   plan.productBasisId == powerSumBasisId;
-          }
-        case MultiplicationPlanId::Unavailable:
-        case MultiplicationPlanId::SchurLittlewoodRichardson:
-        case MultiplicationPlanId::SchurHorizontalPieri:
-        case MultiplicationPlanId::SchurVerticalPieri:
-        case MultiplicationPlanId::SchurMurnaghanNakayama:
-        case MultiplicationPlanId::SchurMixedPieriAndMurnaghanNakayama:
-        case MultiplicationPlanId::MonomialLikeExponentSplittings:
-          return false;
-      }
-    return false;
-  }
-
-// ============================================================================
-// Multiplication-Plan Picker
-// ============================================================================
-// Operand conversions are selected here as complete plans together with the
-// product kernel. The final conversion is intentionally selected by the
-// owning workflow only after the realized product has been normalized and
-// inspected.
-
-SymmetricEngineRing::MultiplicationPlanSelection
-SymmetricEngineRing::selectMultiplicationPlan(
-    ring_elem f,
-    ring_elem g,
-    const ExpressionFacts& leftFacts,
-    const ExpressionFacts& rightFacts,
-    int targetBasisId) const
-{
-    const auto& plans =
-        multiplicationPlansFor(
-            leftFacts, rightFacts, targetBasisId);
-    auto withOperandConversions =
-        [&](const MultiplicationPlan& plan) {
-          MultiplicationPlanSelection selection{
-              plan, std::nullopt, std::nullopt};
-          if (plan.leftOperandBasisId > 0 &&
-              *leftFacts.expandedBasis != plan.leftOperandBasisId)
-            selection.leftConversion =
-                selectBasisConversionPlan(
-                    f,
-                    *leftFacts.expandedBasis,
-                    plan.leftOperandBasisId,
-                    leftFacts,
-                    0);
-          if (error()) return selection;
-          if (plan.rightOperandBasisId > 0 &&
-              *rightFacts.expandedBasis != plan.rightOperandBasisId)
-            selection.rightConversion =
-                selectBasisConversionPlan(
-                    g,
-                    *rightFacts.expandedBasis,
-                    plan.rightOperandBasisId,
-                    rightFacts,
-                    0);
-          return selection;
-        };
-    const char *forced =
-        basisConversionContextActive()
-            ? nullptr
-            : std::getenv(
-                  "M2_SYMMETRIC_RINGS_FORCE_MULTIPLICATION_PLAN");
-    if (forced != nullptr)
-      {
-        for (const auto& plan : plans)
-          if (multiplicationPlanIdentifier(plan.id) == forced &&
-              multiplicationPlanApplicable(
-                  plan, leftFacts, rightFacts, targetBasisId))
-            return withOperandConversions(plan);
-        ERROR("the requested multiplication plan is unknown or inapplicable: ",
-              forced);
-        int powerSumId = requiredBasisIdForKind(BasisKind::PowerSum);
-        return {{MultiplicationPlanId::Unavailable,
-                 MultiplicationKernel::ProductInSingleBasis,
-                 powerSumId,
-                 powerSumId,
-                 powerSumId,
-                 true},
-                std::nullopt,
-                std::nullopt};
-      }
-
-    for (const auto& plan : plans)
-      if (multiplicationPlanApplicable(
-              plan, leftFacts, rightFacts, targetBasisId))
-        return withOperandConversions(plan);
-    ERROR("no applicable multiplication plan is available");
-    int powerSumId = requiredBasisIdForKind(BasisKind::PowerSum);
-    return {{MultiplicationPlanId::Unavailable,
-             MultiplicationKernel::ProductInSingleBasis,
-             powerSumId,
-             powerSumId,
-             powerSumId,
-             true},
-            std::nullopt,
-            std::nullopt};
-  }
-
-// ============================================================================
-// Policy-Free Multiplication Kernel Executor
-// ============================================================================
-// Try-style mathematical helpers revalidate the selected plan's structural
-// preconditions. A false result here is a contract violation, not a signal to
-// select a fallback plan.
-
-ring_elem SymmetricEngineRing::executeMultiplicationKernel(
-    const MultiplicationPlan& plan,
-    ring_elem f,
-    ring_elem g,
-    int targetBasisId) const
-{
-    ring_elem product;
-    if (plan.kernel == MultiplicationKernel::SchurFactorFormulas)
-      {
-        bool completed = tryProductToSchurViaCompatibleFactors(
-            f,
-            g,
-            targetBasisId,
-            displayForBasis(targetBasisId),
-            basisOrderForId(targetBasisId),
-            product);
-        if (error()) return zero();
-        if (!completed)
-          {
-            ERROR("a selected multiplication plan violated its "
-                  "applicability contract");
-            return zero();
-          }
-      }
-    else if (plan.kernel ==
-             MultiplicationKernel::MonomialExponentSplittings)
-      {
-        bool completed = tryProductToMonomialLikeTarget(
-            f,
-            g,
-            targetBasisId,
-            displayForBasis(targetBasisId),
-            basisOrderForId(targetBasisId),
-            isMultiplicativeBasis(targetBasisId),
-            product);
-        if (error()) return zero();
-        if (!completed)
-          {
-            ERROR("a selected multiplication kernel violated its "
-                  "applicability contract");
-            return zero();
-          }
-      }
-    else
-      product = mult(f, g);
-    return error() ? zero() : product;
-  }
-
-// ============================================================================
-// Binary Multiplication Workflow
-// ============================================================================
-// Stages are deliberately visible and linear: convert operands, execute the
-// selected kernel, normalize its product, select and execute one complete
-// final conversion plan, and validate the target contract.
-
-ring_elem SymmetricEngineRing::runMultiplicationWorkflow(
-    const MultiplicationPlanSelection& selection,
-    ring_elem f,
-    ring_elem g,
-    const ExpressionFacts& leftFacts,
-    const ExpressionFacts& rightFacts,
-    int targetBasisId,
-    bool attachResultFacts) const
-{
-    const bool trace = basisConversionTraceEnabled();
-    const MultiplicationPlan& plan = selection.plan;
-    CombinatorialTags tags = selectMultiplicationTags(f, g);
-    ring_elem left = f;
-    ring_elem right = g;
-    if (selection.leftConversion)
-      {
-        if (trace)
-          std::fprintf(
-              stderr,
-              "SymmetricRings multiplication-stage: "
-              "stage=convert-left plan=%s\n",
-              selection.leftConversion->
-                  definition->id.value.c_str());
-        left = executeBasisConversionPlan(
-            *selection.leftConversion,
-            f,
-            polyValue(f)->combinatorialTags,
-            leftFacts);
-        if (error()) return zero();
-      }
-    if (selection.rightConversion)
-      {
-        if (trace)
-          std::fprintf(
-              stderr,
-              "SymmetricRings multiplication-stage: "
-              "stage=convert-right plan=%s\n",
-              selection.rightConversion->
-                  definition->id.value.c_str());
-        right = executeBasisConversionPlan(
-            *selection.rightConversion,
-            g,
-            polyValue(g)->combinatorialTags,
-            rightFacts);
-        if (error()) return zero();
-      }
-
-    if (trace)
-      std::fprintf(
-          stderr,
-          "SymmetricRings multiplication-stage: stage=kernel "
-          "plan=%s output-basis=%s canonical=%s\n",
-          multiplicationPlanIdentifier(plan.id).data(),
-          basisKeyForId(plan.productBasisId).c_str(),
-          plan.productIsCanonical ? "yes" : "no");
-    ring_elem product = executeMultiplicationKernel(
-        plan, left, right, targetBasisId);
-    if (error()) return zero();
-
-    ExpressionFacts productFacts;
-    ring_elem canonicalProduct;
-    if (plan.productIsCanonical)
-      {
-        canonicalProduct = product;
-        // Exact product support is necessary only for a final conversion or
-        // for public metadata. A transient target-basis pair product can rely
-        // on the kernel's canonical-output contract.
-        if (plan.productBasisId != targetBasisId ||
-            attachResultFacts)
-          {
-            auto metadataFacts =
-                expressionFactsFromMetadata(canonicalProduct);
-            productFacts = metadataFacts
-                ? *metadataFacts
-                : inferCanonicalExpansionFacts(
-                      canonicalProduct,
-                      plan.productBasisId);
-          }
-      }
-    else
-      canonicalProduct =
-          normalizeExpression(product, productFacts);
-    if (error()) return zero();
-    if ((plan.productBasisId != targetBasisId ||
-         attachResultFacts) &&
-        !productFacts.canonicalExpansionInBasis(
-            plan.productBasisId))
-      {
-        ERROR("a multiplication kernel violated its declared output contract");
-        return zero();
-      }
-
-    mutablePolyValue(canonicalProduct)->combinatorialTags = tags;
-    if (plan.productBasisId == targetBasisId &&
-        !attachResultFacts)
-      return canonicalProduct;
-    productFacts.combinatorialTags = tags;
-    ring_elem result = canonicalProduct;
-    ExpressionFacts resultFacts;
-    if (plan.productBasisId != targetBasisId)
-      {
-        RingBasisConversionPlan finalConversion =
-            selectBasisConversionPlan(
-                canonicalProduct,
-                plan.productBasisId,
-                targetBasisId,
-                productFacts,
-                tags,
-                std::nullopt,
-                &productFacts);
-        if (error()) return zero();
-        if (trace)
-          std::fprintf(
-              stderr,
-              "SymmetricRings multiplication-stage: "
-              "stage=convert-product plan=%s\n",
-              finalConversion.
-                  definition->id.value.c_str());
-        result = executeBasisConversionPlan(
-            finalConversion,
-            canonicalProduct,
-            tags,
-            productFacts,
-            attachResultFacts ? &resultFacts : nullptr);
-      }
-    else if (attachResultFacts)
-      resultFacts = std::move(productFacts);
-    if (error()) return zero();
-
-    if (!attachResultFacts) return result;
-    if (!resultFacts.canonicalExpansionInBasis(targetBasisId))
-      {
-        ERROR("the binary multiplication workflow did not produce "
-              "a canonical target-basis expansion");
-        return zero();
-      }
-    attachExpressionFacts(
-        result,
-        resultFacts,
-        targetBasisId,
-        tags);
-    return result;
-  }
-
-// ============================================================================
-// Strict Basis-Element Multiplication Helper
-// ============================================================================
-// Coefficients are distributed by the outer wrapper. This helper therefore
-// accepts exactly two coefficient-one, normalized, non-skew basis elements.
-
-ring_elem SymmetricEngineRing::multiplyBasisElementsWithFacts(
-    ring_elem f,
-    ring_elem g,
-    const ExpressionFacts& leftFacts,
-    const ExpressionFacts& rightFacts,
-    int targetBasisId,
-    bool attachResultFacts) const
-{
-    MultiplicationPlanSelection selection =
-        selectMultiplicationPlan(
-            f,
-            g,
-            leftFacts, rightFacts, targetBasisId);
-    if (error()) return zero();
-    if (basisConversionTraceEnabled())
-      std::fprintf(
-          stderr,
-          "SymmetricRings multiplication-plan: target=%s plan=%s\n",
-          displayForBasis(targetBasisId).c_str(),
-          multiplicationPlanIdentifier(selection.plan.id).data());
-    return runMultiplicationWorkflow(
-        selection,
-        f,
-        g,
-        leftFacts,
-        rightFacts,
-        targetBasisId,
-        attachResultFacts);
-}
-
-// ============================================================================
-// One-Term Product Resolver
-// ============================================================================
-// Canonical storage has already removed zero coefficients. This helper removes
-// identity factors, applies the surviving coefficient once at the end, and
-// uses target-basis multiplication or the pairwise plan prescribed by the
-// design.
-
-SymmetricEngineRing::ResolvedProductTerm
-SymmetricEngineRing::multiplyTermToBasis(
-    const SymmetricTerm& term,
-    int targetBasisId) const
-{
-    const bool trace = basisConversionTraceEnabled();
-    struct ProductFactor
-    {
-      ring_elem expression;
-      ExpressionFacts facts;
-    };
-    std::vector<ProductFactor> factors;
-    size_t pos = 0;
-    while (pos < term.monomial.data.size())
-      {
-        bool identityFactor = false;
-        if (!atomIsSkewAt(term.monomial, pos))
-          {
-            // The input has already been normalized. Test the encoded index
-            // in place instead of allocating a Partition merely to trim
-            // trailing zeroes and ask whether it is empty.
-            identityFactor = true;
-            const size_t indexLength =
-                static_cast<size_t>(
-                    atomIndexLengthAt(term.monomial, pos));
-            for (size_t i = 0; i < indexLength; ++i)
-              if (term.monomial.data[
-                      pos + atomHeaderSize + i] != 0)
-                {
-                  identityFactor = false;
-                  break;
-                }
-          }
-        if (!identityFactor)
-          factors.push_back({
-              expressionFromAtom(term.monomial, pos),
-              basisElementFactsFromAtom(
-                  term.monomial,
-                  pos,
-                  coefficientRing->one())});
-        pos += atomLengthAt(term.monomial, pos);
-      }
-
-    // Factor conversions are internal stage values. Keep their exact facts in
-    // the workflow instead of serializing a full metadata record onto each
-    // temporary polynomial; toBasis attaches only the final public result.
-    auto convertFactor =
-        [&](const ProductFactor& factor) {
-          if (!factor.facts.expandedBasis)
-            {
-              ERROR("a product factor was not a canonical basis element");
-              return zero();
-            }
-          const int sourceBasisId = *factor.facts.expandedBasis;
-          CombinatorialTags factorTags =
-              polyValue(factor.expression)->combinatorialTags;
-          if (sourceBasisId == targetBasisId)
-            return factor.expression;
-          RingBasisConversionPlan selection =
-              selectBasisConversionPlan(
-                  factor.expression,
-                  sourceBasisId,
-                  targetBasisId,
-                  factor.facts,
-                  factorTags);
-          if (error()) return zero();
-          return executeBasisConversionPlan(
-              selection,
-              factor.expression,
-              factorTags,
-              factor.facts);
-        };
-
-    ring_elem result;
-    if (factors.empty())
-      {
-        if (trace)
-          std::fprintf(
-              stderr,
-              "SymmetricRings product-resolution: "
-              "branch=scalar target=%s\n",
-              basisKeyForId(targetBasisId).c_str());
-        result = one();
-      }
-    else if (factors.size() == 1)
-      {
-        if (trace)
-          std::fprintf(
-              stderr,
-              "SymmetricRings product-resolution: "
-              "branch=single-factor target=%s\n",
-              basisKeyForId(targetBasisId).c_str());
-        result = convertFactor(factors.front());
-      }
-    else if (isMultiplicativeBasis(targetBasisId))
-      {
-        if (trace)
-          std::fprintf(
-              stderr,
-              "SymmetricRings product-resolution: "
-              "branch=target-basis-product factors=%zu target=%s\n",
-              factors.size(),
-              basisKeyForId(targetBasisId).c_str());
-        std::vector<ring_elem> convertedFactors;
-        convertedFactors.reserve(factors.size());
-        for (const auto& factor : factors)
-          {
-            ring_elem converted = convertFactor(factor);
-            if (error()) return {zero(), {}};
-            convertedFactors.push_back(converted);
-          }
-        // A balanced fold limits the size disparity of intermediate products
-        // and avoids multiplying every expansion through a steadily growing
-        // accumulator.
-        while (convertedFactors.size() > 1)
-          {
-            std::vector<ring_elem> nextLevel;
-            nextLevel.reserve((convertedFactors.size() + 1) / 2);
-            for (size_t i = 0; i < convertedFactors.size(); i += 2)
-              {
-                if (i + 1 == convertedFactors.size())
-                  nextLevel.push_back(convertedFactors[i]);
-                else
-                  {
-                    ring_elem product = mult(
-                        convertedFactors[i], convertedFactors[i + 1]);
-                    if (error()) return {zero(), {}};
-                    nextLevel.push_back(product);
-                  }
-              }
-            convertedFactors = std::move(nextLevel);
-          }
-        result = convertedFactors.front();
-      }
-    else
-      {
-        if (trace)
-          std::fprintf(
-              stderr,
-              "SymmetricRings product-resolution: "
-              "branch=pairwise-plans factors=%zu target=%s\n",
-              factors.size(),
-              basisKeyForId(targetBasisId).c_str());
-        result = multiplyBasisElementsWithFacts(
-            factors[0].expression,
-            factors[1].expression,
-            factors[0].facts,
-            factors[1].facts,
-            targetBasisId,
-            true);
-        for (size_t i = 2; i < factors.size() && !error(); ++i)
-          result = multiplyToBasis(
-              result, factors[i].expression, targetBasisId);
-      }
-    if (error()) return {zero(), {}};
-    // Coefficients are immutable ring elements. Avoid walking and copying a
-    // potentially large expansion when the product term already has unit
-    // coefficient.
-    if (!coefficientRing->is_equal(
-            term.coeff, coefficientRing->one()))
-      result = scaled(term.coeff, result);
-    if (error()) return {zero(), {}};
-
-    auto metadataFacts = expressionFactsFromMetadata(result);
-    ExpressionFacts resultFacts = metadataFacts
-        ? *metadataFacts
-        : inferCanonicalExpansionFacts(
-              result, targetBasisId);
-    if (!resultFacts.canonicalExpansionInBasis(targetBasisId))
-      {
-        ERROR("a resolved product term violated its canonical "
-              "target-basis contract");
-        return {zero(), {}};
-      }
-    resultFacts.combinatorialTags =
-        polyValue(result)->combinatorialTags;
-    if (!metadataFacts)
-      attachExpressionFacts(
-          result,
-          resultFacts,
-          targetBasisId,
-          resultFacts.combinatorialTags);
-    return {result, std::move(resultFacts)};
-  }
-
-// ============================================================================
-// Distributive Multiplication Entry Workflow
-// ============================================================================
-// The public API accepts product-free linear combinations. It distributes
-// coefficients and sends each nonscalar pair to the strict helper above.
-
-ring_elem SymmetricEngineRing::multiplyToBasis(
-    ring_elem f,
-    ring_elem g,
-    int targetBasisId) const
-{
-    requireBasis(targetBasisId);
-    if (error()) return zero();
-    auto strictInputFacts =
-        [&](ring_elem operand)
-            -> std::optional<ExpressionFacts> {
-          const auto *poly = polyValue(operand);
-          if (poly->terms.size() != 1 ||
-              poly->terms.front().monomial.data.empty() ||
-              atomLengthAt(poly->terms.front().monomial, 0) !=
-                  poly->terms.front().monomial.data.size())
-            return std::nullopt;
-          ExpressionFacts facts = basisElementFactsFromAtom(
-              poly->terms.front().monomial,
-              0,
-              poly->terms.front().coeff);
-          facts.combinatorialTags = poly->combinatorialTags;
-          if (!facts.singleBasisElementId ||
-              !facts.singleBasisElementCoefficientOne.value_or(false) ||
-              !facts.canonicalExpansionInBasis(
-                  *facts.singleBasisElementId))
-            return std::nullopt;
-          return facts;
-        };
-    auto strictLeftFacts = strictInputFacts(f);
-    auto strictRightFacts = strictInputFacts(g);
-    if (strictLeftFacts && strictRightFacts)
-      {
-        MultiplicationPlanSelection selection =
-            selectMultiplicationPlan(
-                f,
-                g,
-                *strictLeftFacts, *strictRightFacts, targetBasisId);
-        if (error()) return zero();
-        return runMultiplicationWorkflow(
-            selection,
-            f,
-            g,
-            *strictLeftFacts,
-            *strictRightFacts,
-            targetBasisId,
-            true);
-      }
-
-    ExpressionFacts inferredLeftFacts;
-    auto knownLeftFacts = expressionFactsFromMetadata(f);
-    ring_elem left = f;
-    if (!knownLeftFacts)
-      left = normalizeExpression(f, inferredLeftFacts);
-    if (error()) return zero();
-    const ExpressionFacts& leftFacts = knownLeftFacts
-        ? *knownLeftFacts
-        : inferredLeftFacts;
-
-    ExpressionFacts inferredRightFacts;
-    auto knownRightFacts = expressionFactsFromMetadata(g);
-    ring_elem right = g;
-    if (!knownRightFacts)
-      right = normalizeExpression(g, inferredRightFacts);
-    if (error()) return zero();
-    const ExpressionFacts& rightFacts = knownRightFacts
-        ? *knownRightFacts
-        : inferredRightFacts;
-    if (!leftFacts.noProducts() || !rightFacts.noProducts())
-      {
-        ERROR("multiplyToBasis expects product-free operands");
-        return zero();
-      }
-
-    CombinatorialTags tags = selectMultiplicationTags(left, right);
-    if (leftFacts.singleBasisElement() &&
-        rightFacts.singleBasisElement() &&
-        leftFacts.singleBasisElementCoefficientOne.value_or(false) &&
-        rightFacts.singleBasisElementCoefficientOne.value_or(false))
-      {
-        // The public entry point most often receives exactly the strict kernel
-        // contract. Reuse the facts established above instead
-        // of extracting two temporary atoms and inferring them again.
-        MultiplicationPlanSelection selection =
-            selectMultiplicationPlan(
-                left,
-                right,
-                leftFacts, rightFacts, targetBasisId);
-        if (error()) return zero();
-        return runMultiplicationWorkflow(
-            selection,
-            left,
-            right,
-            leftFacts,
-            rightFacts,
-            targetBasisId,
-            true);
-      }
-
-    // Materialize and inspect each canonical atom once. In the distributive
-    // cross product a left atom is otherwise rebuilt and rescanned once per
-    // right term (and conversely), even though its facts are immutable.
-    struct PreparedOperandTerm
-    {
-      const SymmetricTerm *term;
-      bool scalar;
-      ring_elem factor;
-      ExpressionFacts facts;
-    };
-    auto prepareOperand =
-        [&](ring_elem operand) {
-          std::vector<PreparedOperandTerm> prepared;
-          prepared.reserve(polyValue(operand)->terms.size());
-          for (const auto& term : polyValue(operand)->terms)
-            {
-              bool scalar = term.monomial.data.empty();
-              ring_elem factor = scalar
-                  ? one()
-                  : expressionFromAtom(term.monomial, 0);
-              ExpressionFacts facts;
-              if (!scalar)
-                facts = basisElementFactsFromAtom(
-                    term.monomial, 0, coefficientRing->one());
-              prepared.push_back(
-                  {&term, scalar, factor, std::move(facts)});
-            }
-          return prepared;
-        };
-    std::vector<PreparedOperandTerm> preparedLeft =
-        prepareOperand(left);
-    std::vector<PreparedOperandTerm> preparedRight =
-        prepareOperand(right);
-
-    auto convertTransientFactor =
-        [&](const PreparedOperandTerm& prepared) {
-          if (!prepared.facts.expandedBasis)
-            {
-              ERROR("a prepared multiplication atom has no source basis");
-              return zero();
-            }
-          const int sourceBasisId = *prepared.facts.expandedBasis;
-          if (sourceBasisId == targetBasisId)
-            return prepared.factor;
-          RingBasisConversionPlan conversion =
-              selectBasisConversionPlan(
-                  prepared.factor,
-                  sourceBasisId,
-                  targetBasisId,
-                  prepared.facts,
-                  tags);
-          if (error()) return zero();
-          return executeBasisConversionPlan(
-              conversion,
-              prepared.factor,
-              tags,
-              prepared.facts);
-        };
-
-    // Structured kernels need no operand conversion plans, and their selection
-    // depends only on the two source bases and target. Reuse that completed
-    // selection across equal-basis pairs in this distributive request.
-    std::map<
-        std::tuple<int, int, int>,
-        MultiplicationPlanSelection>
-        reusablePairSelections;
-    VECTOR(SymmetricTerm) resultTerms;
-    for (const auto& leftTerm : preparedLeft)
-      for (const auto& rightTerm : preparedRight)
-        {
-          ring_elem coefficient =
-              coefficientRing->mult(
-                  leftTerm.term->coeff, rightTerm.term->coeff);
-          if (coefficientRing->is_zero(coefficient)) continue;
-
-          ring_elem product;
-          if (leftTerm.scalar && rightTerm.scalar)
-            product = one();
-          else if (leftTerm.scalar || rightTerm.scalar)
-            {
-              product = convertTransientFactor(
-                  leftTerm.scalar ? rightTerm : leftTerm);
-            }
-          else
-            {
-              const auto key = std::make_tuple(
-                  *leftTerm.facts.expandedBasis,
-                  *rightTerm.facts.expandedBasis,
-                  targetBasisId);
-              auto reusable = reusablePairSelections.find(key);
-              if (reusable != reusablePairSelections.end())
-                product = runMultiplicationWorkflow(
-                    reusable->second,
-                    leftTerm.factor,
-                    rightTerm.factor,
-                    leftTerm.facts,
-                    rightTerm.facts,
-                    targetBasisId,
-                    false);
-              else
-                {
-                  MultiplicationPlanSelection selection =
-                      selectMultiplicationPlan(
-                          leftTerm.factor,
-                          rightTerm.factor,
-                          leftTerm.facts,
-                          rightTerm.facts,
-                          targetBasisId);
-                  if (error()) return zero();
-                  if (!selection.leftConversion &&
-                      !selection.rightConversion)
-                    reusablePairSelections.emplace(key, selection);
-                  product = runMultiplicationWorkflow(
-                      selection,
-                      leftTerm.factor,
-                      rightTerm.factor,
-                      leftTerm.facts,
-                      rightTerm.facts,
-                      targetBasisId,
-                      false);
-                }
-            }
-          if (error()) return zero();
-          for (const auto& productTerm : polyValue(product)->terms)
-            appendTermIfNonZero(
-                resultTerms,
-                coefficientRing->mult(
-                    coefficient, productTerm.coeff),
-                productTerm.monomial);
-        }
-
-    // Distribution can create many overlapping target terms. Collect once,
-    // after every strict binary workflow has finished, instead of repeatedly
-    // copying and merging a growing polynomial after each operand pair.
-    ring_elem result = fromTermVector(resultTerms, false);
-    ExpressionFacts resultFacts =
-        inferCanonicalExpansionFacts(result, targetBasisId);
-    attachExpressionFacts(
-        result, resultFacts, targetBasisId, tags);
     return result;
   }
 
@@ -3226,8 +2008,8 @@ SymmetricEngineRing::resolveProductsForBasisConversion(
                 prepared.combinatorialTags;
         return {
             resolved.expression,
-            std::move(resolved.facts),
-            true};
+          std::move(resolved.facts),
+          true};
       }
 
     VECTOR(SymmetricTerm) preparedTerms;

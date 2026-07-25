@@ -11,24 +11,11 @@
 // Every plan-callable kernel receives the same mathematical input. Lower
 // helpers remain free to use signatures natural to their formulas.
 
-  struct BasisConversionBasis
-  {
-    BasisKind kind = BasisKind::Custom;
-    int id = -1;
-    const std::string *display = nullptr;
-    int order = 0;
-
-    const std::string& displayName() const
-    {
-      return *display;
-    }
-  };
-
   struct BasisConversionInput
   {
     ring_elem expansion;
-    BasisConversionBasis source;
-    BasisConversionBasis target;
+    RingBasis source;
+    RingBasis target;
     std::optional<int> homogeneousWeight;
   };
 
@@ -87,7 +74,7 @@
   ring_elem powerSumsToSchurOmegaViaFrobeniusCharacterFormula(
       const BasisConversionInput& input) const;
 
-  // Power sums to Hall--Littlewood and monomial-like bases.
+  // Power sums to Hall--Littlewood, monomial, and forgotten bases.
   ring_elem powerSumsToHallLittlewoodGeneratorsViaLogarithmFormula(
       const BasisConversionInput& input) const;
   ring_elem powerSumSingleCycleTermsToHallLittlewoodViaGreenPolynomials(
@@ -368,11 +355,7 @@
       const std::string& targetDisplay,
       int targetDisplayOrder) const;
 
-// ============================================================================
-// Straightening
-// ============================================================================
-// Composition-indexed basis elements are rewritten into canonical basis expansions.
-
+// Shared recurrence formulas used by the declarative normalization rules.
   Partition replaceAdjacentPair(const Partition& alpha,
                                     size_t pos,
                                     int first,
@@ -381,13 +364,6 @@
                                     int basisId) const;
   ring_elem straightenHallCapitalBasisElement(const Partition& alpha,
                                           int basisId) const;
-  ring_elem straightenBasisElement(const SymmetricMonomial& monomial, size_t pos) const;
-  ring_elem straightenMonomial(const SymmetricMonomial& monomial) const;
-  ring_elem straightenElement(ring_elem f) const;
- public:
-  ring_elem straighten(ring_elem f) const;
-
- private:
 
 #endif
 

@@ -318,6 +318,79 @@ const RingElement *rawSymmetricRingsMultiplyToBasis(
     }
 }
 
+const RingElement *rawSymmetricRingsMultiplyToBasisBench(
+    const RingElement *f,
+    const RingElement *g,
+    int targetBasisId,
+    M2_string forcedKernel,
+    bool usePowerSumReference,
+    bool traceWorkflow)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      if (g->get_ring() != S)
+        {
+          ERROR("expected elements in the same symmetric ring");
+          return nullptr;
+        }
+      const std::string identifier =
+          fromM2String(forcedKernel);
+      const std::optional<std::string> forced =
+          identifier.empty()
+              ? std::nullopt
+              : std::optional<std::string>(identifier);
+      ring_elem result = S->multiplyToBasisBench(
+          f->get_value(),
+          g->get_value(),
+          targetBasisId,
+          forced,
+          usePowerSumReference,
+          traceWorkflow);
+      if (error()) return nullptr;
+      return RingElement::make_raw(S, result);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+const RingElement *rawSymmetricRingsMultiplyExpressionsToBasisBench(
+    const RingElement *f,
+    const RingElement *g,
+    int targetBasisId,
+    M2_string strategy,
+    bool traceWorkflow)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      if (g->get_ring() != S)
+        {
+          ERROR("expected elements in the same symmetric ring");
+          return nullptr;
+        }
+      ring_elem result =
+          S->multiplyExpressionsToBasisBench(
+              f->get_value(),
+              g->get_value(),
+              targetBasisId,
+              fromM2String(strategy),
+              traceWorkflow);
+      if (error()) return nullptr;
+      return RingElement::make_raw(S, result);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
 const RingElement *rawSymmetricRingsPlethysm(const RingElement *f,
                                              const RingElement *g)
 {

@@ -72,6 +72,22 @@ class SymmetricEngineRing : public Ring
     BasisKind kind;
   };
 
+  // Ring-local realization of a mathematical basis.  Conversion and
+  // multiplication share this neutral descriptor; neither pipeline owns a
+  // second endpoint representation.
+  struct RingBasis
+  {
+    BasisKind kind = BasisKind::Custom;
+    int id = -1;
+    const std::string *display = nullptr;
+    int order = 0;
+
+    const std::string& displayName() const
+    {
+      return *display;
+    }
+  };
+
   const Ring *coefficientRing;
   mutable ComputationLimits computationLimits;
   mutable std::map<int, BasisDescriptor> basisDescriptors;
@@ -108,6 +124,9 @@ class SymmetricEngineRing : public Ring
   // A runtime invariant guard: executing a fixed conversion plan may recurse
   // into its component plans, but it must never invoke performance selection.
   mutable size_t basisConversionPlanExecutionDepth = 0;
+  // A strict binary kernel is a terminal combinatorial formula. It must never
+  // reenter binary selection or an outer multiplication workflow.
+  mutable size_t binaryMultiplicationKernelExecutionDepth = 0;
 
   // Schur conversion and product state.
   mutable std::map<std::string, std::vector<SchurConversionRecipeEntry>>
@@ -206,8 +225,13 @@ class SymmetricEngineRing : public Ring
   // ============================================================================
 
 #include "symmetric-rings/basis-conversion-kernels.hpp"
-#include "symmetric-rings/basis-conversion-products.hpp"
+#include "symmetric-rings/multiplication-kernels.hpp"
 #include "symmetric-rings/basis-conversion.hpp"
+#include "symmetric-rings/basis-normalization.hpp"
+#include "symmetric-rings/multiplication-picker.hpp"
+#include "symmetric-rings/multiplication-folds.hpp"
+#include "symmetric-rings/binary-multiplication.hpp"
+#include "symmetric-rings/multiplication.hpp"
 #include "symmetric-rings/basis-coefficient.hpp"
 #include "symmetric-rings/omega.hpp"
 #include "symmetric-rings/plethysm.hpp"

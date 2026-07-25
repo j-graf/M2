@@ -42,18 +42,15 @@ SymmetricEngineRing::inferInnerProductProfile(ring_elem f) const
         if (metadata.expressionFactsComplete &&
             metadata.termCount &&
             metadata.scalarTermCount &&
-            metadata.singleFactorTermCount &&
-            metadata.productTermCount)
+            metadata.singleFactorTermCount)
           {
             const bool singleBasisElement =
                 *metadata.termCount == 1 &&
                 *metadata.scalarTermCount == 0 &&
-                *metadata.singleFactorTermCount == 1 &&
-                *metadata.productTermCount == 0;
+                *metadata.singleFactorTermCount == 1;
             profile.singleBasisElement = singleBasisElement
                 ? KnownState::True : KnownState::False;
-            profile.noProducts = *metadata.productTermCount == 0
-                ? KnownState::True : KnownState::False;
+            profile.noProducts = KnownState::True;
           }
         profile.normalized = metadata.normalized
             ? KnownState::True : KnownState::Unknown;

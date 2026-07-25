@@ -3,7 +3,10 @@
 -- repetition. It can also list filtered case identifiers.
 
 benchmarkDirectory = currentFileDirectory
-needsPackage "SymmetricRings"
+-- The catalog includes development-only strict-kernel operations.  Debug
+-- loading makes those private benchmark boundaries visible without exporting
+-- them from the user package.
+debug needsPackage "SymmetricRings"
 load(benchmarkDirectory | "partitions.m2")
 load(benchmarkDirectory | "operations.m2")
 load(benchmarkDirectory | "cases.m2")
@@ -19,6 +22,8 @@ benchmarkFamilyFilter = benchmarkEnvironment "SYMRINGS_BENCH_FAMILY"
 benchmarkTierFilter = benchmarkEnvironment "SYMRINGS_BENCH_TIER"
 benchmarkIdFilter = benchmarkEnvironment "SYMRINGS_BENCH_CASE"
 benchmarkVariedFixedFilter = benchmarkEnvironment "SYMRINGS_BENCH_VARIED_FIXED"
+benchmarkTraceWorkflows =
+    benchmarkEnvironment "SYMRINGS_BENCH_TRACE_WORKFLOW" === "1"
 
 if benchmarkMode == "list" then (
     scan(benchmarkSelectCases(benchmarkFamilyFilter,
@@ -65,7 +70,8 @@ cpuSeconds = cpuTime() - cpuStart
 wallSeconds = wallTiming#0
 benchmarkResult = wallTiming#1
 
-if benchmarkEnvironment "SYMRINGS_BENCH_VERIFY" == "1" then
+benchmarkVerify = benchmarkEnvironment "SYMRINGS_BENCH_VERIFY"
+if benchmarkVerify === "1" then
     benchmarkVerifyResult(case, benchmarkResult)
 
 resultTerms = if instance(benchmarkResult, SymmetricRingElement)

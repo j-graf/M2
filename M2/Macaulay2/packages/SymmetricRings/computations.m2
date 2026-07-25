@@ -739,6 +739,186 @@ toBasisBench = args -> (
     )
 
 -- ============================================================================
+-- Development Strict-Binary Multiplication Benchmarks
+-- ============================================================================
+
+-- multiplyToBasisBench is deliberately private. It compares strict binary
+-- kernels on two coefficient-one canonical basis terms. Automatic selection,
+-- one forced stable kernel identifier, and the independent PowerSumReference
+-- workflow all reach the same explicit engine request boundary.
+
+multiplyToBasisBenchOptionDefaults = hashTable {
+    "Kernels" => {"Automatic"},
+    "Repetitions" => 3,
+    "Warmups" => 1,
+    "Track" => false,
+    "Verify" => true
+    }
+
+multiplyToBasisBenchExecute = (f, g, B, kernel, track) -> (
+    forcedKernel :=
+        if kernel == "Automatic" or kernel == "PowerSumReference"
+        then ""
+        else kernel;
+    usePowerSumReference := kernel == "PowerSumReference";
+    userSymmetricElement(
+        ring f,
+        rawSymmetricRingsMultiplyToBasisBench(
+            raw f,
+            raw g,
+            B#"BasisId",
+            forcedKernel,
+            usePowerSumReference,
+            track))
+    )
+
+-- Executes the product-free bilinear workflow with a request-scoped strategy
+-- and optional tracing. Four arguments retain the automatic strategy.
+multiplyExpressionsToBasisBenchExecute = args -> (
+    L := argumentList args;
+    if #L != 4 and #L != 5 then
+        error "expected two symmetric functions, a target basis, an optional strategy, and a trace flag";
+    f := L#0;
+    g := L#1;
+    B := L#2;
+    strategy := if #L == 4 then "Automatic" else L#3;
+    track := if #L == 4 then L#3 else L#4;
+    userSymmetricElement(
+        ring f,
+        rawSymmetricRingsMultiplyExpressionsToBasisBench(
+            raw f,
+            raw g,
+            B#"BasisId",
+            strategy,
+            track))
+    )
+
+multiplyToBasisBench = args -> (
+    L := argumentList args;
+    if #L < 3 then
+        error "expected two symmetric functions and a target basis";
+    f := L#0;
+    g := L#1;
+    target := L#2;
+    if not instance(f, SymmetricRingElement)
+        or not instance(g, SymmetricRingElement) then
+        error "expected two symmetric functions";
+    if ring f =!= ring g then
+        error "expected elements in the same symmetric ring";
+    opts := parseStringOptions(
+        multiplyToBasisBenchOptionDefaults,
+        drop(L, 3),
+        "multiplyToBasisBench");
+    kernels := opts#"Kernels";
+    if class kernels === String then kernels = {kernels};
+    if not instance(kernels, List) or #kernels == 0
+        or any(kernels, kernel -> class kernel =!= String) then
+        error "expected Kernels to be a nonempty list of strings";
+    if #(unique kernels) != #kernels then
+        error "expected distinct multiplyToBasisBench kernels";
+
+    repetitions := opts#"Repetitions";
+    warmups := opts#"Warmups";
+    track := opts#"Track";
+    verify := opts#"Verify";
+    if class repetitions =!= ZZ or repetitions <= 0 then
+        error "expected Repetitions to be a positive integer";
+    if class warmups =!= ZZ or warmups < 0 then
+        error "expected Warmups to be a nonnegative integer";
+    if class track =!= Boolean then
+        error "expected Track to be Boolean";
+    if class verify =!= Boolean then
+        error "expected Verify to be Boolean";
+
+    R := ring f;
+    B := targetBasisOnRing(R, target);
+    leftProfile := conversionDispatchProfile(f, B);
+    rightProfile := conversionDispatchProfile(g, B);
+    if not leftProfile#"SourceUsesOnlyEngineBases"
+        or not rightProfile#"SourceUsesOnlyEngineBases"
+        or not leftProfile#"TargetIsEngineReadable"
+        or not rightProfile#"TargetIsEngineReadable" then
+        error "multiplyToBasisBench supports only built-in engine bases";
+
+    for warmup from 1 to warmups do
+        scan(kernels, kernel ->
+            multiplyToBasisBenchExecute(f, g, B, kernel, false));
+
+    timings := new MutableHashTable;
+    results := new MutableHashTable;
+    scan(kernels, kernel -> timings#kernel = {});
+    for repetition from 0 to repetitions - 1 do
+        for offset from 0 to #kernels - 1 do (
+            position := (repetition + offset) % #kernels;
+            kernel := kernels#position;
+            cpuStart := cpuTime();
+            timed := elapsedTiming (
+                result :=
+                    multiplyToBasisBenchExecute(
+                        f, g, B, kernel, false));
+            results#kernel = result;
+            timings#kernel = append(
+                timings#kernel,
+                hashTable {
+                    "Repetition" => repetition + 1,
+                    "CPUSeconds" => cpuTime() - cpuStart,
+                    "WallSeconds" => timed#0
+                    });
+            );
+
+    verified := null;
+    if verify then (
+        reference := results#(kernels#0);
+        scan(drop(kernels, 1), kernel ->
+            if results#kernel != reference then
+                error("multiplyToBasisBench kernels disagree: ",
+                    kernels#0, " and ", kernel));
+        verified = true;
+        );
+
+    if track then scan(kernels, kernel -> (
+            stderr << "SymmetricRings multiplyToBasisBench: kernel="
+                << kernel << endl;
+            multiplyToBasisBenchExecute(f, g, B, kernel, true);
+            ));
+
+    summaries := hashTable apply(kernels, kernel -> (
+            kernelTimings := timings#kernel;
+            cpuMeasurements := apply(
+                kernelTimings, item -> item#"CPUSeconds");
+            wallMeasurements := apply(
+                kernelTimings, item -> item#"WallSeconds");
+            kernel => hashTable {
+                "MinimumCPUSeconds" => first sort cpuMeasurements,
+                "MedianCPUSeconds" =>
+                    toBasisBenchMedian cpuMeasurements,
+                "MaximumCPUSeconds" => last sort cpuMeasurements,
+                "MinimumWallSeconds" => first sort wallMeasurements,
+                "MedianWallSeconds" =>
+                    toBasisBenchMedian wallMeasurements,
+                "MaximumWallSeconds" => last sort wallMeasurements
+                }
+            ));
+    hashTable {
+        "LeftInput" => f,
+        "RightInput" => g,
+        "TargetBasis" => B,
+        "Kernels" => kernels,
+        "Repetitions" => repetitions,
+        "Warmups" => warmups,
+        "Tracked" => track,
+        "Verified" => verified,
+        "Result" =>
+            if #kernels == 1 then results#(kernels#0) else null,
+        "Results" =>
+            hashTable apply(kernels, kernel -> kernel => results#kernel),
+        "Timings" =>
+            hashTable apply(kernels, kernel -> kernel => timings#kernel),
+        "Summary" => summaries
+        }
+    )
+
+-- ============================================================================
 -- Named Conversion Shortcuts
 -- ============================================================================
 

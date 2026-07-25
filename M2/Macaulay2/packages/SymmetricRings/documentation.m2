@@ -1028,10 +1028,12 @@ doc ///
   Description
    Text
     This operation accepts product-free expansions f and g and preserves them
-    as separate operands while selecting a multiplication plan and any
-    required operand or result conversions from the shared registry. It is
-    useful when the caller still has the factors separately; ordinary toBasis
-    owns expressions that already contain products.
+    as complete operands before deciding how to multiply in B. It distributes
+    over term pairs only when every nonscalar pair has an applicable direct
+    commutative kernel. Otherwise it multiplies the complete inputs in power
+    sums and converts the collected result once. It is useful when the caller
+    still has the factors separately; ordinary toBasis owns expressions that
+    already contain products.
    Example
     A = frac(QQ[t])
     R = symmetricRing A

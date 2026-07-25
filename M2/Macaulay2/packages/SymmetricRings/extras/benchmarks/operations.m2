@@ -12,6 +12,8 @@ benchmarkKnownOperations = {
     "DirectBasisConversion", "PowerSumCombinationToSchur",
     "ParameterPowerSumCombinationToSchur", "SchurCombinationToPowerSums",
     "SchurProductExpanded", "SchurProductMultiplyToBasis",
+    "StrictBinaryMultiplication", "BilinearMultiplicationToBasis",
+    "CompleteProductTermToBasis",
     "PlethysmSchurProductToSchur", "HallLittlewoodBasisProduct",
     "HallLittlewoodBasisProductRetained", "SchurClassicalInnerProduct",
     "HallLittlewoodDiagonalInnerProduct", "GeneratorDualInnerProduct",
@@ -49,6 +51,17 @@ benchmarkBasisElement = (basisKeyString, lambda) -> (
     )
 
 benchmarkBasis = basisKeyString -> basis(Rbenchmark, basisKeyString)
+
+benchmarkLinearCombination = (basisKeyString, partitions) ->
+    sum apply(partitions,
+        lambda -> benchmarkBasisElement(basisKeyString, lambda))
+
+benchmarkProductFromFactors = (basisKeys, partitions) -> (
+    if #basisKeys != #partitions then
+        error "benchmark factor bases and partitions have different lengths";
+    product apply(#basisKeys,
+        i -> benchmarkBasisElement(basisKeys#i, partitions#i))
+    )
 
 benchmarkInputPartition = (case, key) -> (
     value := case#key;
@@ -107,6 +120,28 @@ benchmarkExecute = case -> (
         benchmarkToBasis(S_lambda*S_mu, S)
     else if op == "SchurProductMultiplyToBasis" then
         benchmarkMultiplyToBasis(S_lambda, S_mu, S)
+    else if op == "StrictBinaryMultiplication" then
+        multiplyToBasisBenchExecute(
+            benchmarkBasisElement(case#"LeftBasis", lambda),
+            benchmarkBasisElement(case#"RightBasis", mu),
+            benchmarkBasis(case#"TargetBasis"),
+            case#"Kernel",
+            benchmarkTraceWorkflows)
+    else if op == "BilinearMultiplicationToBasis" then
+        multiplyExpressionsToBasisBenchExecute(
+            benchmarkLinearCombination(
+                case#"LeftBasis", case#"LeftPartitions"),
+            benchmarkLinearCombination(
+                case#"RightBasis", case#"RightPartitions"),
+            benchmarkBasis(case#"TargetBasis"),
+            benchmarkTraceWorkflows)
+    else if op == "CompleteProductTermToBasis" then
+        toBasisBenchExecute(
+            benchmarkProductFromFactors(
+                case#"FactorBases", case#"FactorPartitions"),
+            benchmarkBasis(case#"TargetBasis"),
+            "Automatic",
+            benchmarkTraceWorkflows)
     else if op == "PlethysmSchurProductToSchur" then
         benchmarkToBasis(
             plethysm(S_lambda, S_mu)*S_(case#"Probe"), S)
@@ -153,7 +188,8 @@ benchmarkExpectedWeight = case -> (
     op := case#"Operation";
     leftWeight := if case#?"Lambda" then sum benchmarkInputPartition(case, "Lambda") else 0;
     rightWeight := if case#?"Mu" then sum benchmarkInputPartition(case, "Mu") else 0;
-    if member(op, {"SchurPlethysm", "SchurPlethysmToPowerSums", "SchurPlethysmSplit"}) then
+    if case#?"ExpectedWeight" then case#"ExpectedWeight"
+    else if member(op, {"SchurPlethysm", "SchurPlethysmToPowerSums", "SchurPlethysmSplit"}) then
         leftWeight*rightWeight
     else if member(op, {"SchurProduct", "SchurProductToPowerSums", "SchurProductRoundTrip",
                         "HallLittlewoodProduct", "HallLittlewoodProductRetained"}) then
@@ -163,7 +199,8 @@ benchmarkExpectedWeight = case -> (
     else if op == "PlethysmSchurProductToSchur" then
         leftWeight*rightWeight + sum(case#"Probe")
     else if member(op, {"SchurProductExpanded", "SchurProductMultiplyToBasis",
-                        "HallLittlewoodBasisProduct", "HallLittlewoodBasisProductRetained"}) then
+                        "HallLittlewoodBasisProduct", "HallLittlewoodBasisProductRetained",
+                        "StrictBinaryMultiplication"}) then
         leftWeight+rightWeight
     else if member(op, {"HallLittlewoodPlethysmInnerProduct", "PowerSumsSchurInnerProduct",
                         "SchurClassicalInnerProduct", "HallLittlewoodDiagonalInnerProduct",

@@ -810,6 +810,50 @@ bool expressionConditionImplies(
   return leafConditionImplies(guarantee, requirement);
 }
 
+ExpressionFactRequirements expressionFactRequirements(
+    const ExpressionCondition& condition)
+{
+  ExpressionFactRequirements result =
+      noExpressionFactRequirements;
+  switch (condition.kind)
+    {
+      case ExpressionConditionKind::AllPowerSumTermsAreSingleCycles:
+        result |= requirePowerSumSingleCycleFacts;
+        break;
+      case ExpressionConditionKind::
+          ComponentAllPowerSumIndicesHaveMostlyShortCycles:
+      case ExpressionConditionKind::
+          ComponentHasBothMostlyShortCycleAndOtherTerms:
+      case ExpressionConditionKind::
+          ComponentMostlyShortCycleFractionAtLeast:
+      case ExpressionConditionKind::MixedShortCyclePowerSumExpansion:
+      case ExpressionConditionKind::PowerSumIndexHasMostlyShortCycles:
+        result |= requirePowerSumShortCycleFacts;
+        break;
+      case ExpressionConditionKind::
+          ComponentHasCommonPowerSumPartOne:
+      case ExpressionConditionKind::
+          ComponentHasCommonPowerSumPartAtMostPercentOfWeight:
+        result |= requirePowerSumCommonPartFacts;
+        break;
+      default:
+        break;
+    }
+  for (const auto& operand : condition.operands)
+    result |= expressionFactRequirements(operand);
+  return result;
+}
+
+ExpressionFactRequirements expressionFactRequirements(
+    const std::vector<ExpressionCondition>& conditions)
+{
+  ExpressionFactRequirements result =
+      noExpressionFactRequirements;
+  for (const auto& condition : conditions)
+    result |= expressionFactRequirements(condition);
+  return result;
+}
+
 // ============================================================================
 // Ordered Piece Partitioning
 // ============================================================================

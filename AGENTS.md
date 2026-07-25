@@ -126,13 +126,19 @@ The engine subsystem is `M2/Macaulay2/e/symmetric-rings/`:
 - `basis-conversion-plans.cpp`: policy-free complete conversion plans.
 - `basis-conversion-picker.cpp`: ordered endpoint performance policy.
 - `basis-conversion.*`: expression facts, plan validation and generic
-  execution, and conversion/multiplication entry points.
+  execution, and conversion entry points.
 - `basis-coefficient.*`: targeted coefficient selection and scalar transitions.
 - `basis-conversion-kernels.*`: basis-family formulas, Jacobi–Trudi,
-  characters, Hall--Littlewood transitions, straightening, and direct
+  characters, Hall--Littlewood transitions, recurrence helpers, and direct
   conversions.
-- `basis-conversion-products.*`: LR, Pieri, border-strip, multiplication, and
-  product-aware conversion.
+- `basis-normalization.*`: declarative straightening and skew-expansion rules
+  and the generic normalization workflow.
+- `multiplication-kernels.*`: LR, Pieri, border-strip, and monomial/forgotten
+  binary formulas.
+- `multiplication-picker.*`: commutative binary-kernel declarations,
+  applicability, validation, and performance policy.
+- `binary-multiplication.*`: strict two-term multiplication workflows.
+- `multiplication.*`: bilinear extension and complete product-term strategies.
 - `inner-product*.*`: Hall inner-product profiles, selection, and kernels.
 - `plethysm.*`: plethysm and combined plethysm-to-basis paths.
 - `omega.*`: omega involution logic.

@@ -230,10 +230,11 @@ The expression-facts contract contains only exact facts about a realized
 expression: canonical form, basis composition, homogeneous weight, term and
 factor counts, skew counts, single-element index, and provenance. Derived
 flags are computed from those values. Whole-expression profiles needed by a
-picker are computed lazily. Term and homogeneous-component profiles are
-computed by the executor from the actual pieces only when a selected plan has
-such cases. Exact metadata lets canonical input bypass normalization and
-general rescanning.
+picker are computed lazily. The condition language declares which
+target-independent power-sum support facts it needs, and one inspector computes
+those facts for whole expressions, terms, or homogeneous components from the
+actual assigned support. Exact metadata lets canonical input bypass
+normalization and general rescanning.
 
 Arithmetic may retain individually valid hints after it invalidates the exact
 canonical-core marker. Only the complete marker can justify a conversion
@@ -246,153 +247,177 @@ reconstructs them from the realized target-ring expression.
 
 ### Mathematical workflow
 
-For product-free expansions
+Multiplication separates the strict product of two basis terms from linear
+extension and products with many factors.
+
+For coefficient-one canonical terms, a binary kernel is one combinatorial
+formula
 
 $$
-F=\sum_\lambda a_\lambda u_\lambda,
-\qquad
-G=\sum_\mu b_\mu v_\mu,
+K_{u,v}^{w}(u_\lambda,v_\mu)
+=u_\lambda v_\mu
+\quad\text{expressed canonically in }w.
 $$
 
-bilinearity gives
+The source endpoint is the unordered pair $\{u,v\}$ because multiplication is
+commutative. Littlewood--Richardson, horizontal and vertical Pieri,
+Murnaghan--Nakayama, and monomial exponent splitting are examples. A kernel's
+output is already in $w$; it performs no subsequent conversion.
+
+Strict binary multiplication uses three alternatives:
+
+1. if $w$ is multiplicative, convert both terms to $w$ and combine them;
+2. otherwise, use the applicable direct kernel preferred for
+   $\{u,v\}\to w$;
+3. if no direct kernel applies, convert both terms to $p$, multiply and
+   collect in $p$, and convert the complete result once to $w$.
+
+For a complete stored product term
 
 $$
-FG=\sum_{\lambda,\mu}a_\lambda b_\mu
-   \bigl(u_\lambda v_\mu\bigr).
+T=c\,f_1\cdots f_k,
 $$
 
-The remaining problem is therefore the product of two basis elements. Its
-best formula depends on their families and on the requested output basis.
-Schur products may use Littlewood--Richardson, Pieri, or
-Murnaghan--Nakayama rules. In a multiplicative basis one instead has the
-concatenation rule
+the complete factor list is examined before multiplication. For $k\geq2$,
+exactly three strategies are used:
+
+1. if $w$ is multiplicative, convert every factor to $w$ and combine the
+   converted expansions in a balanced product tree;
+2. if a declaratively registered target-closed family $(w,\mathcal A)$ applies,
+   begin with the first factor already in $w$ when one exists, otherwise
+   convert the first factor to $w$, and fold the remaining factors with the
+   total direct kernels $\{w,u\}\to w$ for $u\in\mathcal A$;
+3. otherwise, convert every factor to $p$, multiply and collect the complete
+   product there, and make one $p\to w$ conversion.
+
+A target-closed declaration is the mathematical assertion
 
 $$
-w_\alpha w_\beta=w_{\alpha\sqcup\beta}.
+u\in\mathcal A
+\quad\Longrightarrow\quad
+\{w,u\}\to w
+\text{ has a total direct formula.}
 $$
 
-If neither specialized situation applies, converting both factors to power
-sums gives a broad multiplicative fallback.
+The family database records this assertion explicitly; the workflow never
+infers it by searching the kernel declarations. For example, $(S,\{S,e,h,p\})$
+covers every subset and repetition of those factor bases. The four
+Hall--Littlewood capital examples use $(w,\{w\})$. Their direct formula
+multiplies raising-operator generator coordinates and unitriangularly reduces
+directly to $w$. All families use the same selection and fold code.
+The power-sum strategy operates on the complete term so linear expansion
+cannot cause repeated $p\to w$ conversions.
 
-### Engine layers
+Finally, for product-free expansions
 
-The implementation has three layers. `multiplyTermToBasis` resolves one
-stored product term encountered during basis conversion. Public
-`multiplyToBasis` distributes two product-free linear combinations. Its
-strict binary helper multiplies two canonical unit-coefficient basis elements
-using one selected multiplication plan.
+$$
+F=\sum_i a_i f_i,\qquad G=\sum_j b_j g_j,
+$$
 
-#### One-term product resolution
+`multiplyToBasis` applies bilinearity only after making a complete-input
+decision. It distributes over term pairs only when every nonscalar pair has an
+automatic direct kernel. Otherwise it multiplies the two complete expansions
+in $p$ and converts once.
 
-Mathematically, a stored term has the form $c\,f_1\cdots f_r$. With no
-nonidentity factors it is the scalar $c$; with one factor it needs only basis
-conversion. With several factors, a multiplicative target permits all factors
-to be converted and concatenated there. Otherwise the product is associated
-into binary products, each expressed in the target basis before the next
-factor is introduced.
+### Engine workflow
 
-`multiplyTermToBasis` removes encoded identity factors and preserves the term
-coefficient until the result is complete. Canonical storage has already
-removed zero-coefficient terms, so the zero branch in the mathematical
-contract does not require a runtime branch here.
+The implementation mirrors these mathematical boundaries:
+
+- `multiplication-kernels.*` contains the combinatorial formulas;
+- `multiplication-picker.*` contains the commutative kernel inventory,
+  mathematical applicability, and ordered performance policy;
+- `multiplication-folds.*` contains explicit target-closed family declarations,
+  complete-factor-list selection, and validation of the required total binary
+  formulas;
+- `binary-multiplication.cpp` owns the strict two-term workflow and its two
+  fixed structural alternatives;
+- `multiplication.cpp` owns bilinearity, coefficients, complete product terms,
+  the balanced multiplicative strategy, generic target-closed fold execution,
+  and the complete power-sum strategies.
+
+There are no multiplication plans, plan identifiers, kernel enums, or
+execution switches. The picker stores typed callables directly. Executing a
+selected kernel cannot select another kernel or perform a conversion.
 
 ```mermaid
 flowchart TD
-    A["multiplyTermToBasis(c times f1 ... fn, v)"] --> B["Remove identity factors<br/>Preserve coefficient c"]
-    B --> C{"How many factors remain?"}
+    A["Strict binary multiplication<br/>u_lambda times v_mu in w"] --> D{"Explicit diagnostic request?"}
+    D -->|"Forced kernel"| F["Validate unordered endpoints<br/>and applicability"]
+    D -->|"Power-sum reference"| P
+    D -->|"None"| M{"Is w multiplicative?"}
 
-    C -->|"None"| U["Use the unit expansion"]
-    C -->|"One"| O["Select and execute one complete u-to-v plan"]
-    C -->|"Several"| D{"Is v multiplicative?"}
+    M -->|"Yes"| MT["Convert both terms to w<br/>Combine and collect"]
+    M -->|"No"| K["Ask the commutative kernel picker"]
+    K --> Q{"Direct kernel found?"}
+    Q -->|"Yes"| E["Execute the selected formula once"]
+    Q -->|"No"| P["Convert both terms to p<br/>Multiply and collect in p"]
+    P --> C["Convert the complete p result once to w"]
 
-    D -->|"Yes"| E["Convert every factor to v"]
-    E --> F["Multiply converted factors with a balanced fold<br/>and collect in v"]
+    F --> E
+    MT --> R["Canonical w expansion"]
+    E --> R
+    C --> R
+```
 
-    D -->|"No"| H["Run the strict binary workflow for the first pair"]
-    H --> I{"Any original factors remain?"}
-    I -->|"Yes"| J["Call public multiplyToBasis on<br/>the current v expansion and next factor"]
-    J --> I
+```mermaid
+flowchart TD
+    A["Resolve c times f1 ... fk in w"] --> N{"Number of nonidentity factors"}
+    N -->|"0"| Z["Use the unit"]
+    N -->|"1"| O["Convert the one factor to w"]
+    N -->|"2 or more"| S{"Choose one complete-term strategy"}
 
-    U --> R["Apply coefficient c once<br/>Return a canonical collected v expansion"]
+    S -->|"w multiplicative"| B["Convert every factor to w<br/>Balanced product tree"]
+    S -->|"Registered target-closed family"| H["Use a target-native seed when possible<br/>Fold with total {w,u} to w kernels"]
+    S -->|"Otherwise"| P["Convert every factor to p<br/>Multiply and collect completely<br/>Convert once from p to w"]
+
+    Z --> R["Apply c once<br/>Attach exact canonical facts"]
     O --> R
-    F --> R
-    I -->|"No"| R
+    B --> R
+    H --> R
+    P --> R
 ```
 
-#### Public distribution and strict binary execution
+The binary picker is globally commutative. A definition records one unordered
+endpoint and one mechanical callable orientation. The selector reverses the
+actual arguments when necessary, so contributors never add a second
+$(v,u)\to w$ entry.
 
-The public operation is the linear extension of the strict basis-element
-product:
+Mathematical applicability is stored with each kernel definition. Ordered
+picker rules contain only performance preference. Stable string identifiers
+support tracing and the private `multiplyToBasisBench` comparison helper.
+`PowerSumReference` requests the independent broad calculation explicitly;
+ordinary production calls carry no forcing or tracing state.
 
-$$
-\operatorname{multiplyToBasis}(F,G;w)
-=\sum_{\lambda,\mu}a_\lambda b_\mu\,
-  \bigl[u_\lambda v_\mu\bigr]_w.
-$$
+The private product-free bilinear benchmark can similarly request
+`Automatic`, `MultiplicativeTarget`, `KernelDistribution`, or
+`PowerSumFallback` for one call. These are workflow comparisons, not
+production multiplication plans, and an inapplicable forced strategy fails
+instead of silently choosing another one.
 
-Scalar pairs contribute the unit, while every nonscalar pair uses the same
-strict mathematical product contract. Coefficients are applied only after
-the unit-coefficient product is known.
+The present kernel inventory has direct Schur-family, monomial/forgotten, and
+same-basis Hall--Littlewood capital formulas.  The Hall--Littlewood kernel
+implements its raising-operator generator expansion, multiplicative generator
+product, and unitriangular reduction as one fixed combinatorial
+$\{w,w\}\to w$ algorithm; it does not call the conversion picker. Other
+unsupported Hall--Littlewood endpoints use the ordinary complete power-sum
+fallback.
 
-The public wrapper has a fast path for two canonical unit-coefficient basis
-elements. Otherwise it uses exact metadata or normalizes both operands,
-requires product-free expansions, prepares every atom once, and distributes
-over term pairs. Scalar pairs bypass multiplication-plan selection. Nonscalar
-pairs use the strict workflow, and all distributed results are collected once.
+Adding a target-closed multifactor optimization does not change the workflow.
+Declare one target $w$ and one allowed factor-basis set $\mathcal A$ in
+`multiplication-folds.cpp`. Validation then requires a total automatic
+$\{w,u\}\to w$ formula for every $u\in\mathcal A$. No subsets, factor orders,
+or named-basis branches are added.
 
-```mermaid
-flowchart TD
-    A["multiplyToBasis(F, G, w)"] --> B{"Both inputs are canonical<br/>unit-coefficient basis elements?"}
-    B -->|"Yes"| S["Strict binary workflow"]
-    B -->|"No"| C["Use exact metadata or normalize both inputs"]
-    C --> D["Require product-free expansions<br/>Prepare scalar and basis terms once"]
-    D --> E["Distribute over term pairs"]
-    E --> P{"Pair kind"}
+To add a new direct binary formula, a contributor normally makes two
+production edits:
 
-    P -->|"scalar / scalar"| U["Use unit"]
-    P -->|"scalar / basis"| V["Convert the basis factor to w"]
-    P -->|"basis / basis"| S
+1. implement the formula in `multiplication-kernels.cpp`, with a mechanical
+   declaration in its header;
+2. declare its unordered endpoint, applicability, callable, and ordered
+   preference in `multiplication-picker.cpp`.
 
-    S --> S1["Select multiplication plan<br/>and operand conversions"]
-    S1 --> S2["Execute operand conversions"]
-    S2 --> S3["Execute policy-free product kernel"]
-    S3 --> S4["Establish the product in its declared basis<br/>using the plan's canonical-output contract"]
-    S4 --> S5["Select and execute product-basis-to-v<br/>unless the product is already in v"]
-    S5 --> Q["Canonical w result for this pair"]
-    U --> Q
-    V --> Q
-
-    Q --> T["Apply distributed coefficients and append terms"]
-    T --> W{"More term pairs?"}
-    W -->|"Yes"| P
-    W -->|"No"| R["Collect once and attach exact w facts"]
-```
-
-Multiplication plans declare their operand bases, mathematical output basis,
-and canonical-output guarantee. Selection fixes operand conversions before
-kernel execution. The owning binary workflow selects any support-dependent
-final product conversion only after the canonical product and its facts exist.
-Hall--Littlewood multiplication reaches generator bases through the same
-conversion plan database.
-
-`buildMultiplicationPlansFor` lists plans from most specialized to broadest:
-
-- a Schur-factor plan for Schur targets, reported as
-  Littlewood--Richardson, horizontal or vertical Pieri,
-  Murnaghan--Nakayama, or the mixed formula according to the operand kinds;
-- exponent splittings for monomial or forgotten targets;
-- conversion to the appropriate Hall--Littlewood generator basis for capital
-  Hall--Littlewood targets;
-- multiplication directly in a multiplicative target basis; and
-- multiplication in power sums as the always-available built-in fallback.
-
-The picker executes the first applicable plan unless a valid plan identifier
-is forced. Every currently constructed multiplication plan declares its
-product canonical, although the workflow retains the general normalization
-branch required by the plan contract.
-
-Stable multiplication plan names are rendered from typed plan identifiers;
-applicability and execution never branch on their diagnostic strings.
+Bilinearity, scalar coefficients, argument commutation, fallback conversion,
+metadata, and multifactor resolution require no contributor edits.
 
 ## Plethysm
 
@@ -582,18 +607,25 @@ grouped with their own mathematics.
 - `basis-conversion-policy.*` owns reusable performance-only selection facts.
 - `expression-conditions.*` owns inspectable mathematical conditions, logical
   composition, diagnostics, and ordered expression-piece partitioning.
-- `basis-conversion.hpp` declares expression facts, plan contracts,
-  database indexes, pickers, executors, and public engine entry points.
+- `basis-conversion.hpp` declares expression facts, conversion-plan contracts,
+  database indexes, pickers, executors, and conversion entry points.
 - `basis-conversion-plans.cpp` inventories complete named conversion plans and
   any fixed piecewise formula policies inside them.
 - `basis-conversion-picker.cpp` inventories top-level endpoint performance
   choices among complete plans.
 - `basis-conversion.cpp` implements preparation, metadata, plan indexing and
-  validation, generic execution, product resolution, and conversion and
-  multiplication workflows.
+  validation, generic execution, product resolution handoff, and conversion.
 - `basis-conversion-kernels.*` owns basis-family conversion mathematics.
-- `basis-conversion-products.*` owns Littlewood--Richardson, Pieri,
-  border-strip, and monomial-like product mathematics.
+- `basis-normalization.*` owns the declarative straightening and skew-expansion
+  rules used before conversion plans see an expression.
+- `multiplication-kernels.*` owns Littlewood--Richardson, Pieri,
+  border-strip, and monomial/forgotten binary product mathematics.
+- `multiplication-picker.*` owns the commutative binary-kernel inventory,
+  inspectable applicability, and ordered performance policy.
+- `multiplication-folds.*` owns declared target-closed factor families and
+  validation of their total direct-kernel coverage.
+- `binary-multiplication.cpp` owns the strict two-term workflow.
+- `multiplication.cpp` owns bilinearity and complete product-term strategies.
 - `basis-coefficient.*` owns targeted scalar transition selection.
 - `plethysm.*`, `inner-product-dispatch.*`, and
   `inner-product-kernels.*` own their operation-specific workflows.
@@ -634,14 +666,14 @@ Then add forced-plan coverage, an automatic-selection assertion if the picker
 can choose the plan, and a differential test against an independent broad
 fallback.
 
-Multiplication follows the same separation: plan construction belongs in
-`buildMultiplicationPlansFor`, applicability in
-`multiplicationPlanApplicable`, and formula execution in
-`executeMultiplicationKernel`. Internal kernels use the shared picker and
-executor and do not call public conversion or multiplication entry points.
+Multiplication has no plan layer. A binary formula is implemented in
+`multiplication-kernels.cpp` and declared beside its unordered endpoint and
+performance preference in `multiplication-picker.cpp`. The generic strict
+workflow stores and invokes its typed callable directly; it contains no
+endpoint-specific identifier or execution switch.
 
 The same complete-plan abstraction is used everywhere conversion occurs. A
 caller provides a canonical source expansion, asks the picker for one
-`RingBasisConversionPlan`, and passes it to the generic executor. Callers do
+`ResolvedBasisConversionPlan`, and passes it to the generic executor. Callers do
 not split input for particular basis pairs, and composed plans never re-enter
 the picker.

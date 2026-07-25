@@ -368,7 +368,7 @@ void SymmetricEngineRing::validateBasisConversionPickerDatabase()
 // ============================================================================
 
 bool SymmetricEngineRing::basisConversionPlanApplicable(
-    const RingBasisConversionPlan& plan,
+    const ResolvedBasisConversionPlan& plan,
     ring_elem expression,
     const ExpressionFacts& facts) const
 {
@@ -383,22 +383,23 @@ bool SymmetricEngineRing::basisConversionPlanApplicable(
         inspectExpressionPieces(
             expression,
             ExpressionPieceKind::WholeExpression,
-            facts);
+            facts,
+            expressionFactRequirements(
+                plan.definition->applicability));
     return pieceFacts.size() == 1 &&
            expressionConditionHolds(
                plan.definition->applicability,
                pieceFacts.front());
   }
 
-SymmetricEngineRing::RingBasisConversionPlan
+SymmetricEngineRing::ResolvedBasisConversionPlan
 SymmetricEngineRing::selectBasisConversionPlan(
     ring_elem expression,
     int sourceBasisId,
     int targetBasisId,
     const ExpressionFacts& facts,
     CombinatorialTags combinatorialTags,
-    const std::optional<std::string>& forcedIdentifier,
-    ExpressionFacts *selectionFacts) const
+    const std::optional<std::string>& forcedIdentifier) const
 {
     if (basisConversionPlanExecutionDepth != 0)
       {
@@ -416,7 +417,7 @@ SymmetricEngineRing::selectBasisConversionPlan(
     const auto& plans =
         basisConversionPlansFor(
             sourceBasisId, targetBasisId);
-    RingBasisConversionPlan powerSumFallback =
+    ResolvedBasisConversionPlan powerSumFallback =
         basisConversionViaPowerSumsPlan(
             sourceBasisId, targetBasisId);
     if (error()) return {};
@@ -428,16 +429,11 @@ SymmetricEngineRing::selectBasisConversionPlan(
         forcedIdentifier;
     ExpressionFacts selectionProfile = facts;
     selectionProfile.combinatorialTags = combinatorialTags;
-    auto publishSelectionFacts = [&] {
-      if (selectionFacts != nullptr)
-        *selectionFacts = selectionProfile;
-    };
 
     if (!requested &&
         plans.empty() &&
         powerSumFallback.valid())
       {
-        publishSelectionFacts();
         return powerSumFallback;
       }
     // Most remaining endpoints have one unconditional specific mathematical
@@ -450,7 +446,6 @@ SymmetricEngineRing::selectBasisConversionPlan(
                 applicability.kind ==
             ExpressionConditionKind::Always)
       {
-        publishSelectionFacts();
         return plans.front();
       }
 
@@ -461,21 +456,11 @@ SymmetricEngineRing::selectBasisConversionPlan(
                 genericPowerSumFallbackPlanIdentifier().
                     value)
           {
-            publishSelectionFacts();
             return powerSumFallback;
           }
         for (const auto& plan : plans)
           if (plan.definition->id.value == *requested)
             {
-              // Unconditional forced plans need only the canonical source
-              // contract already checked above. Conditional plans request
-              // their endpoint-specific profile before applicability is
-              // evaluated.
-              if (plan.definition->applicability.kind !=
-                  ExpressionConditionKind::Always)
-                enrichBasisConversionPlanSelectionFacts(
-                    expression, targetBasisId, selectionProfile);
-              publishSelectionFacts();
               if (basisConversionPlanApplicable(
                       plan, expression, selectionProfile))
                 return plan;
@@ -505,19 +490,20 @@ SymmetricEngineRing::selectBasisConversionPlan(
           needsProfile = true;
           break;
         }
-    if (needsProfile)
-      enrichBasisConversionPlanSelectionFacts(
-          expression,
-          targetBasisId,
-          selectionProfile);
-    publishSelectionFacts();
     std::vector<ExpressionPieceFacts> pieceFacts;
     if (needsProfile)
       {
+        std::vector<ExpressionCondition> preferenceConditions;
+        preferenceConditions.reserve(
+            picker->preferences.size());
+        for (const auto& item : picker->preferences)
+          preferenceConditions.push_back(item.condition);
         pieceFacts = inspectExpressionPieces(
             expression,
             ExpressionPieceKind::WholeExpression,
-            selectionProfile);
+            selectionProfile,
+            expressionFactRequirements(
+                preferenceConditions));
         if (pieceFacts.size() != 1)
           {
             ERROR("a basis-conversion picker could not construct "
@@ -554,7 +540,7 @@ SymmetricEngineRing::selectBasisConversionPlan(
                   "before its plan definitions were identified");
             return {};
           }
-        RingBasisConversionPlan selected{
+        ResolvedBasisConversionPlan selected{
             item.planDefinition,
             sourceBasisId,
             targetBasisId};

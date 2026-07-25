@@ -2141,20 +2141,30 @@ ring_elem SymmetricEngineRing::skewPOrPOmegaToPowerSums(
     bool omega) const
 {
     // The skew atom itself cannot enter the plan database. The pairing formula
-    // first expands it canonically in monomial or forgotten coordinates; each
-    // conversion after that point uses the ordinary u -> v workflow.
+    // first expands it canonically in monomial or forgotten coordinates. Every
+    // subsequent conversion is a fixed mathematical component of this formula,
+    // so it names a plan and never invokes conversion selection.
     ring_elem skewCapital = skewQOrBFunction(lambda, mu, omega);
     if (error()) return zero();
-    const int powerSumId =
-        requiredBasisIdForKind(BasisKind::PowerSum);
-    if (error()) return zero();
-    ring_elem inPowerSums = toBasis(skewCapital, powerSumId);
+    ring_elem inPowerSums =
+        executeNamedBasisConversionPlan(
+            {omega
+                 ? "Forgotten->PowerSum:transition-matrix"
+                 : "Monomial->PowerSum:transition-matrix"},
+            skewCapital);
     if (error()) return zero();
     const BasisKind capitalKind = omega ? BasisKind::HallLittlewoodB
                                         : BasisKind::HallLittlewoodQ;
     int capitalId = requiredBasisIdForKind(capitalKind);
     if (error()) return zero();
-    ring_elem inCapital = toBasis(inPowerSums, capitalId);
+    ring_elem inCapital =
+        executeNamedBasisConversionPlan(
+            {omega
+                 ? "PowerSum->HallLittlewoodB:"
+                   "triangular-reduction"
+                 : "PowerSum->HallLittlewoodQ:"
+                   "triangular-reduction"},
+            inPowerSums);
     if (error()) return zero();
     const BasisKind normalizedKind = omega ? BasisKind::HallLittlewoodPOmega
                                            : BasisKind::HallLittlewoodP;
@@ -2162,7 +2172,13 @@ ring_elem SymmetricEngineRing::skewPOrPOmegaToPowerSums(
     if (error()) return zero();
     ring_elem normalized = replaceSingleBasis(inCapital, capitalId, normalizedId);
     if (error()) return zero();
-    return toBasis(normalized, powerSumId);
+    return executeNamedBasisConversionPlan(
+        {omega
+             ? "HallLittlewoodPOmega->PowerSum:"
+               "via-B-normalization"
+             : "HallLittlewoodP->PowerSum:"
+               "via-Q-normalization"},
+        normalized);
   }
 
 ring_elem SymmetricEngineRing::skewHallLittlewoodToPowerSums(
@@ -2179,10 +2195,11 @@ ring_elem SymmetricEngineRing::skewHallLittlewoodToPowerSums(
           ring_elem skewCapital =
               skewQOrBFunction(lambda, mu, omega);
           if (error()) return zero();
-          const int powerSumId =
-              requiredBasisIdForKind(BasisKind::PowerSum);
-          if (error()) return zero();
-          return toBasis(skewCapital, powerSumId);
+          return executeNamedBasisConversionPlan(
+              {omega
+                   ? "Forgotten->PowerSum:transition-matrix"
+                   : "Monomial->PowerSum:transition-matrix"},
+              skewCapital);
         }
       case BasisKind::HallLittlewoodP:
       case BasisKind::HallLittlewoodPOmega:
@@ -2589,90 +2606,6 @@ ring_elem SymmetricEngineRing::straightenHallCapitalBasisElement(const Partition
                                 basisId)));
       }
     return result;
-  }
-
-ring_elem SymmetricEngineRing::straightenBasisElement(
-    const SymmetricMonomial& monomial,
-    size_t pos) const
-{
-    const int basisId = atomBasisIdAt(monomial, pos);
-    const BasisKind basisKind = basisKindForId(basisId);
-    if (atomIsSkewAt(monomial, pos))
-      {
-        auto *poly = new SymmetricRingPoly;
-        poly->terms.push_back(
-            {coefficientRing->one(),
-             monomialFromKey(atomBlockAt(monomial, pos))});
-        return makePolyValue(poly);
-      }
-    Partition index = basisElementIndex(monomial, pos);
-    switch (basisKind)
-      {
-      case BasisKind::Schur:
-      case BasisKind::SchurOmega:
-        return straightenSchurBasisElement(index, basisId);
-      case BasisKind::HallLittlewoodQ:
-      case BasisKind::HallLittlewoodB:
-        return straightenHallCapitalBasisElement(index, basisId);
-      case BasisKind::HallLittlewoodP:
-      case BasisKind::HallLittlewoodPOmega:
-        {
-        // A nonpartition index cannot enter the plan database. Once the
-        // corresponding capital-basis expansion has been straightened, it is
-        // canonical and returns to the ordinary conversion workflow.
-        if (isPartitionIndex(index))
-          return basisElementFromIndex(basisId, index);
-        const BasisKind capitalKind = basisKind == BasisKind::HallLittlewoodP
-                                          ? BasisKind::HallLittlewoodQ
-                                          : BasisKind::HallLittlewoodB;
-        const int capitalId = requiredBasisIdForKind(capitalKind);
-        if (error()) return zero();
-        ring_elem straightCapital =
-            straightenHallCapitalBasisElement(index, capitalId);
-        if (error()) return zero();
-        ring_elem normalizedCapital = scaled(
-            coefficientQuotient(coefficientRing->one(),
-                                hallLittlewoodCFactor(index)),
-            straightCapital);
-        if (error()) return zero();
-        return toBasis(normalizedCapital, basisId);
-        }
-      default:
-        break;
-      }
-    return basisElementFromIndex(basisId, index);
-  }
-
-ring_elem SymmetricEngineRing::straightenMonomial(const SymmetricMonomial& monomial) const
-{
-    ring_elem result = one();
-    size_t pos = 0;
-    while (pos < monomial.data.size())
-      {
-        ring_elem factor = straightenBasisElement(monomial, pos);
-        if (error()) return zero();
-        result = mult(result, factor);
-        pos += atomLengthAt(monomial, pos);
-      }
-    return result;
-  }
-
-ring_elem SymmetricEngineRing::straightenElement(ring_elem f) const
-{
-    const auto *poly = polyValue(f);
-    ring_elem result = zero();
-    for (const auto& term : poly->terms)
-      {
-        ring_elem straightened = straightenMonomial(term.monomial);
-        if (error()) return zero();
-        result = add(result, scaled(term.coeff, straightened));
-      }
-    return result;
-  }
-
-ring_elem SymmetricEngineRing::straighten(ring_elem f) const
-{
-    return straightenElement(f);
   }
 
 } // namespace symmetric_rings

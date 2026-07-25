@@ -114,7 +114,8 @@ ring_elem SymmetricEngineRing::omegaBasisElementDirect(
     // Metadata mappings above are exact omega formulas. When no such formula
     // exists, make the basis element explicit and let the shared conversion
     // plan database choose its conversion to power sums.
-    ring_elem basisElement = expressionFromAtom(monomial, pos);
+    ring_elem basisElement =
+        expressionFromBasisElement(monomial, pos);
     int powerSumBasisId = requiredBasisIdForKind(BasisKind::PowerSum);
     if (error()) return zero();
     ring_elem inPowerSums = toBasis(basisElement, powerSumBasisId);

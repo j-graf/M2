@@ -182,7 +182,12 @@ set(SRCLIST
   symmetric-rings/basis-conversion-policy
   symmetric-rings/basis-conversion
   symmetric-rings/basis-conversion-kernels
-  symmetric-rings/basis-conversion-products
+  symmetric-rings/basis-normalization
+  symmetric-rings/multiplication-kernels
+  symmetric-rings/multiplication-picker
+  symmetric-rings/multiplication-folds
+  symmetric-rings/binary-multiplication
+  symmetric-rings/multiplication
   symmetric-rings/inner-product-dispatch
   symmetric-rings/inner-product-kernels
   symmetric-rings/omega

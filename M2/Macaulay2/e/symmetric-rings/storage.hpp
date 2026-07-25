@@ -125,11 +125,8 @@ class SymmetricConversionMetadata : public our_gc_cleanup
   std::optional<size_t> termCount;
   std::optional<size_t> scalarTermCount;
   std::optional<size_t> singleFactorTermCount;
-  std::optional<size_t> productTermCount;
-  std::optional<size_t> maximumFactorsPerTerm;
   std::optional<size_t> maximumPartitionLength;
   std::optional<std::vector<int>> factorBases;
-  std::optional<size_t> skewFactorCount;
   std::optional<int> singleBasisElementId;
   std::optional<Partition> singleBasisElementIndex;
   std::optional<bool> singleBasisElementCoefficientOne;

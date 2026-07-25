@@ -162,23 +162,24 @@ This file owns public computational policy, including the `toBasis` and
 - Hall and Hall–Littlewood inner products;
 - the optional constant-QQ working-ring policy.
 
-The engine implementation of `multiplyToBasis` accepts and distributes
-product-free linear combinations into calls to a strict binary helper. That
-helper accepts exactly two normalized mathematical basis elements and selects
-one multiplication plan together with any required operand conversions. The
-owning workflow executes those conversions, runs the policy-free product
-kernel, normalizes its declared output, and uses the shared conversion
-registry for any final change of basis.
+The engine implementation of `multiplyToBasis` accepts product-free linear
+combinations and makes one complete-input decision before distribution. If
+every nonscalar pair has an automatic direct kernel, it extends those kernels
+bilinearly. Otherwise it multiplies the complete inputs in power sums and
+converts once. Strict kernels accept two coefficient-one canonical basis
+elements, use one commutative $\{u,v\}\to w$ picker entry, and return canonical
+output already in $w$.
 
 The engine implementation of `toBasis` similarly has one workflow for pure,
 mixed-basis, skew, and product-bearing expressions. It normalizes when exact
 metadata does not justify a bypass, resolves products, groups canonical terms
 by source basis, and selects one complete named source-to-target plan for each
 group. A plan may state different formulas for the whole expression,
-individual terms, or homogeneous components. Each formula is either one
-mathematical kernel or a fixed composition of named child plans. The picker
-does not search an ad hoc graph of intermediate bases, and execution never
-reselects a child plan.
+individual terms, or homogeneous components. Each formula is either a
+`KernelPlan`, which applies one mathematical formula, or a `CompositionPlan`,
+which applies a fixed ordered list of named component plans. The picker does
+not search an ad hoc graph of intermediate bases, and execution never
+reselects a component plan.
 
 The current diagrams and complete contributor contract for these workflows
 are maintained in the

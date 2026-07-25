@@ -9,11 +9,12 @@ specifies architectural outcomes before choosing implementation details.
 The conversion and multiplication workflows are implemented by `toBasis`,
 `multiplyTermToBasis`, and `multiplyToBasis`. They use one exact
 canonical-core facts contract with lazy selector profiles, a shared conversion
-plan database, policy-free executors, and explicit multiplication stages.
-Differential and forced-plan tests cover every currently available conversion
-and multiplication plan family, M2-owned custom and transformed bases,
-coefficient rings and QQ-shadow promotion, metadata invalidation, skew and
-multifactor inputs, and configured resource boundaries.
+plan database, policy-free conversion executors, a commutative binary-kernel
+picker, and explicit outer multiplication strategies. Differential
+conversion-plan and binary-kernel tests cover built-in formulas, M2-owned
+custom and transformed bases, coefficient rings and QQ-shadow promotion,
+metadata invalidation, skew and multifactor inputs, and configured resource
+boundaries.
 
 The unified direct/composition/hybrid plan representation specified below is
 implemented by the current plan database. The remaining unchecked items in this
@@ -931,98 +932,40 @@ flowchart TD
     H --> I["Combine and collect results<br/>Canonical linear combination in basis v"]
 ```
 
-## Proposed `multiplyTermToBasis` design
+## Implemented multiplication design
 
-`multiplyTermToBasis` accepts one coefficient times any number of normalized
-mathematical basis elements and a target basis `v`.  It owns that product until
-it has produced a canonical, collected linear combination entirely in `v`, with
-one normalized `v`-basis element per nonscalar term.  It first removes scalar
-and identity factors while preserving the coefficient.  Zero, unit, and
-one-factor inputs then take the corresponding trivial or `u -> v` branch.
+Multiplication now follows the completed simplification in
+`TODO-multiplication-simplification.md`. Strict binary multiplication selects
+one direct combinatorial kernel for the commutative endpoint
+$\{u,v\}\to w$, or uses one of the fixed multiplicative-target and power-sum
+workflows. It has no multiplication-plan layer.
 
-For multiple factors, the target basis determines the calculation.  If `v` is
-multiplicative, one helper converts the factors to `v`, combines them using the
-multiplicative rule, and collects the result; this branch never calls
-`multiplyToBasis`.  If `v` is not multiplicative, `multiplyTermToBasis`
-repeatedly calls binary `multiplyToBasis` for the next pair and combines and
-collects the returned `v` expansion until no unmultiplied factors remain.  All
-branches meet at one final stage, which applies the preserved coefficient once
-and returns the canonical collected `v` expansion.
+`multiplyTermToBasis` sees the complete factor list and selects exactly one of:
 
-The strict binary helper used by `multiplyToBasis(F, G, v)` accepts exactly two
-already-normalized mathematical basis elements `F` and `G`, which need not
-belong to the same basis. The public method also accepts product-free linear
-combinations and distributes them into strict binary calls. Each strict call
-chooses and executes one complete multiplication plan for `F * G`. The selected kernel
-declares the basis `u` of its output, but its output is not assumed to be
-canonical: it may, for example, contain skew elements or indices requiring
-straightening.  The binary plan must first normalize that output into a
-canonical `u` expansion satisfying the `u -> v` input contract, and only then
-request and execute one complete `u -> v` plan. A proven canonical kernel
-output may bypass normalization; after
-normalization, `u = v` may bypass conversion.
-`multiplyToBasis` returns the same canonical pure-`v` format as
-`multiplyTermToBasis`.
+1. conversion to a multiplicative target followed by a balanced product tree;
+2. the hard-coded Schur fold when every factor basis belongs to
+   $\{S,e,h,p\}$, or the same-basis fold for one capital
+   Hall--Littlewood basis in $\{Q,B,P,P^\omega\}$;
+3. one complete product in power sums followed by one conversion to the
+   requested target.
 
-- [x] Remove scalar and identity factors, preserve the scalar coefficient, and
-      apply it once in the common final stage.
-- [x] Represent a zero coefficient as the zero expansion and an empty factor
-      list as the unit expansion before entering the common final stage.
-- [x] For one remaining factor in basis `u`, request the same complete
-      `u -> v` plan used by `toBasis` from the shared picker and plan database.
-- [x] For multiple factors and a multiplicative target `v`, use one helper that
-      converts the factors to `v`, combines them multiplicatively, and collects
-      the result without calling `multiplyToBasis`.
-- [x] For multiple factors and a nonmultiplicative target `v`, repeatedly call
-      `multiplyToBasis` for the next pair and combine and collect each returned
-      `v` expansion until no multiplication remains.
-- [x] Require `multiplyToBasis` to select and complete one binary
-      product-to-`v` plan.
-- [x] Require every product kernel to declare the source basis `u` of its
-      output without assuming that the output is already canonical.
-- [x] Require binary product plans to normalize the product, including
-      straightening indices and expanding skew elements, before requesting a
-      complete conversion plan from the shared picker and plan database.
-- [x] Bypass product normalization or `u -> v` conversion only when known
-      facts guarantee the corresponding postcondition.
-- [x] Collect like terms and canonicalize target indices after every pairwise
-      step to control intermediate growth.
-- [x] Never respond to a failed pair-product calculation by selecting another
-      plan or calling `toBasis`.
-- [x] Return a canonical, collected linear combination with one `v`-basis
-      element per nonscalar term.
+`multiplyToBasis` similarly distributes two product-free expansions only when
+every nonscalar term pair has an applicable automatic direct kernel.
+Otherwise it multiplies the two complete expansions in power sums and converts
+once. The current mathematical and engine diagrams are maintained in
+`README-pipelines.md`.
 
-```mermaid
-%%{init: {"theme": "dark", "themeVariables": {"background": "#111827", "primaryColor": "#1f2937", "primaryTextColor": "#ffffff", "primaryBorderColor": "#9ca3af", "secondaryColor": "#1f2937", "secondaryTextColor": "#ffffff", "tertiaryColor": "#1f2937", "tertiaryTextColor": "#ffffff", "lineColor": "#d1d5db", "textColor": "#ffffff", "nodeTextColor": "#ffffff", "edgeLabelBackground": "#1f2937"}}}%%
-flowchart TD
-    A["multiplyTermToBasis request<br/>Coefficient c, normalized basis elements f1 through fn,<br/>and target basis v"]
-
-    A --> B["Remove scalar and identity factors<br/>Preserve coefficient c"]
-
-    B --> C{"What remains?"}
-
-    C -->|"Zero coefficient"| Z["Zero expansion"]
-
-    C -->|"No basis factors"| S["Unit expansion"]
-
-    C -->|"One basis factor u"| O["Execute the selected complete u-to-v plan"]
-
-    C -->|"Multiple basis factors"| D{"Is target basis v multiplicative?"}
-
-    D -->|"Yes"| E["Multiply in the target basis<br/>Convert factors to v, combine multiplicatively,<br/>and collect"]
-
-    D -->|"No"| H{"Do unmultiplied factors remain?"}
-
-    H -->|"Yes"| I["Call multiplyToBasis for the next pair<br/>Combine and collect the resulting v expansion"]
-
-    I --> H
-
-    Z --> R["Apply coefficient c<br/>Return a canonical collected expansion in v"]
-    S --> R
-    O --> R
-    E --> R
-    H -->|"No"| R
-```
+- [x] Treat binary source endpoints as unordered commutative pairs.
+- [x] Store direct typed kernel callables and applicability in one binary
+      picker without a plan enum or executor switch.
+- [x] Keep direct kernel output canonical in the requested target basis.
+- [x] Keep bilinearity and coefficients outside strict kernels.
+- [x] Use one complete-input power-sum fallback rather than per-pair fallback.
+- [x] Use one complete-term power-sum fallback rather than a repeated fold.
+- [x] Use the balanced product tree for multiplicative multifactor targets.
+- [x] Encode the Schur fold as one target-and-allowed-set rule.
+- [x] Keep the dependency direction
+      `toBasis -> multiplyTermToBasis -> multiplyToBasis -> strict binary`.
 
 ## Proposed `hallInnerProduct` design
 

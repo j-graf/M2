@@ -118,6 +118,99 @@ benchmarkPieriCases = flatten apply(benchmarkPieriSpecs, spec ->
             spec#3,
             {("Lambda", spec#1), ("Degree", spec#2), ("InputGroup", spec#0)})))
 
+-- Catalog records exercise ordinary automatic strict multiplication.
+-- Forced kernels and the power-sum reference are one-off diagnostics rather
+-- than record-qualifying catalog routes.
+benchmarkStrictBinaryCases = {
+    benchmarkCaseRecord(
+        "binary-S-h-row", "BinaryMultiplication",
+        "StrictBinaryMultiplication", "QQ", "Small",
+        {("LeftBasis", "Schur"), ("RightBasis", "Complete"),
+         ("TargetBasis", "Schur"), ("Lambda", {6,3,1}), ("Mu", {3}),
+         ("Kernel", "Automatic"), ("InputGroup", "binary-S-h-row"),
+         ("PairClass", "Schur-complete-row")}),
+    benchmarkCaseRecord(
+        "binary-S-S-balanced", "BinaryMultiplication",
+        "StrictBinaryMultiplication", "QQ", "Medium",
+        {("LeftBasis", "Schur"), ("RightBasis", "Schur"),
+         ("TargetBasis", "Schur"), ("Lambda", {5,3,1}), ("Mu", {4,2}),
+         ("Kernel", "Automatic"),
+         ("InputGroup", "binary-S-S-LR"),
+         ("PairClass", "Schur-Schur-balanced")})
+    }
+
+-- These cases time the three complete-input and complete-term strategies.
+-- PairClass records the expected route; enabling the engine workflow trace
+-- reports the selected strategy and strict-binary=yes/no from production.
+benchmarkOuterMultiplicationCases = {
+    benchmarkCaseRecord(
+        "bilinear-S-e-to-p", "MultiplicationWorkflow",
+        "BilinearMultiplicationToBasis", "QQ", "Small",
+        {("LeftBasis", "Schur"), ("RightBasis", "Elementary"),
+         ("TargetBasis", "PowerSum"),
+         ("LeftPartitions", {{4,2}, {3,2,1}}),
+         ("RightPartitions", {{3}, {2,1}}),
+         ("ExpectedWeight", 9),
+         ("InputGroup", "bilinear-S-e-to-p"),
+         ("PairClass", "multiplicative-target;strict-binary=no")}),
+    benchmarkCaseRecord(
+        "bilinear-S-h-to-S", "MultiplicationWorkflow",
+        "BilinearMultiplicationToBasis", "QQ", "Small",
+        {("LeftBasis", "Schur"), ("RightBasis", "Complete"),
+         ("TargetBasis", "Schur"),
+         ("LeftPartitions", {{4,2}, {3,2,1}}),
+         ("RightPartitions", {{3}, {2,1}}),
+         ("ExpectedWeight", 9),
+         ("InputGroup", "bilinear-S-h-to-S"),
+         ("PairClass", "direct-kernel-distribution;strict-binary=yes")}),
+    benchmarkCaseRecord(
+        "bilinear-Q-B-to-Q", "MultiplicationWorkflow",
+        "BilinearMultiplicationToBasis", "FracQQt", "Small",
+        {("LeftBasis", "HallLittlewoodQ"),
+         ("RightBasis", "HallLittlewoodB"),
+         ("TargetBasis", "HallLittlewoodQ"),
+         ("LeftPartitions", {{3,1}, {2,2}}),
+         ("RightPartitions", {{2,1}, {1,1,1}}),
+         ("ExpectedWeight", 7),
+         ("InputGroup", "bilinear-Q-B-to-Q"),
+         ("PairClass", "complete-input-power-sums;strict-binary=no")}),
+    benchmarkCaseRecord(
+        "product-S-h-e-S-to-p", "MultiplicationWorkflow",
+        "CompleteProductTermToBasis", "QQ", "Small",
+        {("FactorBases", {"Schur", "Complete", "Elementary", "Schur"}),
+         ("FactorPartitions", {{3,1}, {2}, {1,1}, {1}}),
+         ("TargetBasis", "PowerSum"), ("ExpectedWeight", 9),
+         ("InputGroup", "product-S-h-e-S-to-p"),
+         ("PairClass", "multiplicative-target-balanced;strict-binary=no")}),
+    benchmarkCaseRecord(
+        "product-h-e-p-S-to-S", "MultiplicationWorkflow",
+        "CompleteProductTermToBasis", "QQ", "Small",
+        {("FactorBases", {"Complete", "Elementary", "PowerSum", "Schur"}),
+         ("FactorPartitions", {{2,1}, {2}, {2,1}, {1}}),
+         ("TargetBasis", "Schur"), ("ExpectedWeight", 9),
+         ("InputGroup", "product-h-e-p-S-to-S"),
+         ("PairClass", "target-closed-fold;strict-binary=yes")}),
+    benchmarkCaseRecord(
+        "product-Q-Q-Q-to-Q", "MultiplicationWorkflow",
+        "CompleteProductTermToBasis", "FracQQt", "Small",
+        {("FactorBases",
+             {"HallLittlewoodQ", "HallLittlewoodQ", "HallLittlewoodQ"}),
+         ("FactorPartitions", {{2,1}, {2}, {1}}),
+         ("TargetBasis", "HallLittlewoodQ"), ("ExpectedWeight", 6),
+         ("InputGroup", "product-Q-Q-Q-to-Q"),
+         ("PairClass",
+             "target-closed-fold;strict-binary=yes")}),
+    benchmarkCaseRecord(
+        "product-Q-e-B-to-Q", "MultiplicationWorkflow",
+        "CompleteProductTermToBasis", "FracQQt", "Small",
+        {("FactorBases",
+             {"HallLittlewoodQ", "Elementary", "HallLittlewoodB"}),
+         ("FactorPartitions", {{2,1}, {2}, {1,1}}),
+         ("TargetBasis", "HallLittlewoodQ"), ("ExpectedWeight", 7),
+         ("InputGroup", "product-Q-e-B-to-Q"),
+         ("PairClass", "complete-term-power-sums;strict-binary=no")})
+    }
+
 benchmarkPlethysmOperations = {
     {"combined", "SchurPlethysm"},
     {"to-p", "SchurPlethysmToPowerSums"},
@@ -247,6 +340,8 @@ benchmarkCases = benchmarkUnaryCases |
                  benchmarkRoundTripCases |
                  benchmarkProductCases |
                  benchmarkPieriCases |
+                 benchmarkStrictBinaryCases |
+                 benchmarkOuterMultiplicationCases |
                  benchmarkPlethysmCases |
                  benchmarkPlethysmCrossoverCases |
                  benchmarkHallProductCases |

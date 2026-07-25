@@ -69,6 +69,8 @@ importFrom(Core, {
     "rawSymmetricRingsToBasis",
     "rawSymmetricRingsToBasisBench",
     "rawSymmetricRingsMultiplyToBasis",
+    "rawSymmetricRingsMultiplyToBasisBench",
+    "rawSymmetricRingsMultiplyExpressionsToBasisBench",
     "rawSymmetricRingsPlethysm",
     "rawSymmetricRingsPlethysmToBasis",
     "rawSymmetricRingsSingleBasisId",

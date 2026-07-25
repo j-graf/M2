@@ -1,9 +1,57 @@
 // Copyright 2026
 
-#ifndef M2_SYMMETRIC_RINGS_BASIS_CONVERSION_PRODUCTS_HPP_
-#define M2_SYMMETRIC_RINGS_BASIS_CONVERSION_PRODUCTS_HPP_
+#ifndef M2_SYMMETRIC_RINGS_MULTIPLICATION_KERNELS_HPP_
+#define M2_SYMMETRIC_RINGS_MULTIPLICATION_KERNELS_HPP_
 
 // Declaration fragment included inside SymmetricEngineRing.
+
+// ============================================================================
+// Strict Binary-Kernel Interface
+// ============================================================================
+// A picker-callable kernel receives exactly two coefficient-one canonical
+// basis terms and returns a canonical expansion in the declared target basis.
+
+  struct CanonicalBasisTermView
+  {
+    ring_elem expression;
+    RingBasis basis;
+    Partition index;
+  };
+
+  struct BinaryMultiplicationInput
+  {
+    CanonicalBasisTermView first;
+    CanonicalBasisTermView second;
+    RingBasis target;
+  };
+
+  using BinaryMultiplicationKernel =
+      ring_elem (SymmetricEngineRing::*)(
+          const BinaryMultiplicationInput&) const;
+
+  ring_elem schurTimesSchurViaTableauLittlewoodRichardson(
+      const BinaryMultiplicationInput& input) const;
+  ring_elem schurTimesSchurViaCoefficientLittlewoodRichardson(
+      const BinaryMultiplicationInput& input) const;
+  ring_elem schurTimesCompleteViaHorizontalPieri(
+      const BinaryMultiplicationInput& input) const;
+  ring_elem schurTimesCompleteViaRepeatedHorizontalPieri(
+      const BinaryMultiplicationInput& input) const;
+  ring_elem schurTimesElementaryViaVerticalPieri(
+      const BinaryMultiplicationInput& input) const;
+  ring_elem schurTimesElementaryViaRepeatedVerticalPieri(
+      const BinaryMultiplicationInput& input) const;
+  ring_elem schurTimesPowerSumViaMurnaghanNakayama(
+      const BinaryMultiplicationInput& input) const;
+  ring_elem schurTimesPowerSumsViaRepeatedMurnaghanNakayama(
+      const BinaryMultiplicationInput& input) const;
+  ring_elem schurCompatibleBasisTermsViaPieriAndMurnaghanNakayama(
+      const BinaryMultiplicationInput& input) const;
+  ring_elem monomialAndForgottenTermsViaExponentSplittings(
+      const BinaryMultiplicationInput& input) const;
+  ring_elem
+  hallLittlewoodCapitalTermsViaGeneratorTriangularFormula(
+      const BinaryMultiplicationInput& input) const;
 
 // ============================================================================
 // Littlewood-Richardson And Skew Schur Rules
@@ -87,8 +135,8 @@
 // ============================================================================
 // Schur-Compatible Factor Kernel
 // ============================================================================
-// This is intrinsic factor-level mathematics inside the selected Schur product
-// kernel. It is not the top-level multiplication-plan picker.
+// This is intrinsic factor-level mathematics inside one selected Schur product
+// kernel. It is not binary-kernel selection or multifactor policy.
 
   struct SchurCompatibleFactor
   {
@@ -138,18 +186,11 @@
   void traceSchurFactorMethod(
           SchurFactorMethod method,
           const SchurCompatibleFactor& factor) const;
-  bool schurCompatibleFactorsToSchurDispatch(
+  ring_elem schurExpansionFromCompatibleFactors(
           std::vector<SchurCompatibleFactor> factors,
           int targetBasisId,
           const std::string& targetDisplay,
-          int targetDisplayOrder,
-          ring_elem& result) const;
-  bool tryProductToSchurViaCompatibleFactors(ring_elem f,
-                              ring_elem g,
-                              int targetBasisId,
-                              const std::string& targetDisplay,
-                              int targetDisplayOrder,
-                              ring_elem& result) const;
+          int targetDisplayOrder) const;
 
 // ============================================================================
 // Monomial And Forgotten Products
@@ -163,23 +204,17 @@
   monomialProductViaExponentSplittings(
       const Partition& a,
       const Partition& b) const;
-  bool tryMonomialLikeBasisElementToCoeffMap(const SymmetricMonomial& monomial,
+  bool tryBasisElementToMonomialOrForgottenCoeffMap(const SymmetricMonomial& monomial,
                                       size_t pos,
                                       int targetBasisId,
                                       CoeffMap& result) const;
-  bool tryMonomialLikeMonomialToTarget(const SymmetricMonomial& monomial,
+  bool tryMonomialToMonomialOrForgotten(
+      const SymmetricMonomial& monomial,
                                         int targetBasisId,
                                         const std::string& targetDisplay,
                                         int targetDisplayOrder,
                                         bool targetIsMultiplicative,
                                         ring_elem& result) const;
-  bool tryProductToMonomialLikeTarget(ring_elem f,
-                                     ring_elem g,
-                                     int targetBasisId,
-                                     const std::string& targetDisplay,
-                                     int targetDisplayOrder,
-                                     bool targetIsMultiplicative,
-                                     ring_elem& result) const;
 
 #endif
 

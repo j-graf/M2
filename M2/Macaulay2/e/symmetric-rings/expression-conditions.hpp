@@ -91,6 +91,18 @@ struct PlanCaseAssignments
   std::vector<std::vector<size_t>> termPositionsForCase;
 };
 
+// Expensive support facts are requested by the mathematical conditions that
+// consume them. The request is independent of any target basis.
+using ExpressionFactRequirements = uint32_t;
+
+constexpr ExpressionFactRequirements noExpressionFactRequirements = 0;
+constexpr ExpressionFactRequirements
+    requirePowerSumSingleCycleFacts = 1u << 0;
+constexpr ExpressionFactRequirements
+    requirePowerSumShortCycleFacts = 1u << 1;
+constexpr ExpressionFactRequirements
+    requirePowerSumCommonPartFacts = 1u << 2;
+
 // ============================================================================
 // Condition Construction
 // ============================================================================
@@ -149,6 +161,11 @@ void validateExpressionCondition(
 bool expressionConditionImplies(
     const ExpressionCondition& guarantee,
     const ExpressionCondition& requirement);
+
+ExpressionFactRequirements expressionFactRequirements(
+    const ExpressionCondition& condition);
+ExpressionFactRequirements expressionFactRequirements(
+    const std::vector<ExpressionCondition>& conditions);
 
 PlanCaseAssignments assignExpressionPiecesToCases(
     const std::vector<ExpressionPieceFacts>& pieces,

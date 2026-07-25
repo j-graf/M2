@@ -17,6 +17,322 @@
 
 namespace symmetric_rings {
 
+// This file owns the combinatorial formulas used by strict binary
+// multiplication. It contains no binary picker policy, linear extension, or
+// multifactor routing.
+
+// ============================================================================
+// Strict Binary Schur Kernels
+// ============================================================================
+
+ring_elem
+SymmetricEngineRing::schurTimesSchurViaTableauLittlewoodRichardson(
+    const BinaryMultiplicationInput& input) const
+{
+    CoeffMap result;
+    for (const auto& term :
+         littlewoodRichardsonProductViaTableauEnumeration(
+             input.first.index, input.second.index))
+      addCoeff(
+          result, term.partition, cachedInteger(term.coefficient));
+    return coeffMapToElement(
+        result,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order,
+        false);
+  }
+
+ring_elem
+SymmetricEngineRing::schurTimesSchurViaCoefficientLittlewoodRichardson(
+    const BinaryMultiplicationInput& input) const
+{
+    CoeffMap result;
+    for (const auto& term :
+         littlewoodRichardsonProductViaCoefficientEnumeration(
+             input.first.index, input.second.index))
+      addCoeff(
+          result, term.partition, cachedInteger(term.coefficient));
+    return coeffMapToElement(
+        result,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order,
+        false);
+  }
+
+ring_elem
+SymmetricEngineRing::schurTimesCompleteViaHorizontalPieri(
+    const BinaryMultiplicationInput& input) const
+{
+    if (input.second.index.size() > 1)
+      {
+        ERROR("horizontal Pieri requires a one-row complete index");
+        return zero();
+      }
+    const int row =
+        input.second.index.empty() ? 0 : input.second.index.front();
+    CoeffMap result;
+    for (const auto& partition :
+         schurTimesCompleteViaHorizontalPieri(
+             input.first.index, row))
+      addCoeff(result, partition, coefficientRing->one());
+    return coeffMapToElement(
+        result,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order,
+        false);
+  }
+
+ring_elem
+SymmetricEngineRing::schurTimesCompleteViaRepeatedHorizontalPieri(
+    const BinaryMultiplicationInput& input) const
+{
+    return schurCompatibleBasisTermsViaPieriAndMurnaghanNakayama(
+        input);
+  }
+
+ring_elem
+SymmetricEngineRing::schurTimesElementaryViaVerticalPieri(
+    const BinaryMultiplicationInput& input) const
+{
+    if (input.second.index.size() > 1)
+      {
+        ERROR("vertical Pieri requires a one-column elementary index");
+        return zero();
+      }
+    const int column =
+        input.second.index.empty() ? 0 : input.second.index.front();
+    CoeffMap result;
+    for (const auto& partition :
+         schurTimesElementaryViaVerticalPieri(
+             input.first.index, column))
+      addCoeff(result, partition, coefficientRing->one());
+    return coeffMapToElement(
+        result,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order,
+        false);
+  }
+
+ring_elem
+SymmetricEngineRing::schurTimesElementaryViaRepeatedVerticalPieri(
+    const BinaryMultiplicationInput& input) const
+{
+    return schurCompatibleBasisTermsViaPieriAndMurnaghanNakayama(
+        input);
+  }
+
+ring_elem
+SymmetricEngineRing::schurTimesPowerSumViaMurnaghanNakayama(
+    const BinaryMultiplicationInput& input) const
+{
+    if (input.second.index.size() > 1)
+      {
+        ERROR("single-cycle Murnaghan-Nakayama requires "
+              "a one-part power-sum index");
+        return zero();
+      }
+    const int cycle =
+        input.second.index.empty() ? 0 : input.second.index.front();
+    CoeffMap result;
+    if (cycle == 0)
+      addCoeff(result, input.first.index, coefficientRing->one());
+    else
+      for (const auto& term :
+           schurTimesPowerSumViaBorderStrips(
+               input.first.index, cycle))
+        addCoeff(
+            result, term.partition, cachedInteger(term.coefficient));
+    return coeffMapToElement(
+        result,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order,
+        false);
+  }
+
+ring_elem
+SymmetricEngineRing::schurTimesPowerSumsViaRepeatedMurnaghanNakayama(
+    const BinaryMultiplicationInput& input) const
+{
+    return schurCompatibleBasisTermsViaPieriAndMurnaghanNakayama(
+        input);
+  }
+
+ring_elem
+SymmetricEngineRing::
+schurCompatibleBasisTermsViaPieriAndMurnaghanNakayama(
+    const BinaryMultiplicationInput& input) const
+{
+    const auto& firstTerms =
+        polyValue(input.first.expression)->terms;
+    const auto& secondTerms =
+        polyValue(input.second.expression)->terms;
+    if (firstTerms.size() != 1 ||
+        secondTerms.size() != 1)
+      {
+        ERROR("a strict Schur multiplication kernel received "
+              "a non-basis-term input");
+        return zero();
+      }
+
+    const SymmetricMonomial productMonomial =
+        multiplyMonomials(
+            firstTerms.front().monomial,
+            secondTerms.front().monomial);
+    ring_elem result;
+    if (!trySchurCompatibleMonomialToSchur(
+            productMonomial,
+            input.target.id,
+            input.target.displayName(),
+            input.target.order,
+            result))
+      {
+        ERROR("the Schur-compatible multiplication kernel "
+              "received an inapplicable basis pair");
+        return zero();
+      }
+    return result;
+  }
+
+// ============================================================================
+// Strict Binary Monomial And Forgotten Kernel
+// ============================================================================
+
+ring_elem
+SymmetricEngineRing::monomialAndForgottenTermsViaExponentSplittings(
+    const BinaryMultiplicationInput& input) const
+{
+    const auto& firstTerms =
+        polyValue(input.first.expression)->terms;
+    const auto& secondTerms =
+        polyValue(input.second.expression)->terms;
+    if (firstTerms.size() != 1 ||
+        secondTerms.size() != 1)
+      {
+        ERROR("a strict monomial/forgotten multiplication kernel "
+              "received a non-basis-term input");
+        return zero();
+      }
+
+    const SymmetricMonomial productMonomial =
+        multiplyMonomials(
+            firstTerms.front().monomial,
+            secondTerms.front().monomial);
+    ring_elem result;
+    if (!tryMonomialToMonomialOrForgotten(
+            productMonomial,
+            input.target.id,
+            input.target.displayName(),
+            input.target.order,
+            false,
+            result))
+      {
+        ERROR("the monomial/forgotten exponent-splitting kernel "
+              "received an inapplicable basis pair");
+        return zero();
+      }
+    return result;
+  }
+
+// ============================================================================
+// Hall--Littlewood Capital-Basis Product Kernel
+// ============================================================================
+// Raising operators express one capital basis term in the corresponding
+// multiplicative generator coordinates.  After multiplying those coordinates,
+// unitriangular reduction returns the product directly in the declared
+// capital target.  This is one fixed combinatorial formula: it invokes neither
+// the conversion-plan service nor the binary picker.
+
+ring_elem
+SymmetricEngineRing::
+hallLittlewoodCapitalTermsViaGeneratorTriangularFormula(
+    const BinaryMultiplicationInput& input) const
+{
+    const BasisKind targetKind = input.target.kind;
+    const bool qFamily =
+        targetKind == BasisKind::HallLittlewoodQ ||
+        targetKind == BasisKind::HallLittlewoodP;
+    const bool bFamily =
+        targetKind == BasisKind::HallLittlewoodB ||
+        targetKind == BasisKind::HallLittlewoodPOmega;
+    if (!qFamily && !bFamily)
+      {
+        ERROR("the Hall-Littlewood product formula received an "
+              "incompatible target basis");
+        return zero();
+      }
+    const bool omega = bFamily;
+
+    auto generatorCoordinates =
+        [&](const CanonicalBasisTermView& term) {
+          const bool sourceQFamily =
+              term.basis.kind == BasisKind::HallLittlewoodQ ||
+              term.basis.kind == BasisKind::HallLittlewoodP;
+          const bool sourceBFamily =
+              term.basis.kind == BasisKind::HallLittlewoodB ||
+              term.basis.kind == BasisKind::HallLittlewoodPOmega;
+          if ((qFamily && !sourceQFamily) ||
+              (bFamily && !sourceBFamily))
+            {
+              ERROR("the Hall-Littlewood product formula received "
+                    "factors from different capital families");
+              return CoeffMap{};
+            }
+
+          CoeffMap result = raisingGeneratorMap(term.index);
+          const bool normalized =
+              term.basis.kind == BasisKind::HallLittlewoodP ||
+              term.basis.kind == BasisKind::HallLittlewoodPOmega;
+          if (normalized)
+            {
+              ring_elem scale =
+                  coefficientQuotient(
+                      coefficientRing->one(),
+                      hallLittlewoodCFactor(term.index));
+              if (error()) return CoeffMap{};
+              for (auto& item : result)
+                item.second =
+                    coefficientRing->mult(
+                        scale, item.second);
+            }
+          return result;
+        };
+
+    CoeffMap first =
+        generatorCoordinates(input.first);
+    if (error()) return zero();
+    CoeffMap second =
+        generatorCoordinates(input.second);
+    if (error()) return zero();
+    CoeffMap generatorProduct =
+        multiplyCoeffMaps(first, second);
+    CoeffMap result =
+        triangularReduceHallCapital(
+            generatorProduct, omega);
+    if (error()) return zero();
+
+    const bool normalizedTarget =
+        targetKind == BasisKind::HallLittlewoodP ||
+        targetKind == BasisKind::HallLittlewoodPOmega;
+    if (normalizedTarget)
+      for (auto& item : result)
+        item.second =
+            coefficientRing->mult(
+                item.second,
+                hallLittlewoodCFactor(item.first));
+
+    return coeffMapToElement(
+        result,
+        input.target.id,
+        input.target.displayName(),
+        input.target.order,
+        false);
+  }
+
 // ============================================================================
 // Littlewood-Richardson And Skew Schur Rules
 // ============================================================================
@@ -607,13 +923,13 @@ ring_elem SymmetricEngineRing::powerSumsToSchurViaMurnaghanNakayama(
                                    part});
           }
 
-        ring_elem converted;
-        if (!schurCompatibleFactorsToSchurDispatch(std::move(factors),
-                                                    targetBasisId,
-                                                    targetDisplay,
-                                                    targetDisplayOrder,
-                                                    converted))
-          return zero();
+        ring_elem converted =
+            schurExpansionFromCompatibleFactors(
+                std::move(factors),
+                targetBasisId,
+                targetDisplay,
+                targetDisplayOrder);
+        if (error()) return zero();
         const auto *convertedPoly = polyValue(converted);
         terms.reserve(terms.size() + convertedPoly->terms.size());
         for (const auto& convertedTerm : convertedPoly->terms)
@@ -755,7 +1071,7 @@ ring_elem SymmetricEngineRing::powerSumsToSchurViaAbacusRimHooks(
 // Schur-Compatible Factor Kernel
 // ============================================================================
 // These choices are local mathematical methods inside one already-selected
-// multiplication kernel; they do not select another multiplication plan.
+// multiplication kernel; they do not select another binary kernel.
 // Factor classification chooses LR, Pieri, border-strip, or converted-factor
 // methods for each mathematical factor.
 
@@ -801,11 +1117,12 @@ bool SymmetricEngineRing::trySchurCompatibleMonomialToSchur(
     std::vector<SchurCompatibleFactor> factors;
     if (!trySchurCompatibleFactorsFromMonomial(monomial, targetBasisId, factors))
       return false;
-    return schurCompatibleFactorsToSchurDispatch(std::move(factors),
-                                                targetBasisId,
-                                                targetDisplay,
-                                                targetDisplayOrder,
-                                                result);
+    result = schurExpansionFromCompatibleFactors(
+        std::move(factors),
+        targetBasisId,
+        targetDisplay,
+        targetDisplayOrder);
+    return !error();
   }
 
 bool SymmetricEngineRing::trySchurCompatibleFactorsFromMonomial(
@@ -941,27 +1258,27 @@ void SymmetricEngineRing::traceSchurFactorMethod(
                  schurFactorMethodName(method));
   }
 
-bool SymmetricEngineRing::schurCompatibleFactorsToSchurDispatch(
+ring_elem SymmetricEngineRing::schurExpansionFromCompatibleFactors(
     std::vector<SchurCompatibleFactor> factors,
     int targetBasisId,
     const std::string& targetDisplay,
-    int targetDisplayOrder,
-    ring_elem& result) const
+    int targetDisplayOrder) const
 {
-    if (!hasBasisKind(targetBasisId, BasisKind::Schur)) return false;
-    if (factors.empty())
+    if (!hasBasisKind(targetBasisId, BasisKind::Schur))
       {
-        result = one();
-        return true;
+        ERROR("Schur-compatible factors require a Schur target");
+        return zero();
       }
+    if (factors.empty())
+      return one();
 
     if (factors.size() == 1 &&
         factors.front().kind == SchurCompatibleFactor::General)
       {
         traceSchurFactorMethod(SchurFactorMethod::AlreadySchur,
                                factors.front());
-        result = basisElementFromIndex(targetBasisId, factors.front().index);
-        return true;
+        return basisElementFromIndex(
+            targetBasisId, factors.front().index);
       }
 
     if (factors.size() == 2 &&
@@ -987,8 +1304,7 @@ bool SymmetricEngineRing::schurCompatibleFactorsToSchurDispatch(
             terms.push_back({cachedInteger(item.coefficient),
                              canonicalMonomial(termMonomial)});
           }
-        result = fromTermVector(terms, false);
-        return true;
+        return fromTermVector(terms, false);
       }
 
     std::stable_sort(factors.begin(),
@@ -1092,52 +1408,12 @@ bool SymmetricEngineRing::schurCompatibleFactorsToSchurDispatch(
         current = next;
       }
 
-    result = coeffMapToElement(current,
-                               targetBasisId,
-                               targetDisplay,
-                               targetDisplayOrder,
-                               false);
-    return true;
-  }
-
-bool SymmetricEngineRing::tryProductToSchurViaCompatibleFactors(ring_elem f,
-                          ring_elem g,
-                          int targetBasisId,
-                          const std::string& targetDisplay,
-                          int targetDisplayOrder,
-                          ring_elem& result) const
-{
-    if (!hasBasisKind(targetBasisId, BasisKind::Schur)) return false;
-    const auto *left = polyValue(f);
-    const auto *right = polyValue(g);
-    VECTOR(SymmetricTerm) terms;
-    for (const auto& leftTerm : left->terms)
-      for (const auto& rightTerm : right->terms)
-        {
-          ring_elem baseCoeff = coefficientRing->mult(leftTerm.coeff,
-                                                      rightTerm.coeff);
-          if (coefficientRing->is_zero(baseCoeff)) continue;
-
-          SymmetricMonomial productMonomial =
-              multiplyMonomials(leftTerm.monomial, rightTerm.monomial);
-          ring_elem converted;
-          if (!trySchurCompatibleMonomialToSchur(productMonomial,
-                                               targetBasisId,
-                                               targetDisplay,
-                                               targetDisplayOrder,
-                                               converted))
-            return false;
-
-          const auto *convertedPoly = polyValue(converted);
-          terms.reserve(terms.size() + convertedPoly->terms.size());
-          for (const auto& convertedTerm : convertedPoly->terms)
-            terms.push_back({coefficientRing->mult(baseCoeff,
-                                                   convertedTerm.coeff),
-                             convertedTerm.monomial});
-        }
-
-    result = fromTermVector(terms, false);
-    return true;
+    return coeffMapToElement(
+        current,
+        targetBasisId,
+        targetDisplay,
+        targetDisplayOrder,
+        false);
   }
 
 // ============================================================================
@@ -1254,7 +1530,7 @@ SymmetricEngineRing::monomialProductViaExponentSplittings(
     return inserted.first->second;
   }
 
-bool SymmetricEngineRing::tryMonomialLikeBasisElementToCoeffMap(
+bool SymmetricEngineRing::tryBasisElementToMonomialOrForgottenCoeffMap(
     const SymmetricMonomial& monomial,
     size_t pos,
     int targetBasisId,
@@ -1339,7 +1615,7 @@ bool SymmetricEngineRing::tryMonomialLikeBasisElementToCoeffMap(
     return true;
   }
 
-bool SymmetricEngineRing::tryMonomialLikeMonomialToTarget(
+bool SymmetricEngineRing::tryMonomialToMonomialOrForgotten(
     const SymmetricMonomial& monomial,
     int targetBasisId,
     const std::string& targetDisplay,
@@ -1357,7 +1633,7 @@ bool SymmetricEngineRing::tryMonomialLikeMonomialToTarget(
     while (pos < monomial.data.size())
       {
         CoeffMap factor;
-        if (!tryMonomialLikeBasisElementToCoeffMap(
+        if (!tryBasisElementToMonomialOrForgottenCoeffMap(
                 monomial, pos, targetBasisId, factor))
           return false;
         current = multiplyMonomialCoeffMaps(current, factor);
@@ -1369,53 +1645,6 @@ bool SymmetricEngineRing::tryMonomialLikeMonomialToTarget(
                                targetDisplay,
                                targetDisplayOrder,
                                targetIsMultiplicative);
-    return true;
-  }
-
-bool SymmetricEngineRing::tryProductToMonomialLikeTarget(
-    ring_elem f,
-    ring_elem g,
-    int targetBasisId,
-    const std::string& targetDisplay,
-    int targetDisplayOrder,
-    bool targetIsMultiplicative,
-    ring_elem& result) const
-{
-    const BasisKind targetKind = basisKindForId(targetBasisId);
-    if (targetKind != BasisKind::Monomial &&
-        targetKind != BasisKind::Forgotten)
-      return false;
-
-    const auto *left = polyValue(f);
-    const auto *right = polyValue(g);
-    VECTOR(SymmetricTerm) terms;
-    for (const auto& leftTerm : left->terms)
-      for (const auto& rightTerm : right->terms)
-        {
-          ring_elem baseCoeff = coefficientRing->mult(leftTerm.coeff,
-                                                      rightTerm.coeff);
-          if (coefficientRing->is_zero(baseCoeff)) continue;
-
-          SymmetricMonomial productMonomial =
-              multiplyMonomials(leftTerm.monomial, rightTerm.monomial);
-          ring_elem converted;
-          if (!tryMonomialLikeMonomialToTarget(productMonomial,
-                                            targetBasisId,
-                                            targetDisplay,
-                                            targetDisplayOrder,
-                                            targetIsMultiplicative,
-                                            converted))
-            return false;
-
-          const auto *convertedPoly = polyValue(converted);
-          terms.reserve(terms.size() + convertedPoly->terms.size());
-          for (const auto& convertedTerm : convertedPoly->terms)
-            terms.push_back({coefficientRing->mult(baseCoeff,
-                                                   convertedTerm.coeff),
-                             convertedTerm.monomial});
-        }
-
-    result = fromTermVector(terms, false);
     return true;
   }
 

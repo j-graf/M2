@@ -62,6 +62,19 @@ const RingElement *rawSymmetricRingsMultiplyToBasis(
     const RingElement *f,
     const RingElement *g,
     int targetBasisId);
+const RingElement *rawSymmetricRingsMultiplyToBasisBench(
+    const RingElement *f,
+    const RingElement *g,
+    int targetBasisId,
+    M2_string forcedKernel,
+    bool usePowerSumReference,
+    bool traceWorkflow);
+const RingElement *rawSymmetricRingsMultiplyExpressionsToBasisBench(
+    const RingElement *f,
+    const RingElement *g,
+    int targetBasisId,
+    M2_string strategy,
+    bool traceWorkflow);
 const RingElement *rawSymmetricRingsPlethysm(const RingElement *f,
                                              const RingElement *g);
 const RingElement *rawSymmetricRingsPlethysmToBasis(const RingElement *f,

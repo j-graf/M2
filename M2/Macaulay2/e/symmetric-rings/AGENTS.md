@@ -41,7 +41,7 @@ Use these forms consistently:
   such as an inner-product pipeline.
 - `try<Operation>` checks whether a route applies and, on success, produces its
   result. Add `Via<Algorithm>` when the probe is specific to one algorithm.
-  Example: `tryProductToSchurViaCompatibleFactors`.
+  Example: `trySchurCompatibleMonomialToSchur`.
 - `<source>To<target>Via<Algorithm>` executes one named conversion kernel.
   Declarative compositions belong in the plan database and must
   not make a hidden method choice.
@@ -95,6 +95,17 @@ Name operands and algorithms explicitly. Examples include:
 - `schurTimesPowerSumViaBorderStrips`
 - `powerSumPlethysmViaAdamsOperations`
 
+Strict binary multiplication is commutative. Declare one unordered endpoint
+`{u,v} -> w`; the picker orients actual arguments for the callable. Do not add
+a reversed endpoint, a multiplication plan, a kernel enum, or an executor
+switch. An ordinary new binary formula changes its callable in
+`multiplication-kernels.*` and its declaration and preference in
+`multiplication-picker.cpp`, plus a mechanical header declaration if needed.
+The outer workflows own bilinearity, coefficients, multiplicative targets,
+target-closed fold execution, and the complete power-sum fallback. Declare
+multifactor closure in `multiplication-folds.*`; do not add a named-basis
+branch to the outer workflow.
+
 Use `Dispatch`, `select...Route`, `select...Method`, `run...Pipeline`, and
 `try...` with the same meanings outside ordinary basis conversion.
 
@@ -114,12 +125,23 @@ raw dispatch entry points.
 - `basis-conversion-plans.cpp`: policy-free complete conversion plans.
 - `basis-conversion-picker.cpp`: endpoint-specific ordered performance policy.
 - `basis-conversion.*`: expression facts, plan validation and generic
-  execution, and conversion/multiplication workflows.
+  execution, and conversion workflow.
 - `basis-coefficient.*`: targeted coefficient routes and their default
   full-conversion fallback.
-- `basis-conversion-kernels.*`: conversion formulas and straightening.
-- `basis-conversion-products.*`: multiplication, skew expansion, LR, Pieri,
-  and border-strip algorithms.
+- `basis-conversion-kernels.*`: conversion formulas and recurrence helpers.
+- `basis-normalization.*`: declarative straightening and skew-expansion rules,
+  and the generic normalization workflow.
+- `multiplication-kernels.*`: strict binary formulas and their LR, Pieri,
+  border-strip, and monomial/forgotten combinatorics.
+- `multiplication-picker.*`: commutative binary-kernel declarations,
+  inspectable applicability, validation, and ordered performance policy.
+- `multiplication-folds.*`: declarative target-closed factor families, their
+  complete-factor-list selector, and closure-contract validation.
+- `binary-multiplication.*`: strict two-term orchestration and fixed
+  multiplicative-target and power-sum workflows.
+- `multiplication.*`: bilinear extension, complete product terms, balanced
+  multiplicative products, generic target-closed folds, and complete
+  fallbacks.
 - `presentation.cpp`: presentation ordering and string rendering.
 - `expression-inspection.cpp`: shared expression-shape and coefficient-map probes.
 - `plethysm.*` and `omega.*`: their respective major operations.

@@ -390,6 +390,70 @@ export rawSymmetricRingsMultiplyToBasis(e:Expr):Expr := (
 	     else WrongNumArgs(3));
 setupfun("rawSymmetricRingsMultiplyToBasis", rawSymmetricRingsMultiplyToBasis);
 
+export rawSymmetricRingsMultiplyToBasisBench(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+          if length(s) != 6 then return WrongNumArgs(6);
+          when s.0
+          is f:RawRingElementCell do (
+               when s.1
+               is g:RawRingElementCell do (
+                    when s.2
+                    is targetBasisId:ZZcell do (
+                         if !isInt(targetBasisId) then return WrongArgSmallInteger(3);
+                         when s.3
+                         is forcedKernel:stringCell do (
+                              when s.4
+                              is usePowerSumReference:Boolean do (
+                                   when s.5
+                                   is traceWorkflow:Boolean do (
+                                        toExpr(Ccode(RawRingElementOrNull,
+                                             "rawSymmetricRingsMultiplyToBasisBench(",
+                                             f.p, ", ", g.p, ", ",
+                                             toInt(targetBasisId), ", ",
+                                             forcedKernel.v, ", ",
+                                             toBoolean(s.4), ", ",
+                                             toBoolean(s.5), ")")))
+                                   else WrongArg(6, "a Boolean"))
+                              else WrongArg(5, "a Boolean"))
+                         else WrongArg(4, "a string"))
+                    else WrongArgZZ(3))
+               else WrongArg(2, "a raw ring element"))
+          else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(6));
+setupfun("rawSymmetricRingsMultiplyToBasisBench",
+         rawSymmetricRingsMultiplyToBasisBench);
+
+export rawSymmetricRingsMultiplyExpressionsToBasisBench(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+          if length(s) != 5 then return WrongNumArgs(5);
+          when s.0
+          is f:RawRingElementCell do (
+               when s.1
+               is g:RawRingElementCell do (
+                    when s.2
+                    is targetBasisId:ZZcell do (
+                         if !isInt(targetBasisId) then return WrongArgSmallInteger(3);
+                         when s.3
+                         is strategy:stringCell do (
+                              when s.4
+                              is traceWorkflow:Boolean do (
+                                   toExpr(Ccode(RawRingElementOrNull,
+                                        "rawSymmetricRingsMultiplyExpressionsToBasisBench(",
+                                        f.p, ", ", g.p, ", ",
+                                        toInt(targetBasisId), ", ",
+                                        strategy.v, ", ",
+                                        toBoolean(s.4), ")")))
+                              else WrongArg(5, "a Boolean"))
+                         else WrongArg(4, "a string"))
+                    else WrongArgZZ(3))
+               else WrongArg(2, "a raw ring element"))
+          else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(5));
+setupfun("rawSymmetricRingsMultiplyExpressionsToBasisBench",
+         rawSymmetricRingsMultiplyExpressionsToBasisBench);
+
 export rawSymmetricRingsPlethysm(e:Expr):Expr := (
      when e
      is s:Sequence do (

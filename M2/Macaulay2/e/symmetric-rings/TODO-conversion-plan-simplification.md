@@ -661,7 +661,7 @@ Replace the enum-based kernel formula with a typed member-function pointer.
 Every plan-callable conversion kernel accepts the same mathematical input:
 
 ```cpp
-struct BasisConversionBasis
+struct RingBasis
 {
   BasisKind kind;
   int id;
@@ -677,8 +677,8 @@ struct BasisConversionBasis
 struct BasisConversionInput
 {
   ring_elem expansion;
-  BasisConversionBasis source;
-  BasisConversionBasis target;
+  RingBasis source;
+  RingBasis target;
   std::optional<int> homogeneousWeight;
 };
 
@@ -1206,7 +1206,7 @@ This overhaul does not:
 - reintroduce graph search or dynamically invented compositions;
 - allow the executor to call the picker;
 - move custom or transformed-basis hooks out of M2;
-- redesign multiplication plans, inner-product plans, or plethysm selection;
+- redesign multiplication, inner-product plans, or plethysm selection;
 - change public M2 syntax or raw interface entry points;
 - remove computation safeguards or exact metadata validation.
 

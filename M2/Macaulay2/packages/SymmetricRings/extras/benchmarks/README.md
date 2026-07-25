@@ -284,6 +284,35 @@ Keep these questions separate. First compare exact outputs of forced routes,
 then time them, then run the ordinary unforced case. General catalog records
 should normally reflect the ordinary selector.
 
+Strict binary cases in the `BinaryMultiplication` family record only automatic
+production selection.  The private `multiplyToBasisBench` helper accepts the
+left basis term, right basis term, target basis, a stable forced kernel
+identifier or `Automatic`, and `PowerSumReference`; forced comparisons remain
+one-off diagnostics and never become records.
+
+The `MultiplicationWorkflow` family times complete product-free expressions
+and complete factor lists. For a request-scoped product-free comparison,
+`multiplyExpressionsToBasisBenchExecute` accepts the optional strategy
+`Automatic`, `MultiplicativeTarget`, `KernelDistribution`, or
+`PowerSumFallback` before its trace flag. A forced strategy must be
+mathematically applicable; it never falls through to another strategy.
+
+To run one case diagnostically with an untimed
+production trace, use:
+
+```sh
+SYMRINGS_BENCH_TRACE_WORKFLOW=1 \
+SYMRINGS_BENCH_CASE=product-h-e-p-S-to-S \
+SYMRINGS_BENCH_VERIFY=1 \
+BUILD/build/M2 --script \
+  Macaulay2/packages/SymmetricRings/extras/benchmarks/runner.m2
+```
+
+The trace names the selected complete-input or complete-term strategy and
+prints `strict-binary=yes` or `strict-binary=no`.  The runner translates this
+diagnostic setting into explicit request-scoped trace state; ordinary package
+calls do not read it.  Traced executions are not timing records.
+
 For a selector change, include examples on both sides of every proposed
 threshold and examples from several semantic sources.  Weight alone is often
 insufficient: term count, support density, largest part, common parts,
@@ -303,8 +332,9 @@ The suite is divided into small components for maintainability:
   reporting;
 - `update-latest.awk` updates per-device most recent verified medians;
 - `test-history.sh` checks record retention and latest-result replacement;
-- `test-plan-forcing.sh` checks private conversion-plan comparisons and forced
-  multiplication plans against automatic results;
+- `test-plan-forcing.sh` checks private conversion-plan comparisons and
+  request-scoped binary-kernel comparisons against automatic and power-sum
+  reference results;
 - estimation prefers latest per-case medians and predicts duration without
   running cases;
 - system, condition, and calibration code describe the environment;

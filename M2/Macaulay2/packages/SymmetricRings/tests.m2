@@ -957,6 +957,14 @@ TEST ///
     assert(multiplyToBasis(P_2, P_1, P) == toBasis(P_2*P_1, P))
     assert(multiplyToBasis(B_2, B_1, B) == toBasis(B_2*B_1, B))
     assert(multiplyToBasis(Pomega_2, Pomega_1, Pomega) == toBasis(Pomega_2*Pomega_1, Pomega))
+    assert(toBasis(Q_2*Q_1*Q_1, Q) ==
+           toBasis(toBasis(Q_2*Q_1*Q_1, p), Q))
+    assert(toBasis(B_2*B_1*B_1, B) ==
+           toBasis(toBasis(B_2*B_1*B_1, p), B))
+    assert(toBasis(P_2*P_1*P_1, P) ==
+           toBasis(toBasis(P_2*P_1*P_1, p), P))
+    assert(toBasis(Pomega_2*Pomega_1*Pomega_1, Pomega) ==
+           toBasis(toBasis(Pomega_2*Pomega_1*Pomega_1, p), Pomega))
     assert(toBasis(P_{2,1}*e_1, P) ==
            P_{3,1} + (1+E_0)*P_{2,2} + (1+E_0)*P_{2,1,1})
     assert(toBasis(Pomega_{2,1}*h_1, Pomega) ==
@@ -1191,6 +1199,54 @@ TEST ///
         "Repetitions" => 1,
         "Warmups" => 0)
     assert(singleBenchReport#"Result" == toBasis(benchInput, S))
+///
+
+TEST ///
+    debug needsPackage "SymmetricRings"
+    R0 = symmetricRing QQ
+    binaryBench = multiplyToBasisBench(
+        S_{3,1},
+        h_2,
+        S,
+        "Kernels" => {
+            "Automatic",
+            "Schur*Complete->Schur:horizontal-Pieri",
+            "Schur*Complete->Schur:repeated-horizontal-Pieri",
+            "PowerSumReference"
+            },
+        "Repetitions" => 1,
+        "Warmups" => 0)
+    assert(binaryBench#"Verified")
+    commutedBinaryBench = multiplyToBasisBench(
+        h_2,
+        S_{3,1},
+        S,
+        "Kernels" => "Schur*Complete->Schur:horizontal-Pieri",
+        "Repetitions" => 1,
+        "Warmups" => 0)
+    assert(commutedBinaryBench#"Result" ==
+           (binaryBench#"Results")#"Automatic")
+    assert(try (
+            multiplyToBasisBench(
+                S_{3,1},
+                h_{2,1},
+                S,
+                "Kernels" =>
+                    "Schur*Complete->Schur:horizontal-Pieri",
+                "Repetitions" => 1,
+                "Warmups" => 0);
+            false)
+        else true)
+    assert(toBasis(h_3*e_2*p_1*S_1, h) ==
+           toBasis(toBasis(h_3*e_2*p_1*S_1, p), h))
+    assert(toBasis(h_3*e_2*p_1*S_1*h_1, h) ==
+           toBasis(toBasis(h_3*e_2*p_1*S_1*h_1, p), h))
+    assert(toBasis(h_3*e_2*p_1*S_1, S) ==
+           toBasis(toBasis(h_3*e_2*p_1*S_1, p), S))
+    assert(toBasis(h_3*e_2*p_1, S) ==
+           toBasis(toBasis(h_3*e_2*p_1, p), S))
+    assert(toBasis(m_2*S_1*h_1, S) ==
+           toBasis(toBasis(m_2*S_1*h_1, p), S))
 ///
 
 TEST ///

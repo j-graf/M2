@@ -141,7 +141,6 @@ void SymmetricEngineRing::rememberBasesFrom(const SymmetricEngineRing *R) const
       }
     if (changed)
       {
-        multiplicationPlansCache.clear();
         basisConversionEndpointsForRingCache.clear();
         ringBasisConversionPlanCache.clear();
         powerSumFallbackPlanCache.clear();
@@ -523,6 +522,8 @@ SymmetricEngineRing::SymmetricEngineRing(const Ring *A)
     // user's first timed conversion pays that one-time initialization cost.
     validateBasisConversionPlanDatabase();
     (void) basisConversionPlansBySourceAndTarget();
+    validateBinaryMultiplicationDatabase();
+    (void) binaryMultiplicationPickersByEndpoint();
   }
 
 SymmetricEngineRing *SymmetricEngineRing::create(const Ring *A)
@@ -565,7 +566,6 @@ void SymmetricEngineRing::rememberBasisMetadata(int basisId,
     else
       {
         basisDescriptors.emplace(basisId, std::move(descriptor));
-        multiplicationPlansCache.clear();
         ringBasisConversionPlanCache.clear();
         powerSumFallbackPlanCache.clear();
       }
