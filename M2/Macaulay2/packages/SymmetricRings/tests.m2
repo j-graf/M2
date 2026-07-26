@@ -1334,68 +1334,6 @@ TEST ///
 TEST ///
     debug needsPackage "SymmetricRings"
     R0 = symmetricRing QQ
-    benchInput = p_{4,2} + 2*p_{3,2,1}
-    benchReport = toBasisBench(
-        benchInput,
-        S,
-        "Plans" => {
-            "Automatic",
-            "PowerSum->Schur:abacus-rim-hooks",
-            "PowerSum->Schur:via-complete-basis"
-            },
-        "Repetitions" => 1,
-        "Warmups" => 0)
-    assert(benchReport#"Verified")
-    assert(#(benchReport#"Plans") == 3)
-    assert(#((benchReport#"Timings")#"Automatic") == 1)
-    assert(
-        (benchReport#"Results")#"Automatic" ==
-        (benchReport#"Results")#"PowerSum->Schur:abacus-rim-hooks")
-    singleBenchReport = toBasisBench(
-        benchInput,
-        S,
-        "Plans" => "PowerSum->Schur:Frobenius-character-formula",
-        "Repetitions" => 1,
-        "Warmups" => 0)
-    assert(singleBenchReport#"Result" == toBasis(benchInput, S))
-///
-
-TEST ///
-    debug needsPackage "SymmetricRings"
-    R0 = symmetricRing QQ
-    binaryBench = multiplyToBasisBench(
-        S_{3,1},
-        h_2,
-        S,
-        "Kernels" => {
-            "Automatic",
-            "Schur*Complete->Schur:horizontal-Pieri",
-            "Schur*Complete->Schur:repeated-horizontal-Pieri",
-            "PowerSumReference"
-            },
-        "Repetitions" => 1,
-        "Warmups" => 0)
-    assert(binaryBench#"Verified")
-    commutedBinaryBench = multiplyToBasisBench(
-        h_2,
-        S_{3,1},
-        S,
-        "Kernels" => "Schur*Complete->Schur:horizontal-Pieri",
-        "Repetitions" => 1,
-        "Warmups" => 0)
-    assert(commutedBinaryBench#"Result" ==
-           (binaryBench#"Results")#"Automatic")
-    assert(try (
-            multiplyToBasisBench(
-                S_{3,1},
-                h_{2,1},
-                S,
-                "Kernels" =>
-                    "Schur*Complete->Schur:horizontal-Pieri",
-                "Repetitions" => 1,
-                "Warmups" => 0);
-            false)
-        else true)
     assert(toBasis(h_3*e_2*p_1*S_1, h) ==
            toBasis(toBasis(h_3*e_2*p_1*S_1, p), h))
     assert(toBasis(h_3*e_2*p_1*S_1*h_1, h) ==

@@ -4,12 +4,14 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 SOURCE_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../../../.." && pwd)
 M2_BIN=${M2_BIN:-"$SOURCE_ROOT/BUILD/build/M2"}
+BENCHMARK_HELPERS="$SCRIPT_DIR/benchmark-helpers.m2"
 TEST_HOME=$(mktemp -d "${TMPDIR:-/tmp}/symmetricrings-plan-test.XXXXXX")
 trap 'rm -rf "$TEST_HOME"' EXIT HUP INT TERM
 
 run_m2()
 {
-    HOME="$TEST_HOME" "$M2_BIN" --no-preload --silent --stop -q -e "$1"
+    HOME="$TEST_HOME" "$M2_BIN" --no-preload --silent --stop -q \
+        -e "debug needsPackage \"SymmetricRings\"; load \"$BENCHMARK_HELPERS\"; $1"
 }
 
 assert_trace()

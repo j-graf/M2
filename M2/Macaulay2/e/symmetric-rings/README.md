@@ -186,11 +186,13 @@ Ordinary `toBasis` and `multiplyToBasis` always use automatic production
 selection. Diagnostic forcing and tracing are explicit private benchmark
 requests, not process-environment state.
 
-Conversion-plan comparison belongs to the private M2 function `toBasisBench`,
-available after loading the package in development mode:
+Conversion-plan comparison belongs to the extras-only M2 function
+`toBasisBench`, available after loading the package in development mode and
+then loading the benchmark helpers explicitly:
 
 ```m2
 debug needsPackage "SymmetricRings";
+load "Macaulay2/packages/SymmetricRings/extras/benchmarks/benchmark-helpers.m2";
 R = symmetricRing QQ;
 F = p_{4,2} + p_{3,2,1};
 report = toBasisBench(
@@ -220,8 +222,8 @@ M2_SYMMETRIC_RINGS_TRACE_INNER_PRODUCT=1 BUILD/build/M2
 It reports the inner-product context and selected pipeline, followed by the
 route, operand orientation, estimated cost, and relevant cache state.
 
-Strict binary kernels are compared with the private
-`multiplyToBasisBench` helper:
+Strict binary kernels are compared with the extras-only
+`multiplyToBasisBench` helper loaded above:
 
 ```m2
 debug needsPackage "SymmetricRings";

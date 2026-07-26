@@ -7,6 +7,7 @@ benchmarkDirectory = currentFileDirectory
 -- loading makes those private benchmark boundaries visible without exporting
 -- them from the user package.
 debug needsPackage "SymmetricRings"
+load(benchmarkDirectory | "benchmark-helpers.m2")
 load(benchmarkDirectory | "partitions.m2")
 load(benchmarkDirectory | "operations.m2")
 load(benchmarkDirectory | "cases.m2")

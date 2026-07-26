@@ -164,9 +164,10 @@ Tracing changes timing and remains diagnostic:
 M2_SYMMETRIC_RINGS_TRACE_INNER_PRODUCT=1
 ```
 
-Use private `toBasisBench` from a development-mode M2 session for conversion
+After `debug needsPackage "SymmetricRings"`, explicitly load
+`benchmarks/benchmark-helpers.m2` to use private `toBasisBench` for conversion
 plan forcing, tracing, repetitions, and agreement checks. Ordinary `toBasis`
-ignores ambient conversion diagnostics.
+ignores ambient conversion diagnostics, and the package never loads extras.
 
 Run each forced multiplication or inner-product route in a separate cold
 process. Avoid grouped characters on medium or large inputs without a timeout.

@@ -285,10 +285,11 @@ then time them, then run the ordinary unforced case. General catalog records
 should normally reflect the ordinary selector.
 
 Strict binary cases in the `BinaryMultiplication` family record only automatic
-production selection.  The private `multiplyToBasisBench` helper accepts the
-left basis term, right basis term, target basis, a stable forced kernel
-identifier or `Automatic`, and `PowerSumReference`; forced comparisons remain
-one-off diagnostics and never become records.
+production selection. After loading `benchmark-helpers.m2` explicitly, the
+private `multiplyToBasisBench` helper accepts the left basis term, right basis
+term, target basis, a stable forced kernel identifier or `Automatic`, and
+`PowerSumReference`; forced comparisons remain one-off diagnostics and never
+become records.
 
 The `MultiplicationWorkflow` family times complete product-free expressions
 and complete factor lists. For a request-scoped product-free comparison,

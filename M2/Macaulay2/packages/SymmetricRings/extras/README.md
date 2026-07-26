@@ -11,11 +11,12 @@ engine.
 
 ## Interactive conversion-plan comparisons
 
-Load the package in development mode to use the private `toBasisBench`
-function from an ordinary M2 session:
+Load the package in development mode, then explicitly load the extras-only
+benchmark helpers:
 
 ```m2
 debug needsPackage "SymmetricRings";
+load "Macaulay2/packages/SymmetricRings/extras/benchmarks/benchmark-helpers.m2";
 R = symmetricRing QQ;
 F = p_{8,4,2} + 2*p_{7,4,3} + p_{6,5,3};
 report = toBasisBench(
