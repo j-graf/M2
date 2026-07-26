@@ -47,8 +47,7 @@ The principal files are:
 | `presentation.*` | Stable presentation ordering and string rendering |
 | `partitions.*` | Partition utilities and combinatorial enumeration |
 | `arithmetic.*` | Addition, multiplication, scalar operations, and product tagging |
-| `expression-inspection.*` | Shared expression-shape and coefficient-map inspection |
-| `expression-helpers.*` | Public decomposition, structural inspection, and configurable normalization helpers |
+| `expression-helpers.*` | Shared facts and metadata, basis-expansion probes, decomposition, reconstruction, inspection, and configurable normalization |
 | `expression-conditions.*` | Inspectable plan conditions and ordered expression-piece partitioning |
 | `basis-conversion-policy.*` | Reusable performance-only selection facts |
 | `basis-conversion-plans.cpp` | Policy-free complete conversion plans whose cases use a kernel or a nonempty fixed composition |

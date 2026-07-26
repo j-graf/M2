@@ -176,7 +176,6 @@ set(SRCLIST
   symmetric-rings/storage
   symmetric-rings/presentation
   symmetric-rings/symmetric-engine-ring
-  symmetric-rings/expression-inspection
   symmetric-rings/expression-helpers
   symmetric-rings/expression-conditions
   symmetric-rings/basis-coefficient

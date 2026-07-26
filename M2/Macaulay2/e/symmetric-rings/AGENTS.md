@@ -143,8 +143,8 @@ raw dispatch entry points.
   multiplicative products, generic target-closed folds, and complete
   fallbacks.
 - `presentation.cpp`: presentation ordering and string rendering.
-- `expression-inspection.cpp`: shared expression-shape and coefficient-map probes.
-- `expression-helpers.*`: public decomposition, structural inspection, and
+- `expression-helpers.*`: shared expression facts and metadata, basis-expansion
+  probes, decomposition, reconstruction, structural inspection, and
   configurable normalization helpers.
 - `plethysm.*` and `omega.*`: their respective major operations.
 - `inner-product-dispatch.*`: inner-product requests, profiles, selectors,

@@ -199,17 +199,6 @@ SymmetricEngineRing::expandSkewHallLittlewoodBasisElement(
 // Generic Normalization Workflow
 // ============================================================================
 
-ring_elem SymmetricEngineRing::expressionFromBasisElement(
-    const SymmetricMonomial& monomial,
-    size_t position) const
-{
-    VECTOR(SymmetricTerm) terms{
-        {coefficientRing->one(),
-         monomialFromKey(
-             atomBlockAt(monomial, position))}};
-    return fromTermVector(terms, true);
-  }
-
 ring_elem SymmetricEngineRing::straightenBasisElement(
     const SymmetricMonomial& monomial,
     size_t position) const

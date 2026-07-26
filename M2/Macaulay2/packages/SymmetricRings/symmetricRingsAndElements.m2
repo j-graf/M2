@@ -565,20 +565,6 @@ somegaAtomAsSchurElement = (R0, atom) -> (
     new R0 from rawSymmetricRingsOmega(raw sAtom, omegaMapData R0, false)
     )
 
--- Converts decoded atom data into a user-level symmetric function.
-atomAsElement = (R0, atom) -> (
-    B := basisWithId(R0, atom#"BasisId");
-    if basisKey B == "SchurOmega" then somegaAtomAsSchurElement(R0, atom)
-    else rawBasisAtomElement(R0, B, atom#"Outer", atom#"Inner")
-    )
-
--- Converts decoded monomial atom data into a user-level product.
-monomialAsElement = (R0, atoms) -> (
-    result := 1_R0;
-    scan(atoms, atom -> result = result * atomAsElement(R0, atom));
-    result
-    )
-
 -- Rewrites all Somega factors when the ring normalizes Somega.
 -- This rebuilds through rawTerms instead of asking the engine for a global
 -- simplification because only atoms involving Somega need the special policy;
@@ -596,13 +582,6 @@ normalizeSomegaElement = f -> (
             if c != 0_A then result = result + promote(c, R0) * monomialAsElement(R0, term#1)
             ));
     result
-    )
-
--- Returns the summands of a symmetric function.
-terms SymmetricRingElement := f -> (
-    R0 := ring f;
-    A := coefficientRing R0;
-    apply(presentationTerms(f, null), term -> promote(promote(term#0, A), R0) * monomialAsElement(R0, term#1))
     )
 
 -- Wraps a raw engine element and applies ring-level normalizations.
@@ -880,50 +859,8 @@ html SymmetricRingElement := f -> html net f
 toExternalString SymmetricRingElement := toString
 
 -- ============================================================================
--- Raw Terms, Presentation Terms, And Weight
+-- Presentation Terms And Partition Weights
 -- ============================================================================
-
--- Decodes one flattened engine monomial into atom hash tables.
--- The flattened format is [displayOrder, basisId, outerLength, innerLength,
--- payload...]. displayOrder is used only for engine ordering, so rawTerms
--- exposes basis id plus outer/inner indices for M2-level reconstruction.
-decodeSymmetricMonomialData = data0 -> (
-    data := toList data0;
-    atoms := {};
-    pos := 0;
-    while pos < #data do (
-        if pos + 3 >= #data then error "invalid symmetric-ring monomial data";
-        basisId := data#(pos + 1);
-        outerLength := data#(pos + 2);
-        innerLength := data#(pos + 3);
-        payloadLength := outerLength + innerLength;
-        if pos + 4 + payloadLength > #data then error "invalid symmetric-ring monomial data";
-        payload := take(drop(data, pos + 4), payloadLength);
-        atoms = append(atoms, hashTable {
-                "BasisId" => basisId,
-                "Outer" => take(payload, outerLength),
-                "Inner" => drop(payload, outerLength)
-                });
-        pos = pos + 4 + payloadLength;
-        );
-    atoms
-    )
-
--- Public method exposing coefficient and monomial data for terms.
-rawTerms = method()
-
--- Extracts raw term data from a symmetric function.
--- Coefficients are wrapped in the coefficient ring before returning. Monomials
--- stay decoded as atom metadata so higher-level code can rebuild elements in a
--- different ring, basis, or display policy without reparsing strings.
-rawTerms SymmetricRingElement := f -> (
-    A := coefficientRing ring f;
-    n := rawSymmetricRingsTermCount raw f;
-    if n == 0 then {} else apply(toList(0..n-1), i -> {
-            new A from rawSymmetricRingsTermCoefficient(raw f, i),
-            decodeSymmetricMonomialData rawSymmetricRingsTermMonomial(raw f, i)
-            })
-    )
 
 -- Returns terms through the engine's presentation permutation. The engine
 -- sorts the complete view before applying maxTerms; only the selected terms
@@ -937,12 +874,6 @@ presentationTerms = (f, maxTerms) -> (
             decodeSymmetricMonomialData rawSymmetricRingsPresentationTermMonomial(raw f, i)
             })
     )
-
--- Public method for total degree/weight.
-weight = method()
-
--- Computes the total degree of a symmetric function through the engine.
-weight SymmetricRingElement := f -> rawSymmetricRingsElementWeight raw f
 
 -- Computes the weight of an integer partition.
 partitionWeight = L -> sum L

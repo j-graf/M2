@@ -11,6 +11,59 @@
 // These helpers expose stable mathematical decompositions and normalization
 // operations. They do not contain operation-specific selection policy.
 
+  struct ExpressionFacts
+  {
+    // Every ExpressionFacts value is an exact description of one realized
+    // expression. Canonical-output contracts are plan/kernel properties and
+    // must never be represented by invented support counts in this type.
+    bool normalized = true;
+    bool skewFree = true;
+    bool collected = true;
+    CombinatorialTags combinatorialTags = 0;
+    size_t termCount = 0;
+    size_t scalarTermCount = 0;
+    size_t singleFactorTermCount = 0;
+    size_t productTermCount = 0;
+    size_t maximumFactorsPerTerm = 0;
+    std::vector<int> factorBases;
+    size_t skewFactorCount = 0;
+    std::optional<int> pureBasis;
+    std::optional<int> expandedBasis;
+    std::optional<int> homogeneousWeight;
+    size_t maximumPartitionLength = 0;
+    std::optional<int> singleBasisElementId;
+    std::optional<Partition> singleBasisElementIndex;
+    std::optional<bool> singleBasisElementCoefficientOne;
+
+    bool noProducts() const { return productTermCount == 0; }
+    bool singleTerm() const { return termCount == 1; }
+    bool mixedBasis() const { return factorBases.size() > 1; }
+    bool provenanceUnknown() const { return combinatorialTags == 0; }
+    bool provenanceMixed() const
+    {
+      return combinatorialTags != 0 &&
+             (combinatorialTags & (combinatorialTags - 1)) != 0;
+    }
+    bool singleBasisElement() const
+    {
+      return termCount == 1 &&
+             scalarTermCount == 0 &&
+             singleFactorTermCount == 1 &&
+             productTermCount == 0 &&
+             normalized &&
+             skewFree &&
+             collected;
+    }
+    bool canonicalExpansionInBasis(int basisId) const
+    {
+      if (!normalized || !skewFree || !collected || !noProducts())
+        return false;
+      // Zero and scalar expressions are canonical in every basis.
+      return singleFactorTermCount == 0 ||
+             (expandedBasis && *expandedBasis == basisId);
+    }
+  };
+
  public:
   struct HomogeneousComponent
   {
@@ -118,6 +171,51 @@
       ring_elem expression) const;
 
  private:
+  ExpressionFacts inferExpressionFacts(
+      ring_elem f,
+      std::vector<size_t> *termFactorCounts = nullptr) const;
+  ExpressionFacts inferCanonicalExpansionFacts(
+      ring_elem f,
+      int basisId,
+      const std::optional<int>& knownHomogeneousWeight =
+          std::nullopt) const;
+  ExpressionFacts basisElementFactsFromAtom(
+      const SymmetricMonomial& monomial,
+      size_t pos,
+      ring_elem coefficient) const;
+  std::optional<ExpressionFacts> expressionFactsFromMetadata(
+      ring_elem f) const;
+  void invalidateExactExpressionFacts(
+      SymmetricConversionMetadataSlot& metadata) const;
+  void refreshSingleBasisElementCoefficientFact(
+      SymmetricConversionMetadata& metadata,
+      const SymmetricRingPoly *poly) const;
+  SymmetricConversionMetadata metadataAfterAddition(
+      const SymmetricConversionMetadata& left,
+      const SymmetricConversionMetadata& right,
+      const SymmetricRingPoly *result) const;
+  SymmetricConversionMetadata metadataAfterProduct(
+      const SymmetricConversionMetadata& left,
+      const SymmetricConversionMetadata& right,
+      const SymmetricRingPoly *result) const;
+  void attachExpressionFacts(
+      ring_elem f,
+      const ExpressionFacts& facts,
+      int targetBasisId,
+      CombinatorialTags combinatorialTags) const;
+  bool singleScaledBasisElement(
+      ring_elem f,
+      int basisId,
+      Partition& index,
+      ring_elem& coefficient) const;
+  CoeffMap coefficientsInBasis(ring_elem f, int basisId) const;
+  bool coefficientsInBasisIfPossible(
+      ring_elem f,
+      int basisId,
+      CoeffMap& result) const;
+  ring_elem expressionFromBasisElement(
+      const SymmetricMonomial& monomial,
+      size_t position) const;
   ring_elem expressionHelperFromTerms(
       VECTOR(SymmetricTerm)& terms,
       CombinatorialTags tags) const;

@@ -218,17 +218,15 @@ class SymmetricEngineRing : public Ring
                                         const Partition& inner) const;
   ring_elem basisPartElement(int basisId, int n) const;
 
-#include "symmetric-rings/expression-inspection.hpp"
-
   // ============================================================================
   // Topic-Specific Engine Declarations
   // ============================================================================
 
 #include "symmetric-rings/basis-conversion-kernels.hpp"
 #include "symmetric-rings/multiplication-kernels.hpp"
+#include "symmetric-rings/expression-helpers.hpp"
 #include "symmetric-rings/basis-conversion.hpp"
 #include "symmetric-rings/basis-normalization.hpp"
-#include "symmetric-rings/expression-helpers.hpp"
 #include "symmetric-rings/multiplication-picker.hpp"
 #include "symmetric-rings/multiplication-folds.hpp"
 #include "symmetric-rings/binary-multiplication.hpp"

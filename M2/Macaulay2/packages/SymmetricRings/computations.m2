@@ -6,15 +6,6 @@
 -- fallbacks. The guiding invariant is correctness first: custom bases and
 -- transformed bases use M2 hooks whenever the engine cannot know their rules.
 
--- Public method for straightening composition-indexed expressions.
-straighten = method()
-
--- Applies engine straightening rules to a symmetric function.
-straighten SymmetricRingElement := f -> (
-    R0 := ring f;
-    userSymmetricElement(R0, rawSymmetricRingsStraighten raw f)
-    )
-
 -- Falls back to power-sum comparison when raw straightened forms differ.
 -- Raw equality can miss identities whose bases have different straightened
 -- representatives. The p-basis fallback is slower but gives a common semantic
@@ -80,11 +71,6 @@ engineToBasis = (F, B) -> (
     userSymmetricElement(R0, rawSymmetricRingsToBasis(raw F, B#"BasisId"))
     )
 
--- Tests whether a basis is implemented by the C++ engine. This is a
--- mathematical capability check, not a performance-policy decision.
-isEngineReadableBasis = B ->
-    any(builtinSymmetricBases, B0 -> B0#"BasisId" == B#"BasisId")
-
 -- Tests whether a numeric basis id is available on a particular ring.
 isBasisIdAvailableOnRing = (R0, basisId) ->
     any(R0#"Bases", B0 -> B0#"BasisId" == basisId)
@@ -131,10 +117,6 @@ expressionConversionCapabilities = F -> (
         "NeedsPowerSumHook" => needsPowerSumHook
         }
     )
-
--- Tests whether every atom in an expression belongs to an engine basis.
-isEngineReadableExpression = F ->
-    (expressionConversionCapabilities F)#"UsesOnlyEngineBases"
 
 -- Tests whether every atom in an expression has a declared route to p.
 -- Execution errors from a declared route are deliberately not caught.
@@ -1272,33 +1254,6 @@ innerProductContextCode = contextName -> (
     if contextName == "Ordinary" then 0
     else if contextName == "HallLittlewood" then 1
     else error("unknown built-in inner-product context: ", contextName)
-    )
-
--- Adds a coefficient to an accumulator hash table.
-addCoefficientToMutableHash = (H, idx, c, A) -> (
-    H#idx = (if H#?idx then H#idx else 0_A) + c;
-    )
-
--- Extracts coefficients when an expression is already in one basis.
--- This intentionally refuses products and mixed bases. Returning null tells the
--- caller to use a safer fallback instead of silently applying diagonal pairing
--- metadata outside its valid form.
-coefficientsInBasisIfPossibleM2 = (F, B) -> (
-    A := coefficientRing ring F;
-    result := new MutableHashTable;
-    basisId := B#"BasisId";
-    ok := true;
-    scan(rawTerms F, term -> (
-            if not ok then () else (
-                atoms := term#1;
-                idx := null;
-                if #atoms == 0 then idx = {}
-                else if #atoms == 1 and (atoms#0)#"BasisId" == basisId then idx = atomIndexForSpecialization atoms#0
-                else ok = false;
-                if ok then addCoefficientToMutableHash(result, idx, term#0, A);
-                )
-            ));
-    if ok then result else null
     )
 
 -- Computes a diagonal inner product directly for one pairing rule.

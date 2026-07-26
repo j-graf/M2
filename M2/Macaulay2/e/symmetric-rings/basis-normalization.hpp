@@ -52,9 +52,6 @@
 // Generic Normalization Workflow
 // ============================================================================
 
-  ring_elem expressionFromBasisElement(
-      const SymmetricMonomial& monomial,
-      size_t position) const;
   ring_elem straightenBasisElement(
       const SymmetricMonomial& monomial,
       size_t position) const;

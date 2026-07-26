@@ -1,6 +1,93 @@
 -- General-purpose expression decomposition, inspection, and normalization.
 -- The engine owns the algebraic work; this file presents mathematical M2 values.
 
+-- Converts decoded atom data into a user-level symmetric function.
+atomAsElement = (R0, atom) -> (
+    B := basisWithId(R0, atom#"BasisId");
+    if basisKey B == "SchurOmega" then somegaAtomAsSchurElement(R0, atom)
+    else rawBasisAtomElement(R0, B, atom#"Outer", atom#"Inner")
+    )
+
+-- Converts decoded monomial atom data into a user-level product.
+monomialAsElement = (R0, atoms) -> (
+    result := 1_R0;
+    scan(atoms, atom -> result = result * atomAsElement(R0, atom));
+    result
+    )
+
+-- Returns the summands of a symmetric function.
+terms SymmetricRingElement := f -> (
+    R0 := ring f;
+    A := coefficientRing R0;
+    apply(presentationTerms(f, null), term -> promote(promote(term#0, A), R0) * monomialAsElement(R0, term#1))
+    )
+
+-- Decodes one flattened engine monomial into atom hash tables.
+-- The flattened format is [displayOrder, basisId, outerLength, innerLength,
+-- payload...]. displayOrder is used only for engine ordering, so rawTerms
+-- exposes basis id plus outer/inner indices for M2-level reconstruction.
+decodeSymmetricMonomialData = data0 -> (
+    data := toList data0;
+    atoms := {};
+    pos := 0;
+    while pos < #data do (
+        if pos + 3 >= #data then error "invalid symmetric-ring monomial data";
+        basisId := data#(pos + 1);
+        outerLength := data#(pos + 2);
+        innerLength := data#(pos + 3);
+        payloadLength := outerLength + innerLength;
+        if pos + 4 + payloadLength > #data then error "invalid symmetric-ring monomial data";
+        payload := take(drop(data, pos + 4), payloadLength);
+        atoms = append(atoms, hashTable {
+                "BasisId" => basisId,
+                "Outer" => take(payload, outerLength),
+                "Inner" => drop(payload, outerLength)
+                });
+        pos = pos + 4 + payloadLength;
+        );
+    atoms
+    )
+
+-- Public method exposing coefficient and monomial data for terms.
+rawTerms = method()
+
+-- Extracts raw term data from a symmetric function.
+-- Coefficients are wrapped in the coefficient ring before returning. Monomials
+-- stay decoded as atom metadata so higher-level code can rebuild elements in a
+-- different ring, basis, or display policy without reparsing strings.
+rawTerms SymmetricRingElement := f -> (
+    A := coefficientRing ring f;
+    n := rawSymmetricRingsTermCount raw f;
+    if n == 0 then {} else apply(toList(0..n-1), i -> {
+            new A from rawSymmetricRingsTermCoefficient(raw f, i),
+            decodeSymmetricMonomialData rawSymmetricRingsTermMonomial(raw f, i)
+            })
+    )
+
+-- Public method for total degree/weight.
+weight = method()
+
+-- Computes the total degree of a symmetric function through the engine.
+weight SymmetricRingElement := f -> rawSymmetricRingsElementWeight raw f
+
+-- Public method for straightening composition-indexed expressions.
+straighten = method()
+
+-- Applies engine straightening rules to a symmetric function.
+straighten SymmetricRingElement := f -> (
+    R0 := ring f;
+    userSymmetricElement(R0, rawSymmetricRingsStraighten raw f)
+    )
+
+-- Tests whether a basis is implemented by the C++ engine. This is a
+-- mathematical capability check, not a performance-policy decision.
+isEngineReadableBasis = B ->
+    any(builtinSymmetricBases, B0 -> B0#"BasisId" == B#"BasisId")
+
+-- Tests whether every atom in an expression belongs to an engine basis.
+isEngineReadableExpression = F ->
+    (expressionConversionCapabilities F)#"UsesOnlyEngineBases"
+
 wrapExpressionHelperRawList = (R, values) ->
     apply(toList values, value -> userSymmetricElement(R, value))
 
@@ -219,6 +306,33 @@ coefficientsInBasis = args -> (
         index := if #factors === 0 then {} else factors#0#"Outer";
         index => coefficient
         ))
+    )
+
+-- Adds a coefficient to an accumulator hash table.
+addCoefficientToMutableHash = (H, idx, c, A) -> (
+    H#idx = (if H#?idx then H#idx else 0_A) + c;
+    )
+
+-- Extracts coefficients when an expression is already in one basis.
+-- This intentionally refuses products and mixed bases. Returning null tells the
+-- caller to use a safer fallback instead of silently applying diagonal pairing
+-- metadata outside its valid form.
+coefficientsInBasisIfPossibleM2 = (F, B) -> (
+    A := coefficientRing ring F;
+    result := new MutableHashTable;
+    basisId := B#"BasisId";
+    ok := true;
+    scan(rawTerms F, term -> (
+            if not ok then () else (
+                atoms := term#1;
+                idx := null;
+                if #atoms == 0 then idx = {}
+                else if #atoms == 1 and (atoms#0)#"BasisId" == basisId then idx = atomIndexForSpecialization atoms#0
+                else ok = false;
+                if ok then addCoefficientToMutableHash(result, idx, term#0, A);
+                )
+            ));
+    if ok then result else null
     )
 
 homogeneousBasisComponents = method()

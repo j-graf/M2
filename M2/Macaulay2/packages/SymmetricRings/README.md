@@ -145,19 +145,20 @@ It owns:
 - ring-local basis symbols and aliases;
 - ordinary and skew basis-element construction;
 - display and expression formatting;
-- `terms`, `rawTerms`, `sum`, `product`, and `weight`;
+- `sum` and `product`;
 - partition/index normalization visible at the M2 level.
 
 ### `expressionHelpers.m2`
 
 This file exposes general engine-backed expression utilities without making
 operation-specific policy decisions. It owns homogeneous, basis, and
-term-level decomposition; weight and basis support; structural shape
-inspection; configurable normalization; product resolution; and coefficient
-extraction from canonical basis expansions. These helpers are available to
-users and future workflows, but existing computational pipelines do not
-depend on them. The detailed C++ normalization result carries exact expression
-facts and per-term factor counts needed by those workflows. Normalization
+term-level decomposition; `terms` and `rawTerms`; weight and basis support;
+decoded atom reconstruction; straightening; engine-readability predicates;
+structural shape inspection; configurable normalization; product resolution;
+and coefficient extraction from canonical basis expansions. These helpers are
+shared by the public helper API and operation-specific workflows. The detailed
+C++ normalization result carries exact expression facts and per-term factor
+counts needed by those workflows. Normalization
 steps use individually valid metadata flags for bypasses and attach their
 established postconditions; product-free, normalized, skew-free results carry
 the complete metadata contract even when their basis support is mixed.

@@ -96,8 +96,10 @@ Loaded implementation files:
 - `builtInBases.m2`: pairing/specialization helpers and built-in metadata for
   `p,h,e,m,ff,S,Somega,q,b,Q,B,P,Pomega`.
 - `symmetricRingsAndElements.m2`: rings and elements, basis availability and
-  aliases, indexing/skewing, display, terms, sum/product, weight, and partitions.
-- `computations.m2`: straightening, equality, Jacobi–Trudi, conversions,
+  aliases, indexing/skewing, display, sum/product, and partitions.
+- `expressionHelpers.m2`: terms and raw terms, weights, straightening,
+  decomposition, structural inspection, normalization, and coefficient maps.
+- `computations.m2`: equality, Jacobi–Trudi, conversions,
   specialization, plethysm/`@`, omega, multiplication dispatch, and inner products.
 
 Documentation: `M2/Macaulay2/packages/SymmetricRings/documentation.m2`.
@@ -121,7 +123,8 @@ The engine subsystem is `M2/Macaulay2/e/symmetric-rings/`:
 - `presentation.cpp`: stable user-facing ordering and display formatting.
 - `symmetric-engine-ring.*`: engine ring class and shared state.
 - `arithmetic.*`: arithmetic, comparison, hashing, terms, weights, constructors.
-- `expression-inspection.cpp`: shared basis-expansion and coefficient-map probes.
+- `expression-helpers.*`: shared expression facts and metadata, basis-expansion
+  probes, decomposition, reconstruction, inspection, and normalization workflows.
 - `basis-conversion-policy.*`: reusable performance-only selector facts.
 - `basis-conversion-plans.cpp`: policy-free complete conversion plans.
 - `basis-conversion-picker.cpp`: ordered endpoint performance policy.
