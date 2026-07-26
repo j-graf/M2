@@ -515,6 +515,197 @@ export rawSymmetricRingsCopyConversionMetadata(e:Expr):Expr := (
      else WrongNumArgs(2));
 setupfun("rawSymmetricRingsCopyConversionMetadata", rawSymmetricRingsCopyConversionMetadata);
 
+export rawSymmetricRingsHomogeneousComponents(e:Expr):Expr := (
+     when e
+     is f:RawRingElementCell do
+	  toExpr(Ccode(RawRingElementArrayOrNull,
+	       "rawSymmetricRingsHomogeneousComponents(", f.p, ")"))
+     else WrongArg(1, "a raw ring element"));
+setupfun("rawSymmetricRingsHomogeneousComponents", rawSymmetricRingsHomogeneousComponents);
+
+export rawSymmetricRingsHomogeneousComponent(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 2 then return WrongNumArgs(2);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is weight:ZZcell do (
+		    if !isInt(weight) then return WrongArgSmallInteger(2);
+		    toExpr(Ccode(RawRingElementOrNull,
+			 "rawSymmetricRingsHomogeneousComponent(",
+			 f.p, ", ", toInt(weight), ")")))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(2));
+setupfun("rawSymmetricRingsHomogeneousComponent", rawSymmetricRingsHomogeneousComponent);
+
+export rawSymmetricRingsWeightSupport(e:Expr):Expr := (
+     when e
+     is f:RawRingElementCell do
+	  toExpr(Ccode(array(int),
+	       "rawSymmetricRingsWeightSupport(", f.p, ")"))
+     else WrongArg(1, "a raw ring element"));
+setupfun("rawSymmetricRingsWeightSupport", rawSymmetricRingsWeightSupport);
+
+export rawSymmetricRingsTruncateWeights(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 3 then return WrongNumArgs(3);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is minimumWeight:ZZcell do (
+		    if !isInt(minimumWeight) then return WrongArgSmallInteger(2);
+		    when s.2
+		    is maximumWeight:ZZcell do (
+			 if !isInt(maximumWeight) then return WrongArgSmallInteger(3);
+			 toExpr(Ccode(RawRingElementOrNull,
+			      "rawSymmetricRingsTruncateWeights(",
+			      f.p, ", ", toInt(minimumWeight), ", ",
+			      toInt(maximumWeight), ")")))
+		    else WrongArgZZ(3))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(3));
+setupfun("rawSymmetricRingsTruncateWeights", rawSymmetricRingsTruncateWeights);
+
+export rawSymmetricRingsNormalizeExpression(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 4 then return WrongNumArgs(4);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is straightenIndices:Boolean do (
+		    when s.2
+		    is expandSkewFactors:Boolean do (
+			 when s.3
+			 is targetBasisId:ZZcell do (
+			      if !isInt(targetBasisId) then return WrongArgSmallInteger(4);
+			      toExpr(Ccode(RawRingElementOrNull,
+				   "rawSymmetricRingsNormalizeExpression(",
+					   f.p, ", ", toBoolean(s.1), ", ",
+					   toBoolean(s.2), ", ",
+				   toInt(targetBasisId), ")")))
+			 else WrongArgZZ(4))
+		    else WrongArg(3, "a Boolean"))
+	       else WrongArg(2, "a Boolean"))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(4));
+setupfun("rawSymmetricRingsNormalizeExpression", rawSymmetricRingsNormalizeExpression);
+
+export rawSymmetricRingsExpandSkewFactors(e:Expr):Expr := (
+     when e
+     is f:RawRingElementCell do
+	  toExpr(Ccode(RawRingElementOrNull,
+	       "rawSymmetricRingsExpandSkewFactors(", f.p, ")"))
+     else WrongArg(1, "a raw ring element"));
+setupfun("rawSymmetricRingsExpandSkewFactors", rawSymmetricRingsExpandSkewFactors);
+
+export rawSymmetricRingsExpandProductsInBasis(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 2 then return WrongNumArgs(2);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is targetBasisId:ZZcell do (
+		    if !isInt(targetBasisId) then return WrongArgSmallInteger(2);
+		    toExpr(Ccode(RawRingElementOrNull,
+			 "rawSymmetricRingsExpandProductsInBasis(",
+			 f.p, ", ", toInt(targetBasisId), ")")))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(2));
+setupfun("rawSymmetricRingsExpandProductsInBasis", rawSymmetricRingsExpandProductsInBasis);
+
+export rawSymmetricRingsExpressionShape(e:Expr):Expr := (
+     when e
+     is f:RawRingElementCell do
+	  toExpr(Ccode(array(int),
+	       "rawSymmetricRingsExpressionShape(", f.p, ")"))
+     else WrongArg(1, "a raw ring element"));
+setupfun("rawSymmetricRingsExpressionShape", rawSymmetricRingsExpressionShape);
+
+export rawSymmetricRingsBasisSupport(e:Expr):Expr := (
+     when e
+     is f:RawRingElementCell do
+	  toExpr(Ccode(array(int),
+	       "rawSymmetricRingsBasisSupport(", f.p, ")"))
+     else WrongArg(1, "a raw ring element"));
+setupfun("rawSymmetricRingsBasisSupport", rawSymmetricRingsBasisSupport);
+
+export rawSymmetricRingsBasisComponents(e:Expr):Expr := (
+     when e
+     is f:RawRingElementCell do
+	  toExpr(Ccode(RawRingElementArrayOrNull,
+	       "rawSymmetricRingsBasisComponents(", f.p, ")"))
+     else WrongArg(1, "a raw ring element"));
+setupfun("rawSymmetricRingsBasisComponents", rawSymmetricRingsBasisComponents);
+
+export rawSymmetricRingsIsBasisExpansion(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 2 then return WrongNumArgs(2);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is basisId:ZZcell do (
+		    if !isInt(basisId) then return WrongArgSmallInteger(2);
+		    toExpr(Ccode(bool,
+			 "rawSymmetricRingsIsBasisExpansion(",
+			 f.p, ", ", toInt(basisId), ")")))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(2));
+setupfun("rawSymmetricRingsIsBasisExpansion", rawSymmetricRingsIsBasisExpansion);
+
+export rawSymmetricRingsIsLinearCombinationOfBasisElements(e:Expr):Expr := (
+     when e
+     is f:RawRingElementCell do
+	  toExpr(Ccode(bool,
+	       "rawSymmetricRingsIsLinearCombinationOfBasisElements(", f.p, ")"))
+     else WrongArg(1, "a raw ring element"));
+setupfun("rawSymmetricRingsIsLinearCombinationOfBasisElements", rawSymmetricRingsIsLinearCombinationOfBasisElements);
+
+export rawSymmetricRingsCoefficientsInBasis(e:Expr):Expr := (
+     when e
+     is s:Sequence do (
+	  if length(s) != 3 then return WrongNumArgs(3);
+	  when s.0
+	  is f:RawRingElementCell do (
+	       when s.1
+	       is basisId:ZZcell do (
+		    if !isInt(basisId) then return WrongArgSmallInteger(2);
+		    when s.2
+		    is convert:Boolean do
+			 toExpr(Ccode(RawRingElementOrNull,
+			      "rawSymmetricRingsCoefficientsInBasis(",
+			      f.p, ", ", toInt(basisId), ", ",
+				      toBoolean(s.2), ")"))
+		    else WrongArg(3, "a Boolean"))
+	       else WrongArgZZ(2))
+	  else WrongArg(1, "a raw ring element"))
+     else WrongNumArgs(3));
+setupfun("rawSymmetricRingsCoefficientsInBasis", rawSymmetricRingsCoefficientsInBasis);
+
+export rawSymmetricRingsHomogeneousBasisComponents(e:Expr):Expr := (
+     when e
+     is f:RawRingElementCell do
+	  toExpr(Ccode(RawRingElementArrayOrNull,
+	       "rawSymmetricRingsHomogeneousBasisComponents(", f.p, ")"))
+     else WrongArg(1, "a raw ring element"));
+setupfun("rawSymmetricRingsHomogeneousBasisComponents", rawSymmetricRingsHomogeneousBasisComponents);
+
+export rawSymmetricRingsSinglePartitionIndexedTerms(e:Expr):Expr := (
+     when e
+     is f:RawRingElementCell do
+	  toExpr(Ccode(RawRingElementArrayOrNull,
+	       "rawSymmetricRingsSinglePartitionIndexedTerms(", f.p, ")"))
+     else WrongArg(1, "a raw ring element"));
+setupfun("rawSymmetricRingsSinglePartitionIndexedTerms", rawSymmetricRingsSinglePartitionIndexedTerms);
+
 export rawSymmetricRingsOmega(e:Expr):Expr := (
      when e
      is s:Sequence do (

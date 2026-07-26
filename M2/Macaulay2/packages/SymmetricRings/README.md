@@ -82,9 +82,10 @@ functions from `Core`, and loads these files in order:
 3. `transformedBases.m2`
 4. `builtInBases.m2`
 5. `symmetricRingsAndElements.m2`
-6. `computations.m2`
-7. `documentation.m2`
-8. `tests.m2`
+6. `expressionHelpers.m2`
+7. `computations.m2`
+8. `documentation.m2`
+9. `tests.m2`
 
 The ordering matters: later files use types, registries, and helper methods
 defined earlier.
@@ -146,6 +147,27 @@ It owns:
 - display and expression formatting;
 - `terms`, `rawTerms`, `sum`, `product`, and `weight`;
 - partition/index normalization visible at the M2 level.
+
+### `expressionHelpers.m2`
+
+This file exposes general engine-backed expression utilities without making
+operation-specific policy decisions. It owns homogeneous, basis, and
+term-level decomposition; weight and basis support; structural shape
+inspection; configurable normalization; product resolution; and coefficient
+extraction from canonical basis expansions. These helpers are available to
+users and future workflows, but existing computational pipelines do not
+depend on them. The detailed C++ normalization result carries exact expression
+facts and per-term factor counts needed by those workflows. Normalization
+steps use individually valid metadata flags for bypasses and attach their
+established postconditions; product-free, normalized, skew-free results carry
+the complete metadata contract even when their basis support is mixed.
+Product resolution is term-local: its target basis is used only to multiply
+multifactor terms, while scalar and canonical single-factor terms retain their
+existing bases. The existing `terms` function exposes arbitrary additive
+summands, while `singlePartitionIndexedTerms` validates the stronger
+basis-neutral single-partition-indexed contract. M2 fallbacks use registered
+custom-basis conversion hooks rather than assuming that every basis is
+implemented by the engine.
 
 ### `computations.m2`
 

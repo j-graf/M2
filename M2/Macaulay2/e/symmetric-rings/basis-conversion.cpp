@@ -478,22 +478,30 @@ SymmetricEngineRing::expressionFactsFromMetadata(ring_elem f) const
             facts.productTermCount != facts.termCount ||
         facts.productTermCount != 0)
       return std::nullopt;
-    // A zero or scalar expansion has no distinguished basis. Every
-    // nonscalar canonical expansion must name its unique source basis.
-    if ((facts.singleFactorTermCount != 0 && !metadata.expandedBasis) ||
-        (facts.singleFactorTermCount == 0 && metadata.expandedBasis))
+    // A zero or scalar expansion has no basis support. A product-free mixed
+    // expansion is also pipeline-ready, but has no single expanded basis.
+    if (!metadata.factorBases)
       return std::nullopt;
-    facts.pureBasis = metadata.pureBasis
-        ? metadata.pureBasis : metadata.expandedBasis;
-    facts.expandedBasis = metadata.expandedBasis;
-    if (metadata.factorBases)
-      facts.factorBases = *metadata.factorBases;
-    else if (metadata.expandedBasis)
-      facts.factorBases = {*metadata.expandedBasis};
+    facts.factorBases = *metadata.factorBases;
+    if ((facts.singleFactorTermCount == 0 &&
+         (!facts.factorBases.empty() || metadata.expandedBasis)) ||
+        (facts.singleFactorTermCount != 0 &&
+         facts.factorBases.empty()))
+      return std::nullopt;
     if (metadata.expandedBasis &&
         (facts.factorBases.size() != 1 ||
-         facts.factorBases.front() != *metadata.expandedBasis))
+         facts.factorBases.front() !=
+             *metadata.expandedBasis))
       return std::nullopt;
+    if (!metadata.expandedBasis &&
+        facts.factorBases.size() == 1)
+      return std::nullopt;
+    if (metadata.pureBasis &&
+        (facts.factorBases.size() != 1 ||
+         facts.factorBases.front() != *metadata.pureBasis))
+      return std::nullopt;
+    facts.pureBasis = metadata.pureBasis;
+    facts.expandedBasis = metadata.expandedBasis;
     facts.skewFactorCount = 0;
     facts.homogeneousWeight = metadata.homogeneousWeight;
     facts.maximumPartitionLength =

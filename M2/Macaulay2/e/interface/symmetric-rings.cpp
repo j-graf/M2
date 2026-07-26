@@ -202,6 +202,132 @@ bool rawSymmetricRingsCopyConversionMetadata(const RingElement *source,
 }
 
 // ============================================================================
+// General Expression Helpers
+// ============================================================================
+
+engine_RawRingElementArray rawSymmetricRingsHomogeneousComponents(
+    const RingElement *f)
+{
+  return symmetric_rings::
+      rawSymmetricRingsHomogeneousComponents(f);
+}
+
+const RingElement *rawSymmetricRingsHomogeneousComponent(
+    const RingElement *f,
+    int weight)
+{
+  return symmetric_rings::
+      rawSymmetricRingsHomogeneousComponent(f, weight);
+}
+
+M2_arrayint rawSymmetricRingsWeightSupport(
+    const RingElement *f)
+{
+  return symmetric_rings::
+      rawSymmetricRingsWeightSupport(f);
+}
+
+const RingElement *rawSymmetricRingsTruncateWeights(
+    const RingElement *f,
+    int minimumWeight,
+    int maximumWeight)
+{
+  return symmetric_rings::rawSymmetricRingsTruncateWeights(
+      f, minimumWeight, maximumWeight);
+}
+
+const RingElement *rawSymmetricRingsNormalizeExpression(
+    const RingElement *f,
+    bool straightenIndices,
+    bool expandSkewFactors,
+    int productTargetBasisId)
+{
+  return symmetric_rings::rawSymmetricRingsNormalizeExpression(
+      f,
+      straightenIndices,
+      expandSkewFactors,
+      productTargetBasisId);
+}
+
+const RingElement *rawSymmetricRingsExpandSkewFactors(
+    const RingElement *f)
+{
+  return symmetric_rings::
+      rawSymmetricRingsExpandSkewFactors(f);
+}
+
+const RingElement *rawSymmetricRingsExpandProductsInBasis(
+    const RingElement *f,
+    int targetBasisId)
+{
+  return symmetric_rings::
+      rawSymmetricRingsExpandProductsInBasis(
+          f, targetBasisId);
+}
+
+M2_arrayint rawSymmetricRingsExpressionShape(
+    const RingElement *f)
+{
+  return symmetric_rings::
+      rawSymmetricRingsExpressionShape(f);
+}
+
+M2_arrayint rawSymmetricRingsBasisSupport(
+    const RingElement *f)
+{
+  return symmetric_rings::
+      rawSymmetricRingsBasisSupport(f);
+}
+
+engine_RawRingElementArray rawSymmetricRingsBasisComponents(
+    const RingElement *f)
+{
+  return symmetric_rings::
+      rawSymmetricRingsBasisComponents(f);
+}
+
+bool rawSymmetricRingsIsBasisExpansion(
+    const RingElement *f,
+    int basisId)
+{
+  return symmetric_rings::
+      rawSymmetricRingsIsBasisExpansion(
+          f, basisId);
+}
+
+bool rawSymmetricRingsIsLinearCombinationOfBasisElements(
+    const RingElement *f)
+{
+  return symmetric_rings::
+      rawSymmetricRingsIsLinearCombinationOfBasisElements(f);
+}
+
+const RingElement *rawSymmetricRingsCoefficientsInBasis(
+    const RingElement *f,
+    int basisId,
+    bool convert)
+{
+  return symmetric_rings::
+      rawSymmetricRingsCoefficientsInBasis(
+          f, basisId, convert);
+}
+
+engine_RawRingElementArray
+rawSymmetricRingsHomogeneousBasisComponents(
+    const RingElement *f)
+{
+  return symmetric_rings::
+      rawSymmetricRingsHomogeneousBasisComponents(f);
+}
+
+engine_RawRingElementArray rawSymmetricRingsSinglePartitionIndexedTerms(
+    const RingElement *f)
+{
+  return symmetric_rings::
+      rawSymmetricRingsSinglePartitionIndexedTerms(f);
+}
+
+// ============================================================================
 // Omega, Straightening, And Pairing Interface
 // ============================================================================
 

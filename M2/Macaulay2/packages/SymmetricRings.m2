@@ -30,6 +30,21 @@ export {
     "omegaPartners",
     "specializations",
     "innerProductPairings",
+    "homogeneousComponents",
+    "homogeneousComponent",
+    "weightSupport",
+    "truncateWeights",
+    "normalizeExpression",
+    "expandSkewFactors",
+    "expandProductsInBasis",
+    "expressionShape",
+    "basisSupport",
+    "basisComponents",
+    "isBasisExpansion",
+    "isLinearCombinationOfBasisElements",
+    "coefficientsInBasis",
+    "homogeneousBasisComponents",
+    "singlePartitionIndexedTerms",
     "straighten",
     "toBasis",
     "toS",
@@ -76,6 +91,21 @@ importFrom(Core, {
     "rawSymmetricRingsSingleBasisId",
     "rawSymmetricRingsHasPlethysmProvenance",
     "rawSymmetricRingsCopyConversionMetadata",
+    "rawSymmetricRingsHomogeneousComponents",
+    "rawSymmetricRingsHomogeneousComponent",
+    "rawSymmetricRingsWeightSupport",
+    "rawSymmetricRingsTruncateWeights",
+    "rawSymmetricRingsNormalizeExpression",
+    "rawSymmetricRingsExpandSkewFactors",
+    "rawSymmetricRingsExpandProductsInBasis",
+    "rawSymmetricRingsExpressionShape",
+    "rawSymmetricRingsBasisSupport",
+    "rawSymmetricRingsBasisComponents",
+    "rawSymmetricRingsIsBasisExpansion",
+    "rawSymmetricRingsIsLinearCombinationOfBasisElements",
+    "rawSymmetricRingsCoefficientsInBasis",
+    "rawSymmetricRingsHomogeneousBasisComponents",
+    "rawSymmetricRingsSinglePartitionIndexedTerms",
     "rawSymmetricRingsOmega",
     "rawSymmetricRingsStraighten",
     "rawSymmetricRingsHallInnerProduct",
@@ -97,6 +127,7 @@ load "SymmetricRings/operators.m2"
 load "SymmetricRings/transformedBases.m2"
 load "SymmetricRings/builtInBases.m2"
 load "SymmetricRings/symmetricRingsAndElements.m2"
+load "SymmetricRings/expressionHelpers.m2"
 load "SymmetricRings/computations.m2"
 
 beginDocumentation()

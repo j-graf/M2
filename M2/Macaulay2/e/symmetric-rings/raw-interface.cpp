@@ -24,6 +24,30 @@ Partition partitionFromM2Array(M2_arrayint a)
     return result;
 }
 
+engine_RawRingElementArray ringElementArray(
+    const SymmetricEngineRing *S,
+    const std::vector<ring_elem>& elements)
+{
+    engine_RawRingElementArray result =
+        getmemarraytype(
+            engine_RawRingElementArray,
+            static_cast<int>(elements.size()));
+    result->len = static_cast<int>(elements.size());
+    for (int i = 0; i < result->len; ++i)
+      result->array[i] =
+          RingElement::make_raw(S, elements[i]);
+    return result;
+}
+
+M2_arrayint integerArray(const std::vector<int>& values)
+{
+    M2_arrayint result =
+        M2_makearrayint(static_cast<int>(values.size()));
+    for (size_t i = 0; i < values.size(); ++i)
+      result->array[i] = values[i];
+    return result;
+}
+
 } // namespace
 
 // ============================================================================
@@ -504,6 +528,350 @@ bool rawSymmetricRingsCopyConversionMetadata(const RingElement *source,
     {
       ERROR(e.what());
       return false;
+    }
+}
+
+// ============================================================================
+// General Expression Helpers
+// ============================================================================
+
+engine_RawRingElementArray rawSymmetricRingsHomogeneousComponents(
+    const RingElement *f)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      const auto components =
+          S->homogeneousComponents(f->get_value());
+      std::vector<ring_elem> expressions;
+      expressions.reserve(components.size());
+      for (const auto& component : components)
+        expressions.push_back(component.expression);
+      return ringElementArray(S, expressions);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+const RingElement *rawSymmetricRingsHomogeneousComponent(
+    const RingElement *f,
+    int weight)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      return RingElement::make_raw(
+          S,
+          S->homogeneousComponent(
+              f->get_value(), weight));
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+M2_arrayint rawSymmetricRingsWeightSupport(
+    const RingElement *f)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      return integerArray(
+          S->weightSupport(f->get_value()));
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+const RingElement *rawSymmetricRingsTruncateWeights(
+    const RingElement *f,
+    int minimumWeight,
+    int maximumWeight)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      ring_elem result = S->truncateWeights(
+          f->get_value(),
+          minimumWeight,
+          maximumWeight);
+      if (error()) return nullptr;
+      return RingElement::make_raw(S, result);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+const RingElement *rawSymmetricRingsNormalizeExpression(
+    const RingElement *f,
+    bool straightenIndices,
+    bool expandSkewFactors,
+    int productTargetBasisId)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      SymmetricEngineRing::ExpressionNormalizationOptions options;
+      options.straightenIndices = straightenIndices;
+      options.expandSkewFactors = expandSkewFactors;
+      options.productTargetBasisId = productTargetBasisId;
+      ring_elem result =
+          S->normalizeExpressionWithOptions(
+              f->get_value(), options);
+      if (error()) return nullptr;
+      return RingElement::make_raw(S, result);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+const RingElement *rawSymmetricRingsExpandSkewFactors(
+    const RingElement *f)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      ring_elem result =
+          S->expandSkewFactors(f->get_value());
+      if (error()) return nullptr;
+      return RingElement::make_raw(S, result);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+const RingElement *rawSymmetricRingsExpandProductsInBasis(
+    const RingElement *f,
+    int targetBasisId)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      ring_elem result = S->expandProductsInBasis(
+          f->get_value(), targetBasisId);
+      if (error()) return nullptr;
+      return RingElement::make_raw(S, result);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+M2_arrayint rawSymmetricRingsExpressionShape(
+    const RingElement *f)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      const auto shape =
+          S->expressionShape(f->get_value());
+      std::vector<int> values{
+          2,
+          static_cast<int>(shape.termCount),
+          static_cast<int>(shape.scalarTermCount),
+          static_cast<int>(shape.singleFactorTermCount),
+          static_cast<int>(shape.productTermCount),
+          static_cast<int>(shape.maximumFactorsPerTerm),
+          static_cast<int>(shape.skewFactorCount),
+          static_cast<int>(shape.maximumPartitionLength),
+          shape.normalized ? 1 : 0,
+          shape.skewFree ? 1 : 0,
+          shape.collected ? 1 : 0,
+          shape.homogeneousWeight.value_or(-1),
+          shape.pureBasis.value_or(-1),
+          shape.expandedBasis.value_or(-1),
+          static_cast<int>(shape.basisIds.size())};
+      values.insert(
+          values.end(),
+          shape.basisIds.begin(),
+          shape.basisIds.end());
+      values.push_back(
+          static_cast<int>(shape.weights.size()));
+      values.insert(
+          values.end(),
+          shape.weights.begin(),
+          shape.weights.end());
+      values.push_back(shape.hasMetadata ? 1 : 0);
+      values.push_back(
+          shape.metadataFactsComplete ? 1 : 0);
+      values.push_back(
+          shape.metadataNormalized ? 1 : 0);
+      values.push_back(
+          shape.metadataSkewFree ? 1 : 0);
+      values.push_back(
+          shape.metadataCollected ? 1 : 0);
+      return integerArray(values);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+M2_arrayint rawSymmetricRingsBasisSupport(
+    const RingElement *f)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      return integerArray(
+          S->basisSupport(f->get_value()));
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+engine_RawRingElementArray rawSymmetricRingsBasisComponents(
+    const RingElement *f)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      const auto components =
+          S->basisComponents(f->get_value());
+      if (error()) return nullptr;
+      std::vector<ring_elem> expressions;
+      expressions.reserve(components.size());
+      for (const auto& component : components)
+        expressions.push_back(component.expression);
+      return ringElementArray(S, expressions);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+bool rawSymmetricRingsIsBasisExpansion(
+    const RingElement *f,
+    int basisId)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return false;
+      return S->isBasisExpansion(
+          f->get_value(), basisId);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return false;
+    }
+}
+
+bool rawSymmetricRingsIsLinearCombinationOfBasisElements(
+    const RingElement *f)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return false;
+      return S->isLinearCombinationOfBasisElements(
+          f->get_value());
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return false;
+    }
+}
+
+const RingElement *rawSymmetricRingsCoefficientsInBasis(
+    const RingElement *f,
+    int basisId,
+    bool convert)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      ring_elem result =
+          S->coefficientsInBasisExpression(
+              f->get_value(), basisId, convert);
+      if (error()) return nullptr;
+      return RingElement::make_raw(S, result);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+engine_RawRingElementArray
+rawSymmetricRingsHomogeneousBasisComponents(
+    const RingElement *f)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      const auto components =
+          S->homogeneousBasisComponents(
+              f->get_value());
+      if (error()) return nullptr;
+      std::vector<ring_elem> expressions;
+      expressions.reserve(components.size());
+      for (const auto& component : components)
+        expressions.push_back(component.expression);
+      return ringElementArray(S, expressions);
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
+    }
+}
+
+engine_RawRingElementArray rawSymmetricRingsSinglePartitionIndexedTerms(
+    const RingElement *f)
+{
+  try
+    {
+      const auto *S = symmetricRingFromElement(f);
+      if (error()) return nullptr;
+      return ringElementArray(
+          S, S->singlePartitionIndexedTerms(f->get_value()));
+    }
+  catch (const exc::engine_error& e)
+    {
+      ERROR(e.what());
+      return nullptr;
     }
 }
 

@@ -16,6 +16,141 @@ TEST ///
 
 TEST ///
     R0 = symmetricRing QQ
+    f = 3 + h_1 + S_2 + 2*p_3 + S_1*h_2
+
+    homogeneousParts = homogeneousComponents f
+    assert(weightSupport f === {0, 1, 2, 3})
+    assert(apply(homogeneousParts, weight) === {0, 1, 2, 3})
+    assert(sum homogeneousParts == f)
+    assert(homogeneousComponent(f, 3) == 2*p_3 + S_1*h_2)
+    assert(homogeneousComponent(f, 4) == 0)
+    assert(truncateWeights(f, 1, 2) == h_1 + S_2)
+    assert(homogeneousComponents 0_R0 === {})
+    assert((expressionShape 0_R0)#"TermCount" == 0)
+    assert((expressionShape 0_R0)#"Weights" === {})
+
+    shape = expressionShape f
+    assert(shape#"Weights" === {0, 1, 2, 3})
+    assert(shape#"TermCount" == 5)
+    assert(shape#"ScalarTermCount" == 1)
+    assert(shape#"SingleFactorTermCount" == 3)
+    assert(shape#"ProductTermCount" == 1)
+    assert(shape#"MaximumFactorsPerTerm" == 2)
+    assert(shape#"HomogeneousWeight" === null)
+    assert(shape#"PureBasis" === null)
+    assert(shape#"SkewFree")
+    assert(apply(shape#"BasisSupport", B -> B#"BasisKey") ===
+        {"PowerSum", "Complete", "Schur"})
+    assert(apply(basisSupport f, B -> B#"BasisKey") ===
+        {"PowerSum", "Complete", "Schur"})
+
+    productFree = 3 + h_1 + S_2 + p_3
+    byBasis = basisComponents productFree
+    assert(sum apply(byBasis, component -> component#"Expression") == productFree)
+    assert(apply(byBasis, component ->
+            if component#"Basis" === null
+            then null
+            else component#"Basis"#"BasisKey") ===
+        {null, "PowerSum", "Complete", "Schur"})
+    byWeightAndBasis = homogeneousBasisComponents productFree
+    assert(sum apply(byWeightAndBasis, component -> component#"Expression") ==
+        productFree)
+    assert(apply(byWeightAndBasis, component -> component#"Weight") ===
+        {0, 1, 2, 3})
+    assert(try (basisComponents f; false) else true)
+
+    canonical = 2*S_2 - 3*S_{1,1}
+    assert(isBasisExpansion(canonical, S))
+    assert(not isBasisExpansion(h_2, S))
+    coefficientMap = coefficientsInBasis(canonical, S)
+    assert(sort keys coefficientMap === {{1,1}, {2}})
+    assert(coefficientMap#{2} == 2)
+    assert(coefficientMap#{1,1} == -3)
+    convertedCoefficientMap = coefficientsInBasis(h_2, S, "Convert" => true)
+    assert(keys convertedCoefficientMap === {{2}})
+    assert(convertedCoefficientMap#{2} == 1)
+    assert(try (coefficientsInBasis(h_2, S); false) else true)
+    assert(sum terms f == f)
+    assert(not isLinearCombinationOfBasisElements f)
+    assert(try (singlePartitionIndexedTerms f; false) else true)
+
+    assert(normalizeExpression S_{1,3} == -S_{2,2})
+    assert(normalizeExpression(S_{1,3}, "StraightenIndices" => false) ==
+        S_{1,3})
+    assert(expandSkewFactors S_{{3,1},{1}} == h_{2,1})
+    assert(expandSkewFactors(S_{{3,1},{1}} + S_{1,3}) ==
+        h_{2,1} + S_{1,3})
+    assert(expandProductsInBasis(S_1*S_1, S) == S_2 + S_{1,1})
+    assert(normalizeExpression(S_1*S_1, "ProductTarget" => S) ==
+        S_2 + S_{1,1})
+
+    mixedProductInput = h_2 + p_3 + S_1*S_1
+    mixedProductResolved =
+        expandProductsInBasis(mixedProductInput, S)
+    resolvedByBasis = hashTable apply(
+        select(
+            basisComponents mixedProductResolved,
+            component -> component#"Basis" =!= null),
+        component ->
+            component#"Basis"#"BasisKey" =>
+                component#"Expression")
+    assert(resolvedByBasis#"Complete" == h_2)
+    assert(resolvedByBasis#"PowerSum" == p_3)
+    assert(resolvedByBasis#"Schur" == S_2 + S_{1,1})
+    resolvedShape = expressionShape mixedProductResolved
+    assert(resolvedShape#"ProductTermCount" == 0)
+    assert(resolvedShape#"Normalized")
+    assert(resolvedShape#"SkewFree")
+    assert(resolvedShape#"MetadataFactsComplete")
+    assert(not isBasisExpansion(mixedProductResolved, S))
+    assert(isLinearCombinationOfBasisElements mixedProductResolved)
+    assert(sum singlePartitionIndexedTerms mixedProductResolved == mixedProductResolved)
+    assert(rawTerms(normalizeExpression(
+            mixedProductInput, "ProductTarget" => S)) ===
+        rawTerms mixedProductResolved)
+
+    productNormalized = normalizeExpression(S_1*h_2)
+    productShape = expressionShape productNormalized
+    assert(productShape#"MetadataNormalized")
+    assert(productShape#"MetadataSkewFree")
+    assert(productShape#"MetadataCollected")
+    assert(not productShape#"MetadataFactsComplete")
+    assert(productShape#"ProductTermCount" == 1)
+
+    skewExpandedOnly =
+        expandSkewFactors(S_{{3,1},{1}} + S_{1,3})
+    skewExpandedShape = expressionShape skewExpandedOnly
+    assert(skewExpandedShape#"MetadataSkewFree")
+    assert(not skewExpandedShape#"MetadataNormalized")
+    assert(not skewExpandedShape#"MetadataFactsComplete")
+    assert(normalizeExpression(
+            skewExpandedOnly, "ExpandSkew" => true) ==
+        h_{2,1} - S_{2,2})
+
+    pipelineReady =
+        normalizeExpression(
+            S_{{3,1},{1}} + S_{1,3},
+            "ExpandSkew" => true)
+    pipelineReadyShape = expressionShape pipelineReady
+    assert(pipelineReadyShape#"MetadataFactsComplete")
+    assert(pipelineReadyShape#"MetadataNormalized")
+    assert(pipelineReadyShape#"MetadataSkewFree")
+    assert(pipelineReadyShape#"MetadataCollected")
+
+    mixedReady =
+        normalizeExpression(h_1 + S_2, "ExpandSkew" => true)
+    mixedReadyShape = expressionShape mixedReady
+    assert(mixedReadyShape#"MetadataFactsComplete")
+    assert(mixedReadyShape#"ExpandedBasis" === null)
+    assert(toBasis(mixedReady, p) == toBasis(h_1 + S_2, p))
+    assert(multiplyToBasis(mixedReady, e_1, S) ==
+        multiplyToBasis(h_1 + S_2, e_1, S))
+    assert(hallInnerProduct(mixedReady, S_2) ==
+        hallInnerProduct(h_1 + S_2, S_2))
+///
+
+TEST ///
+    R0 = symmetricRing QQ
     partitionDisplay = p_5 + p_{4,1} + p_{3,2} + p_{3,1,1} +
         p_{2,2,1} + p_{2,1,1,1} + p_{1,1,1,1,1}
     assert(toString partitionDisplay ==
@@ -203,6 +338,30 @@ TEST ///
     assert(multiplyToBasis(HScaledSolo_2, S_1, S) ==
            toBasis(HScaledSolo_2*S_1, S))
     assert(hallInnerProduct(HScaledSolo_{2,1}, m_{2,1}) == 4_QQ)
+
+    customHelperInput = HScaledSolo_2 + HScaledSolo_1*S_1
+    customHelperResolved = expandProductsInBasis(customHelperInput, S)
+    customHelperByBasis = hashTable apply(
+        select(
+            basisComponents customHelperResolved,
+            component -> component#"Basis" =!= null),
+        component ->
+            component#"Basis"#"BasisKey" =>
+                component#"Expression")
+    assert(customHelperByBasis#"HScaledSolo" == HScaledSolo_2)
+    assert(customHelperByBasis#"Schur" == 2*S_2 + 2*S_{1,1})
+    assert(isLinearCombinationOfBasisElements customHelperResolved)
+    assert(rawTerms(normalizeExpression(
+            customHelperInput, "ProductTarget" => S)) ===
+        rawTerms customHelperResolved)
+    customSkewExpanded =
+        expandSkewFactors(HScaledSolo_1*S_{{2},{1}})
+    assert(customSkewExpanded == HScaledSolo_1*h_1)
+    assert((expressionShape customSkewExpanded)#"SkewFree")
+    customHelperCoefficients =
+        coefficientsInBasis(h_2, HScaledSolo, "Convert" => true)
+    assert(keys customHelperCoefficients === {{2}})
+    assert(customHelperCoefficients#{2} == 1/2)
 ///
 
 TEST ///

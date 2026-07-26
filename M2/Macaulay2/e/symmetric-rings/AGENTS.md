@@ -144,6 +144,8 @@ raw dispatch entry points.
   fallbacks.
 - `presentation.cpp`: presentation ordering and string rendering.
 - `expression-inspection.cpp`: shared expression-shape and coefficient-map probes.
+- `expression-helpers.*`: public decomposition, structural inspection, and
+  configurable normalization helpers.
 - `plethysm.*` and `omega.*`: their respective major operations.
 - `inner-product-dispatch.*`: inner-product requests, profiles, selectors,
   tracing, pipeline orchestration, and public entry points.

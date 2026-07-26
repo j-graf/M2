@@ -48,6 +48,7 @@ The principal files are:
 | `partitions.*` | Partition utilities and combinatorial enumeration |
 | `arithmetic.*` | Addition, multiplication, scalar operations, and product tagging |
 | `expression-inspection.*` | Shared expression-shape and coefficient-map inspection |
+| `expression-helpers.*` | Public decomposition, structural inspection, and configurable normalization helpers |
 | `expression-conditions.*` | Inspectable plan conditions and ordered expression-piece partitioning |
 | `basis-conversion-policy.*` | Reusable performance-only selection facts |
 | `basis-conversion-plans.cpp` | Policy-free complete conversion plans whose cases use a kernel or a nonempty fixed composition |
@@ -70,6 +71,23 @@ The principal files are:
 Some class declarations are split among topic-specific header fragments and
 included into the central class.  This is organizational, not a separate
 object hierarchy.
+
+The normalization helper exposes a detailed result containing the realized
+expression, exact `ExpressionFacts`, and per-term factor counts. Its pipeline
+preparation preset establishes collected, straightened, skew-free factors
+while deliberately permitting products. Individually valid metadata flags
+bypass already-completed steps; the helper attaches the postconditions it
+establishes, and marks the complete metadata core when the result is also
+product-free. Conversion and multiplication retain their current preparation
+code until they are migrated deliberately. The helper also preserves
+combinatorial provenance tags, since later conversion policy may distinguish
+plethysm, Pieri, Littlewood--Richardson, and other structural origins.
+Its product-resolution option is not a full basis conversion: it converts only
+multifactor terms to the requested target and leaves canonical single-factor
+terms in their original bases. The validated
+`singlePartitionIndexedTerms` helper requires every summand to be scalar or a
+coefficient times one normalized, skew-free, partition-indexed basis element,
+while allowing different terms to use different bases.
 
 The current end-to-end diagrams are kept in
 [`README-pipelines.md`](README-pipelines.md). This guide explains ownership

@@ -1436,6 +1436,198 @@ doc ///
 
  Node
   Key
+   homogeneousComponents
+   (homogeneousComponents,SymmetricRingElement)
+   homogeneousComponent
+   (homogeneousComponent,SymmetricRingElement,ZZ)
+   weightSupport
+   (weightSupport,SymmetricRingElement)
+   truncateWeights
+   (truncateWeights,SymmetricRingElement,ZZ,ZZ)
+  Headline
+   decompose and restrict an expression by weight
+  Usage
+   homogeneousComponents f
+   homogeneousComponent(f,d)
+   weightSupport f
+   truncateWeights(f,a,b)
+  Description
+   Text
+    These functions inspect the stored grading without changing bases.
+    @TO homogeneousComponents@ returns the nonzero homogeneous components in
+    increasing weight order, while @TO homogeneousComponent@ selects one
+    weight and returns zero if it is absent.  @TO weightSupport@ returns the
+    corresponding list of weights, and @TO truncateWeights@ retains weights in
+    the inclusive interval from $a$ through $b$.
+   Example
+    A = QQ
+    R = symmetricRing A
+    F = 3 + h_1 + S_2 + 2*p_3 + S_1*h_2
+    weightSupport F
+    homogeneousComponents F
+    homogeneousComponent(F,3)
+    truncateWeights(F,1,2)
+   Text
+    The decomposition is implemented directly in the C++ engine and is a
+    general expression utility.  In particular, it does not depend on the
+    inner-product pipeline.
+
+ Node
+  Key
+   normalizeExpression
+   expandSkewFactors
+   (expandSkewFactors,SymmetricRingElement)
+   expandProductsInBasis
+  Headline
+   normalize the structural form of an expression
+  Usage
+   normalizeExpression f
+   expandSkewFactors f
+   expandProductsInBasis(f,B)
+  Description
+   Text
+    @TO normalizeExpression@ provides one entry point for structural
+    normalization.  By default it straightens composition indices.  The
+    string options "StraightenIndices" and "ExpandSkew" are Boolean.
+    "ProductTarget" may be a basis and requests that each product-bearing term
+    be multiplied into a canonical expansion in that basis.  Scalar and
+    already-single-factor terms keep their existing bases, so the resulting
+    expression may remain mixed-basis even though every term is product-free.
+   Example
+    A = QQ
+    R = symmetricRing A
+    normalizeExpression S_{1,3}
+    normalizeExpression(S_1*S_1,"ProductTarget"=>S)
+   Text
+    Each requested step uses attached engine metadata as a proof that the step
+    may be bypassed when possible.  The result receives metadata for the
+    postconditions actually established: normalized indices, skew-freeness,
+    collected storage, support, weight, and exact canonical facts when the
+    result is product-free.  Request both "StraightenIndices" and "ExpandSkew"
+    to obtain the preparation contract used by conversion and multiplication
+    pipelines before their product-specific stages.
+   Example
+    ready = normalizeExpression(
+        S_{{3,1},{1}} + S_{1,3},
+        "ExpandSkew"=>true)
+    shape = expressionShape ready
+    apply({"MetadataFactsComplete","MetadataNormalized",
+            "MetadataSkewFree","MetadataCollected"},
+        key -> key => shape#key)
+   Text
+    @TO expandSkewFactors@ expands every skew factor without choosing a single
+    target basis for unrelated factors, including when another factor uses a
+    custom basis.  @TO expandProductsInBasis@ chooses the basis used to
+    multiply multifactor terms.  Before multiplication it straightens indices
+    and expands skew factors.  It passes scalar and canonical single-factor
+    terms through unchanged, and therefore returns a product-free, skew-free,
+    straightened expression whose terms may belong to different bases.
+   Example
+    expandSkewFactors S_{{3,1},{1}}
+    expandProductsInBasis(S_1*S_1,S)
+    expandProductsInBasis(h_2 + p_3 + S_1*S_1,S)
+
+ Node
+  Key
+   expressionShape
+   (expressionShape,SymmetricRingElement)
+   basisSupport
+   (basisSupport,SymmetricRingElement)
+  Headline
+   inspect the shape and basis support of an expression
+  Usage
+   expressionShape f
+   basisSupport f
+  Description
+   Text
+    @TO expressionShape@ returns a hash table of stable structural facts:
+    weight and basis support, term counts, scalar/single-factor/product
+    counts, maximum factor and partition lengths, skew-factor count,
+    normalization flags, and the homogeneous, pure-basis, or expanded-basis
+    certificates when they exist.  The "HasMetadata",
+    "MetadataFactsComplete", "MetadataNormalized", "MetadataSkewFree", and
+    "MetadataCollected" entries report which structural facts are attached to
+    the engine value rather than merely inferred during this inspection.
+    @TO basisSupport@ returns just the ring-attached bases occurring in the
+    factors.
+   Example
+    A = QQ
+    R = symmetricRing A
+    F = 3 + h_1 + S_2 + S_1*h_2
+    shape = expressionShape F
+    shape#"Weights"
+    shape#"ProductTermCount"
+    apply(basisSupport F, B -> B#"BasisKey")
+
+ Node
+  Key
+   basisComponents
+   (basisComponents,SymmetricRingElement)
+   homogeneousBasisComponents
+   (homogeneousBasisComponents,SymmetricRingElement)
+   singlePartitionIndexedTerms
+   (singlePartitionIndexedTerms,SymmetricRingElement)
+  Headline
+   split an expression into canonical structural pieces
+  Usage
+   basisComponents f
+   homogeneousBasisComponents f
+   singlePartitionIndexedTerms f
+  Description
+   Text
+    @TO basisComponents@ groups a product-free expression by basis and returns
+    hash tables with keys "Basis" and "Expression"; the scalar component has
+    basis @TT "null"@.  @TO homogeneousBasisComponents@ groups simultaneously
+    by weight and basis and adds the key "Weight".  Both functions reject
+    product-bearing terms because such a term has no unique basis.
+    @TO singlePartitionIndexedTerms@ returns the additive terms only after
+    verifying that every term is scalar or a coefficient times one
+    straightened, skew-free basis element with a partition index.  Use the
+    existing @TO terms@ function when this validation is not wanted.
+   Example
+    A = QQ
+    R = symmetricRing A
+    F = 3 + h_1 + S_2 + p_3
+    apply(basisComponents F, component -> component#"Expression")
+    apply(homogeneousBasisComponents F, component ->
+        {component#"Weight", component#"Expression"})
+    terms(F + S_1*h_2)
+    singlePartitionIndexedTerms expandProductsInBasis(F + S_1*h_2,S)
+
+ Node
+  Key
+   isBasisExpansion
+   isLinearCombinationOfBasisElements
+   coefficientsInBasis
+  Headline
+   recognize and extract a canonical basis expansion
+  Usage
+   isBasisExpansion(f,B)
+   isLinearCombinationOfBasisElements f
+   coefficientsInBasis(f,B)
+  Description
+   Text
+    @TO isBasisExpansion@ tests whether every nonscalar term of $f$ is one
+    canonical, skew-free factor in basis $B$.
+    @TO isLinearCombinationOfBasisElements@ tests the basis-neutral version of this
+    contract: every term must be scalar or one straightened, skew-free factor,
+    but different terms may use different bases.  @TO coefficientsInBasis@
+    returns a hash table from partition indices to coefficients and uses the
+    empty index for a scalar term.  It normally requires an already canonical
+    expansion; set the Boolean string option "Convert" to true to convert
+    first.  Conversion uses registered M2 hooks when either side is a custom
+    basis.
+   Example
+    A = QQ
+    R = symmetricRing A
+    F = 2*S_2 - 3*S_{1,1}
+    isBasisExpansion(F,S)
+    isLinearCombinationOfBasisElements(F + h_3)
+    coefficientsInBasis(F,S)
+    coefficientsInBasis(h_2,S,"Convert"=>true)
+
+ Node
+  Key
    straighten
    (straighten,SymmetricRingElement)
   Headline

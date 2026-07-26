@@ -101,6 +101,49 @@ bool rawSymmetricRingsCopyConversionMetadata(const RingElement *source,
                                              const RingElement *target);
 
 // ============================================================================
+// General Expression Helpers
+// ============================================================================
+
+engine_RawRingElementArray rawSymmetricRingsHomogeneousComponents(
+    const RingElement *f);
+const RingElement *rawSymmetricRingsHomogeneousComponent(
+    const RingElement *f,
+    int weight);
+M2_arrayint rawSymmetricRingsWeightSupport(const RingElement *f);
+const RingElement *rawSymmetricRingsTruncateWeights(
+    const RingElement *f,
+    int minimumWeight,
+    int maximumWeight);
+const RingElement *rawSymmetricRingsNormalizeExpression(
+    const RingElement *f,
+    bool straightenIndices,
+    bool expandSkewFactors,
+    int productTargetBasisId);
+const RingElement *rawSymmetricRingsExpandSkewFactors(
+    const RingElement *f);
+const RingElement *rawSymmetricRingsExpandProductsInBasis(
+    const RingElement *f,
+    int targetBasisId);
+M2_arrayint rawSymmetricRingsExpressionShape(const RingElement *f);
+M2_arrayint rawSymmetricRingsBasisSupport(const RingElement *f);
+engine_RawRingElementArray rawSymmetricRingsBasisComponents(
+    const RingElement *f);
+bool rawSymmetricRingsIsBasisExpansion(
+    const RingElement *f,
+    int basisId);
+bool rawSymmetricRingsIsLinearCombinationOfBasisElements(
+    const RingElement *f);
+const RingElement *rawSymmetricRingsCoefficientsInBasis(
+    const RingElement *f,
+    int basisId,
+    bool convert);
+engine_RawRingElementArray
+rawSymmetricRingsHomogeneousBasisComponents(
+    const RingElement *f);
+engine_RawRingElementArray rawSymmetricRingsSinglePartitionIndexedTerms(
+    const RingElement *f);
+
+// ============================================================================
 // Omega, Straightening, And Pairing Interface
 // ============================================================================
 
