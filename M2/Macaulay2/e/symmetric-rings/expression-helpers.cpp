@@ -19,7 +19,7 @@ namespace symmetric_rings {
 // Derived predicates live on ExpressionFacts so selectors do not maintain
 // redundant flags that can disagree with the underlying counts.
 
-SymmetricEngineRing::ExpressionFacts
+ExpressionFacts
 SymmetricEngineRing::inferExpressionFacts(
     ring_elem f,
     std::vector<size_t> *termFactorCounts) const
@@ -112,7 +112,10 @@ SymmetricEngineRing::inferExpressionFacts(
     std::sort(facts.factorBases.begin(), facts.factorBases.end());
     if (facts.factorBases.size() == 1)
       facts.pureBasis = facts.factorBases.front();
-    if (facts.productTermCount == 0 &&
+    if (facts.normalized &&
+        facts.skewFree &&
+        facts.collected &&
+        facts.productTermCount == 0 &&
         facts.singleFactorTermCount + facts.scalarTermCount == facts.termCount &&
         facts.factorBases.size() == 1)
       facts.expandedBasis = facts.factorBases.front();
@@ -137,7 +140,7 @@ SymmetricEngineRing::inferExpressionFacts(
     return facts;
   }
 
-SymmetricEngineRing::ExpressionFacts
+ExpressionFacts
 SymmetricEngineRing::inferCanonicalExpansionFacts(
     ring_elem f,
     int basisId,
@@ -153,6 +156,7 @@ SymmetricEngineRing::inferCanonicalExpansionFacts(
     facts.termCount = poly->terms.size();
     std::optional<int> firstWeight;
     bool multipleWeights = false;
+    bool contractViolated = false;
 
     for (const auto& term : poly->terms)
       {
@@ -173,9 +177,7 @@ SymmetricEngineRing::inferCanonicalExpansionFacts(
             atomBasisIdAt(term.monomial, 0) != basisId ||
             atomIsSkewAt(term.monomial, 0))
           {
-            facts.normalized = false;
-            facts.skewFree = false;
-            ++facts.productTermCount;
+            contractViolated = true;
             continue;
           }
         facts.maximumFactorsPerTerm = 1;
@@ -193,6 +195,12 @@ SymmetricEngineRing::inferCanonicalExpansionFacts(
               multipleWeights = true;
           }
       }
+    // This fast inspector relies on a canonical target-basis contract. If a
+    // caller violates that contract, return the general exact facts rather
+    // than manufacturing partially contradictory facts.
+    if (contractViolated)
+      return inferExpressionFacts(f);
+
     if (facts.singleFactorTermCount != 0)
       {
         facts.factorBases = {basisId};
@@ -217,7 +225,7 @@ SymmetricEngineRing::inferCanonicalExpansionFacts(
     return facts;
   }
 
-SymmetricEngineRing::ExpressionFacts
+ExpressionFacts
 SymmetricEngineRing::basisElementFactsFromAtom(
     const SymmetricMonomial& monomial,
     size_t pos,
@@ -230,11 +238,6 @@ SymmetricEngineRing::basisElementFactsFromAtom(
     facts.maximumFactorsPerTerm = 1;
     facts.factorBases = {basisId};
     facts.pureBasis = basisId;
-    facts.expandedBasis = basisId;
-    facts.singleBasisElementId = basisId;
-    facts.singleBasisElementCoefficientOne =
-        coefficientRing->is_equal(
-            coefficient, coefficientRing->one());
     int weight = 0;
 
     if (atomIsSkewAt(monomial, pos))
@@ -261,83 +264,74 @@ SymmetricEngineRing::basisElementFactsFromAtom(
         weight = partitionWeight(index);
       }
     facts.homogeneousWeight = weight;
+    if (facts.singleBasisElement())
+      {
+        facts.expandedBasis = basisId;
+        facts.singleBasisElementId = basisId;
+        facts.singleBasisElementIndex =
+            basisElementIndex(monomial, pos);
+        facts.singleBasisElementCoefficientOne =
+            coefficientRing->is_equal(
+                coefficient, coefficientRing->one());
+      }
     return facts;
   }
 
-std::optional<SymmetricEngineRing::ExpressionFacts>
-SymmetricEngineRing::expressionFactsFromMetadata(ring_elem f) const
+std::optional<ExpressionFacts>
+SymmetricEngineRing::canonicalExpressionFactsFromCache(
+    ring_elem f) const
 {
     const auto *poly = polyValue(f);
-    if (!poly->conversionMetadata) return std::nullopt;
-    const auto& metadata = *poly->conversionMetadata;
-    if (!metadata.expressionFactsComplete ||
-        !metadata.normalized || !metadata.skewFree || !metadata.collected ||
-        !metadata.termCount)
+    if (!poly->expressionFactsCache)
+      return std::nullopt;
+    const auto& cache =
+        *poly->expressionFactsCache;
+    if (!cache.hasCompleteCanonicalFacts())
       return std::nullopt;
 
-    ExpressionFacts facts;
-    facts.normalized = true;
-    facts.skewFree = true;
-    facts.collected = true;
+    ExpressionFacts facts = cache.facts;
     facts.combinatorialTags = poly->combinatorialTags;
-    facts.termCount = *metadata.termCount;
-    if (!metadata.scalarTermCount ||
-        !metadata.singleFactorTermCount)
-      return std::nullopt;
-    facts.scalarTermCount = *metadata.scalarTermCount;
-    facts.singleFactorTermCount = *metadata.singleFactorTermCount;
-    facts.productTermCount = 0;
-    facts.maximumFactorsPerTerm =
-        facts.singleFactorTermCount == 0 ? 0 : 1;
     if (facts.termCount != poly->terms.size() ||
         facts.scalarTermCount + facts.singleFactorTermCount +
-            facts.productTermCount != facts.termCount ||
-        facts.productTermCount != 0)
+            facts.productTermCount != facts.termCount)
       return std::nullopt;
-    // A zero or scalar expansion has no basis support. A product-free mixed
-    // expansion is also pipeline-ready, but has no single expanded basis.
-    if (!metadata.factorBases)
+    if (!facts.normalized ||
+        !facts.skewFree ||
+        !facts.collected ||
+        !facts.noProducts())
       return std::nullopt;
-    facts.factorBases = *metadata.factorBases;
+    const size_t expectedMaximumFactors =
+        facts.singleFactorTermCount == 0 ? 0 : 1;
+    if (facts.maximumFactorsPerTerm != expectedMaximumFactors ||
+        facts.skewFactorCount != 0 ||
+        !std::is_sorted(
+            facts.factorBases.begin(), facts.factorBases.end()) ||
+        std::adjacent_find(
+            facts.factorBases.begin(), facts.factorBases.end()) !=
+                facts.factorBases.end())
+      return std::nullopt;
+    const std::optional<int> expectedBasis =
+        facts.factorBases.size() == 1
+            ? std::optional<int>{facts.factorBases.front()}
+            : std::nullopt;
     if ((facts.singleFactorTermCount == 0 &&
-         (!facts.factorBases.empty() || metadata.expandedBasis)) ||
+         !facts.factorBases.empty()) ||
         (facts.singleFactorTermCount != 0 &&
-         facts.factorBases.empty()))
+         facts.factorBases.empty()) ||
+        facts.pureBasis != expectedBasis ||
+        facts.expandedBasis != expectedBasis)
       return std::nullopt;
-    if (metadata.expandedBasis &&
-        (facts.factorBases.size() != 1 ||
-         facts.factorBases.front() !=
-             *metadata.expandedBasis))
-      return std::nullopt;
-    if (!metadata.expandedBasis &&
-        facts.factorBases.size() == 1)
-      return std::nullopt;
-    if (metadata.pureBasis &&
-        (facts.factorBases.size() != 1 ||
-         facts.factorBases.front() != *metadata.pureBasis))
-      return std::nullopt;
-    facts.pureBasis = metadata.pureBasis;
-    facts.expandedBasis = metadata.expandedBasis;
-    facts.skewFactorCount = 0;
-    facts.homogeneousWeight = metadata.homogeneousWeight;
-    facts.maximumPartitionLength =
-        metadata.maximumPartitionLength.value_or(0);
-    facts.singleBasisElementId =
-        metadata.singleBasisElementId;
-    facts.singleBasisElementIndex =
-        metadata.singleBasisElementIndex;
-    facts.singleBasisElementCoefficientOne =
-        metadata.singleBasisElementCoefficientOne;
     const bool singleBasisElement =
         facts.termCount == 1 &&
         facts.scalarTermCount == 0 &&
         facts.singleFactorTermCount == 1;
     if (singleBasisElement !=
             static_cast<bool>(facts.singleBasisElementId) ||
-        (facts.singleBasisElementIndex &&
-         !facts.singleBasisElementId) ||
-        (facts.singleBasisElementCoefficientOne &&
-         !facts.singleBasisElementId) ||
+        singleBasisElement !=
+            static_cast<bool>(facts.singleBasisElementIndex) ||
+        singleBasisElement !=
+            static_cast<bool>(
+                facts.singleBasisElementCoefficientOne) ||
         (facts.singleBasisElementId &&
          (!facts.expandedBasis ||
           *facts.singleBasisElementId != *facts.expandedBasis)))
@@ -345,121 +339,166 @@ SymmetricEngineRing::expressionFactsFromMetadata(ring_elem f) const
     return facts;
   }
 
-// ============================================================================
-// Metadata Lifecycle
-// ============================================================================
-// Arithmetic may preserve inexpensive hints even when cancellation or product
-// formation prevents it from proving the complete canonical core. All such
-// construction and invalidation goes through these helpers so no operation
-// invents its own interpretation of SymmetricConversionMetadata.
-
-void SymmetricEngineRing::invalidateExactExpressionFacts(
-    SymmetricConversionMetadataSlot& metadata) const
+ExpressionFacts SymmetricEngineRing::exactExpressionFacts(
+    ring_elem f) const
 {
-    if (!metadata) return;
-    metadata->invalidateExactExpressionFacts();
+    auto cached =
+        canonicalExpressionFactsFromCache(f);
+    return cached ? std::move(*cached) : inferExpressionFacts(f);
+  }
+
+// ============================================================================
+// Expression-Facts Cache Lifecycle
+// ============================================================================
+// Arithmetic may preserve inexpensive positive facts even when cancellation
+// or product formation prevents it from proving the complete canonical
+// contract. All such construction and invalidation goes through these helpers
+// so no operation invents its own interpretation of the shared cache.
+
+void SymmetricEngineRing::discardSupportDependentFacts(
+    ExpressionFactsCacheSlot& cache) const
+{
+    if (!cache) return;
+    cache->discardSupportDependentFacts();
   }
 
 void SymmetricEngineRing::refreshSingleBasisElementCoefficientFact(
-    SymmetricConversionMetadata& metadata,
+    ExpressionFactsCache& cache,
     const SymmetricRingPoly *poly) const
 {
-    if (!metadata.expressionFactsComplete) return;
+    if (!cache.hasCompleteCanonicalFacts()) return;
     const bool singleBasisElement =
-        metadata.termCount.value_or(0) == 1 &&
-        metadata.singleFactorTermCount.value_or(0) == 1 &&
-        metadata.scalarTermCount.value_or(0) == 0 &&
+        cache.facts.singleBasisElement() &&
         poly->terms.size() == 1 &&
         !poly->terms.front().monomial.data.empty();
     if (!singleBasisElement)
       {
-        metadata.singleBasisElementCoefficientOne.reset();
+        cache.facts.singleBasisElementCoefficientOne.reset();
         return;
       }
-    metadata.singleBasisElementCoefficientOne =
+    cache.facts.singleBasisElementCoefficientOne =
         coefficientRing->is_equal(
             poly->terms.front().coeff, coefficientRing->one());
   }
 
-SymmetricConversionMetadata SymmetricEngineRing::metadataAfterAddition(
-    const SymmetricConversionMetadata& left,
-    const SymmetricConversionMetadata& right,
-    const SymmetricRingPoly *result) const
+ExpressionFactsCache SymmetricEngineRing::expressionFactsCacheAfterAddition(
+    const ExpressionFactsCache& left,
+    const ExpressionFactsCache& right) const
 {
-    SymmetricConversionMetadata metadata;
-    if (left.pureBasis == right.pureBasis)
-      metadata.pureBasis = left.pureBasis;
-    if (left.expandedBasis == right.expandedBasis)
-      metadata.expandedBasis = left.expandedBasis;
-    if (left.homogeneousWeight == right.homogeneousWeight)
-      metadata.homogeneousWeight = left.homogeneousWeight;
-    // Cancellation can only decrease this maximum, so the retained value is a
-    // conservative cost hint even though the exact core is invalidated below.
-    if (left.maximumPartitionLength && right.maximumPartitionLength)
-      metadata.maximumPartitionLength = std::max(
-          *left.maximumPartitionLength, *right.maximumPartitionLength);
-    if (left.factorBases && right.factorBases)
+    ExpressionFactsCache cache;
+    if (left.knows(ExpressionFactKnowledge::PureBasis) &&
+        right.knows(ExpressionFactKnowledge::PureBasis) &&
+        left.facts.pureBasis &&
+        left.facts.pureBasis == right.facts.pureBasis)
       {
-        std::vector<int> factors = *left.factorBases;
-        factors.insert(
-            factors.end(), right.factorBases->begin(), right.factorBases->end());
-        std::sort(factors.begin(), factors.end());
-        factors.erase(std::unique(factors.begin(), factors.end()), factors.end());
-        metadata.factorBases = std::move(factors);
+        cache.facts.pureBasis = left.facts.pureBasis;
+        cache.remember(ExpressionFactKnowledge::PureBasis);
       }
-    metadata.termCount = result->terms.size();
-    metadata.normalized = left.normalized && right.normalized;
-    metadata.skewFree = left.skewFree && right.skewFree;
-    metadata.collected = true;
-    // Cancellation can change every exact support count. The retained fields
-    // above are hints only and cannot justify the canonical metadata bypass.
-    metadata.invalidateExactExpressionFacts();
-    return metadata;
+    if (left.knows(ExpressionFactKnowledge::ExpandedBasis) &&
+        right.knows(ExpressionFactKnowledge::ExpandedBasis) &&
+        left.facts.expandedBasis &&
+        left.facts.expandedBasis == right.facts.expandedBasis)
+      {
+        cache.facts.expandedBasis = left.facts.expandedBasis;
+        cache.remember(ExpressionFactKnowledge::ExpandedBasis);
+      }
+    if (left.knows(ExpressionFactKnowledge::HomogeneousWeight) &&
+        right.knows(ExpressionFactKnowledge::HomogeneousWeight) &&
+        left.facts.homogeneousWeight &&
+        left.facts.homogeneousWeight == right.facts.homogeneousWeight)
+      {
+        cache.facts.homogeneousWeight = left.facts.homogeneousWeight;
+        cache.remember(ExpressionFactKnowledge::HomogeneousWeight);
+      }
+    if (left.knows(ExpressionFactKnowledge::Normalized) &&
+        right.knows(ExpressionFactKnowledge::Normalized) &&
+        left.facts.normalized &&
+        right.facts.normalized)
+      {
+        cache.facts.normalized = true;
+        cache.remember(ExpressionFactKnowledge::Normalized);
+      }
+    if (left.knows(ExpressionFactKnowledge::SkewFree) &&
+        right.knows(ExpressionFactKnowledge::SkewFree) &&
+        left.facts.skewFree &&
+        right.facts.skewFree)
+      {
+        cache.facts.skewFree = true;
+        cache.remember(ExpressionFactKnowledge::SkewFree);
+      }
+    cache.facts.collected = true;
+    cache.remember(ExpressionFactKnowledge::Collected);
+    // Cancellation can change exact support, counts, and negative structural
+    // claims. Retain only positive properties shared by both summands.
+    return cache;
   }
 
-SymmetricConversionMetadata SymmetricEngineRing::metadataAfterProduct(
-    const SymmetricConversionMetadata& left,
-    const SymmetricConversionMetadata& right,
-    const SymmetricRingPoly *result) const
+ExpressionFactsCache SymmetricEngineRing::expressionFactsCacheAfterProduct(
+    const ExpressionFactsCache& left,
+    const ExpressionFactsCache& right) const
 {
-    SymmetricConversionMetadata metadata;
-    if (left.pureBasis && left.pureBasis == right.pureBasis)
-      metadata.pureBasis = left.pureBasis;
-    if (left.homogeneousWeight && right.homogeneousWeight)
-      metadata.homogeneousWeight =
-          *left.homogeneousWeight + *right.homogeneousWeight;
-    // Product indices concatenate or merge. Neither max(left, right) nor
-    // their sum is exact for every basis/storage combination, so leave this
-    // optional hint absent until the realized result is inspected.
-    if (left.factorBases && right.factorBases)
+    ExpressionFactsCache cache;
+    if (left.knows(ExpressionFactKnowledge::PureBasis) &&
+        right.knows(ExpressionFactKnowledge::PureBasis) &&
+        left.facts.pureBasis &&
+        left.facts.pureBasis == right.facts.pureBasis)
       {
-        std::vector<int> factors = *left.factorBases;
-        factors.insert(
-            factors.end(), right.factorBases->begin(), right.factorBases->end());
-        std::sort(factors.begin(), factors.end());
-        factors.erase(std::unique(factors.begin(), factors.end()), factors.end());
-        metadata.factorBases = std::move(factors);
+        cache.facts.pureBasis = left.facts.pureBasis;
+        cache.remember(ExpressionFactKnowledge::PureBasis);
       }
-    metadata.normalized = left.normalized && right.normalized;
-    metadata.skewFree = left.skewFree && right.skewFree;
-    if (metadata.pureBasis && isMultiplicativeBasis(*metadata.pureBasis) &&
-        metadata.skewFree)
-      metadata.expandedBasis = metadata.pureBasis;
-    metadata.termCount = result->terms.size();
-    metadata.collected = true;
+    if (left.knows(ExpressionFactKnowledge::HomogeneousWeight) &&
+        right.knows(ExpressionFactKnowledge::HomogeneousWeight) &&
+        left.facts.homogeneousWeight &&
+        right.facts.homogeneousWeight)
+      {
+        cache.facts.homogeneousWeight =
+            *left.facts.homogeneousWeight +
+            *right.facts.homogeneousWeight;
+        cache.remember(ExpressionFactKnowledge::HomogeneousWeight);
+      }
+    // Product indices concatenate or merge, so exact support and maximum
+    // partition length remain unknown until the realized result is inspected.
+    if (left.knows(ExpressionFactKnowledge::Normalized) &&
+        right.knows(ExpressionFactKnowledge::Normalized) &&
+        left.facts.normalized &&
+        right.facts.normalized)
+      {
+        cache.facts.normalized = true;
+        cache.remember(ExpressionFactKnowledge::Normalized);
+      }
+    if (left.knows(ExpressionFactKnowledge::SkewFree) &&
+        right.knows(ExpressionFactKnowledge::SkewFree) &&
+        left.facts.skewFree &&
+        right.facts.skewFree)
+      {
+        cache.facts.skewFree = true;
+        cache.remember(ExpressionFactKnowledge::SkewFree);
+      }
+    if (cache.knows(ExpressionFactKnowledge::PureBasis) &&
+        cache.facts.pureBasis &&
+        isMultiplicativeBasis(*cache.facts.pureBasis) &&
+        cache.knows(ExpressionFactKnowledge::Normalized) &&
+        cache.facts.normalized &&
+        cache.knows(ExpressionFactKnowledge::SkewFree) &&
+        cache.facts.skewFree)
+      {
+        cache.facts.expandedBasis = cache.facts.pureBasis;
+        cache.remember(ExpressionFactKnowledge::ExpandedBasis);
+      }
+    cache.facts.collected = true;
+    cache.remember(ExpressionFactKnowledge::Collected);
     // General products may merge factors or cancel coefficients. Exact facts
     // are attached only by a workflow that has inspected the realized result.
-    metadata.invalidateExactExpressionFacts();
-    return metadata;
+    return cache;
   }
 
 // ============================================================================
-// Metadata Attachment
+// Expression-Facts Cache Attachment
 // ============================================================================
-// Facts populate the storage envelope directly. The complete marker is set
-// only when the exact canonical bypass core is present.
+// Facts populate the storage envelope directly. The complete canonical marker
+// is set only when the full workflow-bypass contract is present.
 
-void SymmetricEngineRing::attachExpressionFacts(
+void SymmetricEngineRing::attachCanonicalExpansionFacts(
     ring_elem f,
     const ExpressionFacts& facts,
     int targetBasisId,
@@ -468,29 +507,13 @@ void SymmetricEngineRing::attachExpressionFacts(
     if (!facts.canonicalExpansionInBasis(targetBasisId))
       {
         ERROR("only exact canonical target-basis facts can be attached "
-              "as public conversion metadata");
+              "to the expression-facts cache");
         return;
       }
-    SymmetricConversionMetadata metadata;
-    metadata.pureBasis = facts.pureBasis;
-    metadata.expandedBasis = facts.expandedBasis;
-    metadata.homogeneousWeight = facts.homogeneousWeight;
-    metadata.termCount = facts.termCount;
-    metadata.maximumPartitionLength = facts.maximumPartitionLength;
-    metadata.factorBases = facts.factorBases;
-    metadata.normalized = facts.normalized;
-    metadata.skewFree = facts.skewFree;
-    metadata.collected = facts.collected;
-    metadata.expressionFactsComplete = true;
-    metadata.scalarTermCount = facts.scalarTermCount;
-    metadata.singleFactorTermCount = facts.singleFactorTermCount;
-    metadata.singleBasisElementId = facts.singleBasisElementId;
-    metadata.singleBasisElementIndex = facts.singleBasisElementIndex;
-    metadata.singleBasisElementCoefficientOne =
-        facts.singleBasisElementCoefficientOne;
-    auto *poly = mutablePolyValue(f);
-    poly->combinatorialTags = combinatorialTags;
-    poly->conversionMetadata = std::move(metadata);
+    ExpressionFacts attachedFacts = facts;
+    attachedFacts.combinatorialTags = combinatorialTags;
+    mutablePolyValue(f)->combinatorialTags = combinatorialTags;
+    attachInspectedExpressionFacts(f, attachedFacts);
   }
 
 // ============================================================================
@@ -577,61 +600,44 @@ bool SymmetricEngineRing::coefficientsInBasisIfPossible(
 // Shared Result Construction
 // ============================================================================
 
-ring_elem SymmetricEngineRing::expressionHelperFromTerms(
+ring_elem SymmetricEngineRing::expressionFromTermsWithFacts(
     VECTOR(SymmetricTerm)& terms,
     CombinatorialTags tags) const
 {
     ring_elem result = fromTermVector(terms, false);
     mutablePolyValue(result)->combinatorialTags = tags;
     const ExpressionFacts facts = inferExpressionFacts(result);
-    attachExpressionHelperFacts(result, facts);
+    attachInspectedExpressionFacts(result, facts);
     return result;
   }
 
-void SymmetricEngineRing::attachExpressionHelperFacts(
+void SymmetricEngineRing::attachInspectedExpressionFacts(
     ring_elem expression,
     const ExpressionFacts& facts) const
 {
-    SymmetricConversionMetadata metadata;
-    metadata.pureBasis = facts.pureBasis;
-    if (facts.expandedBasis &&
-        facts.canonicalExpansionInBasis(
-            *facts.expandedBasis))
-      metadata.expandedBasis = facts.expandedBasis;
-    metadata.homogeneousWeight = facts.homogeneousWeight;
-    metadata.termCount = facts.termCount;
-    metadata.scalarTermCount = facts.scalarTermCount;
-    metadata.singleFactorTermCount =
-        facts.singleFactorTermCount;
-    metadata.maximumPartitionLength =
-        facts.maximumPartitionLength;
-    metadata.factorBases = facts.factorBases;
-    metadata.normalized = facts.normalized;
-    metadata.skewFree = facts.skewFree;
-    metadata.collected = facts.collected;
-    // The existing exact-metadata bypass represents product-free canonical
-    // storage. Product-bearing results retain valid step postconditions and
-    // support hints, but consumers must still inspect their factor counts.
-    metadata.expressionFactsComplete =
-        facts.normalized &&
+    ExpressionFactsCache cache;
+    cache.facts = facts;
+    cache.remember(ExpressionFactKnowledge::Normalized);
+    cache.remember(ExpressionFactKnowledge::SkewFree);
+    cache.remember(ExpressionFactKnowledge::Collected);
+    cache.remember(ExpressionFactKnowledge::PureBasis);
+    cache.remember(ExpressionFactKnowledge::ExpandedBasis);
+    cache.remember(ExpressionFactKnowledge::HomogeneousWeight);
+    cache.remember(ExpressionFactKnowledge::MaximumPartitionLength);
+    cache.remember(ExpressionFactKnowledge::FactorBases);
+    // The complete canonical bypass represents product-free canonical storage.
+    // Product-bearing results retain exact individual fields and step
+    // postconditions, but consumers must still inspect their factor counts.
+    if (facts.normalized &&
         facts.skewFree &&
         facts.collected &&
-        facts.noProducts();
-    if (metadata.expressionFactsComplete &&
-        facts.singleBasisElement())
-      {
-        metadata.singleBasisElementId =
-            facts.singleBasisElementId;
-        metadata.singleBasisElementIndex =
-            facts.singleBasisElementIndex;
-        metadata.singleBasisElementCoefficientOne =
-            facts.singleBasisElementCoefficientOne;
-      }
+        facts.noProducts())
+      cache.setCompleteCanonicalFacts(facts);
     auto *poly = mutablePolyValue(expression);
     poly->combinatorialTags =
         facts.combinatorialTags;
-    poly->conversionMetadata =
-        std::move(metadata);
+    poly->expressionFactsCache =
+        std::move(cache);
   }
 
 // ============================================================================
@@ -652,7 +658,7 @@ SymmetricEngineRing::homogeneousComponents(
     for (auto& item : termsByWeight)
       result.push_back({
           item.first,
-          expressionHelperFromTerms(
+          expressionFromTermsWithFacts(
               item.second, poly->combinatorialTags)});
     return result;
   }
@@ -666,7 +672,7 @@ ring_elem SymmetricEngineRing::homogeneousComponent(
     for (const auto& term : poly->terms)
       if (monomialWeight(term.monomial) == weight)
         selected.push_back(term);
-    return expressionHelperFromTerms(
+    return expressionFromTermsWithFacts(
         selected, poly->combinatorialTags);
   }
 
@@ -699,7 +705,7 @@ ring_elem SymmetricEngineRing::truncateWeights(
         if (minimumWeight <= weight && weight <= maximumWeight)
           selected.push_back(term);
       }
-    return expressionHelperFromTerms(
+    return expressionFromTermsWithFacts(
         selected, poly->combinatorialTags);
   }
 
@@ -749,57 +755,62 @@ SymmetricEngineRing::normalizeExpressionWithOptionsDetailed(
           }
         result.resolvedProducts = true;
         auto exactFacts =
-            expressionFactsFromMetadata(result.expression);
+            canonicalExpressionFactsFromCache(
+                result.expression);
         if (exactFacts)
           result.facts = std::move(*exactFacts);
         else
           result.facts = inferExpressionFacts(
               result.expression,
               &result.factorsPerTerm);
-        attachExpressionHelperFacts(
+        attachInspectedExpressionFacts(
             result.expression, result.facts);
         return result;
       }
 
     auto exactFacts =
-        expressionFactsFromMetadata(expression);
+        canonicalExpressionFactsFromCache(expression);
     if (exactFacts)
       {
         result.expression = copy(expression);
         result.facts = std::move(*exactFacts);
-        result.usedCompleteMetadataBypass = true;
-        result.bypassedStraighteningFromMetadata =
+        result.usedCompleteCanonicalFactsBypass = true;
+        result.bypassedStraighteningFromCache =
             options.straightenIndices;
-        result.bypassedSkewExpansionFromMetadata =
+        result.bypassedSkewExpansionFromCache =
             options.expandSkewFactors;
-        attachExpressionHelperFacts(
+        attachInspectedExpressionFacts(
             result.expression, result.facts);
         return result;
       }
 
     const auto *inputPoly = polyValue(expression);
-    const bool metadataProvesNormalized =
-        inputPoly->conversionMetadata &&
-        inputPoly->conversionMetadata->normalized;
-    const bool metadataProvesSkewFree =
-        inputPoly->conversionMetadata &&
-        inputPoly->conversionMetadata->skewFree;
+    const bool cacheProvesNormalized =
+        inputPoly->expressionFactsCache &&
+        inputPoly->expressionFactsCache->knows(
+            ExpressionFactKnowledge::Normalized) &&
+        inputPoly->expressionFactsCache->facts.normalized;
+    const bool cacheProvesSkewFree =
+        inputPoly->expressionFactsCache &&
+        inputPoly->expressionFactsCache->knows(
+            ExpressionFactKnowledge::SkewFree) &&
+        inputPoly->expressionFactsCache->facts.skewFree;
     std::vector<size_t> inputFactorsPerTerm;
     ExpressionFacts inputFacts =
         inferExpressionFacts(
             expression, &inputFactorsPerTerm);
     const bool indicesAlreadyStraightened =
-        metadataProvesNormalized ||
+        cacheProvesNormalized ||
         inputFacts.normalized;
     const bool alreadySkewFree =
-        metadataProvesSkewFree ||
+        cacheProvesSkewFree ||
         inputFacts.skewFree;
-    result.bypassedStraighteningFromMetadata =
+    result.bypassedStraighteningFromCache =
         options.straightenIndices &&
-        metadataProvesNormalized;
-    result.bypassedSkewExpansionFromMetadata =
+        cacheProvesNormalized;
+    result.bypassedSkewExpansionFromCache =
         options.expandSkewFactors &&
-        metadataProvesSkewFree;
+        cacheProvesSkewFree;
     if ((!options.straightenIndices ||
          indicesAlreadyStraightened) &&
         (!options.expandSkewFactors ||
@@ -810,7 +821,7 @@ SymmetricEngineRing::normalizeExpressionWithOptionsDetailed(
         result.factorsPerTerm =
             std::move(inputFactorsPerTerm);
         result.usedAlreadyPreparedBypass = true;
-        attachExpressionHelperFacts(
+        attachInspectedExpressionFacts(
             result.expression, result.facts);
         return result;
       }
@@ -871,7 +882,7 @@ SymmetricEngineRing::normalizeExpressionWithOptionsDetailed(
         result.expression = zero();
         return result;
       }
-    attachExpressionHelperFacts(
+    attachInspectedExpressionFacts(
         result.expression, result.facts);
     return result;
   }
@@ -905,7 +916,7 @@ ring_elem SymmetricEngineRing::expandSkewFactors(
             expandedPoly->terms.begin(),
             expandedPoly->terms.end());
       }
-    ring_elem result = expressionHelperFromTerms(
+    ring_elem result = expressionFromTermsWithFacts(
         expandedTerms, poly->combinatorialTags);
     const ExpressionFacts facts =
         inferExpressionFacts(result);
@@ -914,7 +925,7 @@ ring_elem SymmetricEngineRing::expandSkewFactors(
         ERROR("skew expansion did not establish its skew-free contract");
         return zero();
       }
-    attachExpressionHelperFacts(result, facts);
+    attachInspectedExpressionFacts(result, facts);
     return result;
   }
 
@@ -982,7 +993,7 @@ ring_elem SymmetricEngineRing::expandProductsInBasis(
         ERROR("product resolution did not establish its canonical-term contract");
         return zero();
       }
-    attachExpressionHelperFacts(result, facts);
+    attachInspectedExpressionFacts(result, facts);
     return result;
   }
 
@@ -995,7 +1006,7 @@ SymmetricEngineRing::expressionShape(
     ring_elem expression) const
 {
     const ExpressionFacts facts =
-        inferExpressionFacts(expression);
+        exactExpressionFacts(expression);
     ExpressionShape result;
     result.weights = weightSupport(expression);
     result.basisIds = facts.factorBases;
@@ -1017,19 +1028,24 @@ SymmetricEngineRing::expressionShape(
     result.pureBasis = facts.pureBasis;
     result.expandedBasis = facts.expandedBasis;
     const auto *poly = polyValue(expression);
-    if (poly->conversionMetadata)
+    if (poly->expressionFactsCache)
       {
-        const auto& metadata =
-            *poly->conversionMetadata;
+        const auto& cache =
+            *poly->expressionFactsCache;
         result.hasMetadata = true;
         result.metadataFactsComplete =
-            metadata.expressionFactsComplete;
+            cache.hasCompleteCanonicalFacts() &&
+            canonicalExpressionFactsFromCache(
+                expression).has_value();
         result.metadataNormalized =
-            metadata.normalized;
+            cache.knows(ExpressionFactKnowledge::Normalized) &&
+            cache.facts.normalized;
         result.metadataSkewFree =
-            metadata.skewFree;
+            cache.knows(ExpressionFactKnowledge::SkewFree) &&
+            cache.facts.skewFree;
         result.metadataCollected =
-            metadata.collected;
+            cache.knows(ExpressionFactKnowledge::Collected) &&
+            cache.facts.collected;
       }
     return result;
   }
@@ -1037,7 +1053,7 @@ SymmetricEngineRing::expressionShape(
 std::vector<int> SymmetricEngineRing::basisSupport(
     ring_elem expression) const
 {
-    return inferExpressionFacts(expression).factorBases;
+    return exactExpressionFacts(expression).factorBases;
   }
 
 bool SymmetricEngineRing::isBasisExpansion(
@@ -1046,17 +1062,15 @@ bool SymmetricEngineRing::isBasisExpansion(
 {
     (void) requireBasis(basisId);
     if (error()) return false;
-    return inferExpressionFacts(expression)
+    return exactExpressionFacts(expression)
         .canonicalExpansionInBasis(basisId);
   }
 
 bool SymmetricEngineRing::isLinearCombinationOfBasisElements(
     ring_elem expression) const
 {
-    if (expressionFactsFromMetadata(expression))
-      return true;
     const ExpressionFacts facts =
-        inferExpressionFacts(expression);
+        exactExpressionFacts(expression);
     return facts.normalized &&
            facts.skewFree &&
            facts.collected &&
@@ -1110,7 +1124,7 @@ SymmetricEngineRing::basisComponents(
     for (auto& item : termsByBasis)
       result.push_back({
           item.first,
-          expressionHelperFromTerms(
+          expressionFromTermsWithFacts(
               item.second, poly->combinatorialTags)});
     return result;
   }
@@ -1149,7 +1163,7 @@ SymmetricEngineRing::homogeneousBasisComponents(
       result.push_back({
           item.first.first,
           item.first.second,
-          expressionHelperFromTerms(
+          expressionFromTermsWithFacts(
               item.second, poly->combinatorialTags)});
     return result;
   }
@@ -1170,7 +1184,7 @@ std::vector<ring_elem> SymmetricEngineRing::singlePartitionIndexedTerms(
       {
         VECTOR(SymmetricTerm) oneTerm{term};
         result.push_back(
-            expressionHelperFromTerms(
+            expressionFromTermsWithFacts(
                 oneTerm, poly->combinatorialTags));
       }
     return result;

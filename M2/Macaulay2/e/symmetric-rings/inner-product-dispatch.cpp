@@ -16,109 +16,11 @@
 namespace symmetric_rings {
 
 // ============================================================================
-// Inner-Product Requests And Profiles
+// Inner-Product Requests And Shared Expression Facts
 // ============================================================================
-// Expression facts and pairing context are collected before pipeline selection.
-
-SymmetricEngineRing::InnerProductProfile
-SymmetricEngineRing::inferInnerProductProfile(ring_elem f) const
-{
-    InnerProductProfile profile;
-    const auto *poly = polyValue(f);
-    profile.termCount = poly->terms.size();
-    int weight = elementWeight(f);
-    if (weight >= 0) profile.homogeneousWeight = weight;
-
-    if (poly->conversionMetadata)
-      {
-        const auto& metadata = *poly->conversionMetadata;
-        profile.pureBasis = metadata.pureBasis;
-        profile.expandedBasis = metadata.expandedBasis;
-        if (metadata.homogeneousWeight)
-          profile.homogeneousWeight = metadata.homogeneousWeight;
-        if (metadata.termCount) profile.termCount = metadata.termCount;
-        if (metadata.maximumPartitionLength)
-          profile.maximumPartitionLength = metadata.maximumPartitionLength;
-        if (metadata.expressionFactsComplete &&
-            metadata.termCount &&
-            metadata.scalarTermCount &&
-            metadata.singleFactorTermCount)
-          {
-            const bool singleBasisElement =
-                *metadata.termCount == 1 &&
-                *metadata.scalarTermCount == 0 &&
-                *metadata.singleFactorTermCount == 1;
-            profile.singleBasisElement = singleBasisElement
-                ? KnownState::True : KnownState::False;
-            profile.noProducts = KnownState::True;
-          }
-        profile.normalized = metadata.normalized
-            ? KnownState::True : KnownState::Unknown;
-        profile.skewFree = metadata.skewFree
-            ? KnownState::True : KnownState::Unknown;
-        profile.collected = metadata.collected
-            ? KnownState::True : KnownState::Unknown;
-      }
-
-    int pureBasisId = singleBasisId(f);
-    if (pureBasisId > 0)
-      {
-        profile.pureBasis = pureBasisId;
-        CoeffMap coefficients;
-        if (coefficientsInBasisIfPossible(f, pureBasisId, coefficients))
-          profile.expandedBasis = pureBasisId;
-      }
-
-    if (poly->terms.size() == 1 &&
-        !poly->terms.front().monomial.data.empty())
-      {
-        const SymmetricMonomial& monomial = poly->terms.front().monomial;
-        if (!atomIsSkewAt(monomial, 0) &&
-            atomLengthAt(monomial, 0) == monomial.data.size())
-          {
-            Partition index = basisElementIndex(monomial, 0);
-            if (isPartitionIndex(index))
-              {
-                profile.singleBasisElement = KnownState::True;
-                profile.singleBasisId = atomBasisIdAt(monomial, 0);
-                profile.singleIndex = std::move(index);
-              }
-          }
-      }
-    if (profile.singleBasisElement == KnownState::Unknown)
-      profile.singleBasisElement = KnownState::False;
-    return profile;
-  }
-
-
-size_t SymmetricEngineRing::innerProductMaximumPartitionLength(
-    ring_elem f,
-    const InnerProductProfile& profile) const
-{
-    if (profile.maximumPartitionLength)
-      return *profile.maximumPartitionLength;
-    size_t maximum = 0;
-    for (const auto& term : polyValue(f)->terms)
-      for (size_t pos = 0; pos < term.monomial.data.size();
-           pos += atomLengthAt(term.monomial, pos))
-        {
-          if (atomIsSkewAt(term.monomial, pos))
-            maximum = std::max(
-                maximum,
-                static_cast<size_t>(std::max(
-                    partitionLength(basisElementOuterIndex(
-                        term.monomial, pos)),
-                    partitionLength(basisElementInnerIndex(
-                        term.monomial, pos)))));
-          else
-            maximum = std::max(
-                maximum,
-                static_cast<size_t>(partitionLength(
-                    basisElementIndex(term.monomial, pos))));
-        }
-    profile.maximumPartitionLength = maximum;
-    return maximum;
-  }
+// The request carries the same exact facts used by conversion, multiplication,
+// normalization, and stored expression caches. Pairing data is the only
+// inner-product-specific request state.
 
 
 SymmetricEngineRing::InnerProductRequest
@@ -126,16 +28,16 @@ SymmetricEngineRing::buildInnerProductRequest(
     ring_elem f,
     ring_elem g,
     InnerProductKind kind,
-    std::map<int, InnerProductTarget> metadata) const
+    std::map<int, InnerProductTarget> pairings) const
 {
     return InnerProductRequest{
         f,
         g,
         InnerProductContext{kind,
                             powerSumPairingKind(kind),
-                            std::move(metadata)},
-        inferInnerProductProfile(f),
-        inferInnerProductProfile(g)};
+                            std::move(pairings)},
+        exactExpressionFacts(f),
+        exactExpressionFacts(g)};
   }
 
 SymmetricEngineRing::InnerProductKind
@@ -186,21 +88,21 @@ const char *SymmetricEngineRing::innerProductKindName(
 // ============================================================================
 // Candidate Cost And Selection
 // ============================================================================
-// Routes are compared using lazy profile facts and known transition-cache state.
+// Routes are compared using shared exact facts and transition-cache state.
 
-SymmetricEngineRing::KnownState
+SymmetricEngineRing::InnerProductCacheState
 SymmetricEngineRing::innerProductTransitionCacheState(
     const InnerProductCandidate& candidate,
     const InnerProductRequest& request) const
 {
     ring_elem expansion = candidate.orientation == InnerProductOrientation::Original
         ? request.left : request.right;
-    const InnerProductProfile& expansionProfile =
+    const ExpressionFacts& expansionFacts =
         candidate.orientation == InnerProductOrientation::Original
-            ? request.leftProfile : request.rightProfile;
-    const InnerProductProfile& probeProfile =
+            ? request.leftFacts : request.rightFacts;
+    const ExpressionFacts& probeFacts =
         candidate.orientation == InnerProductOrientation::Original
-            ? request.rightProfile : request.leftProfile;
+            ? request.rightFacts : request.leftFacts;
     if (candidate.route == InnerProductRoute::ViaSchurCompleteKostkaNumbers ||
         candidate.route ==
             InnerProductRoute::ViaSchurElementaryConjugateKostkaNumbers ||
@@ -208,7 +110,7 @@ SymmetricEngineRing::innerProductTransitionCacheState(
             InnerProductRoute::ViaSchurOmegaCompleteConjugateKostkaNumbers ||
         candidate.route == InnerProductRoute::ViaSchurOmegaElementaryKostkaNumbers)
       {
-        Partition shape = expansionProfile.singleIndex;
+        Partition shape = *expansionFacts.singleBasisElementIndex;
         if (candidate.route ==
                 InnerProductRoute::ViaSchurElementaryConjugateKostkaNumbers ||
             candidate.route ==
@@ -216,27 +118,30 @@ SymmetricEngineRing::innerProductTransitionCacheState(
           shape = conjugatePartition(shape);
         return kostkaNumberCache.find(
                    std::make_pair(normalizePartition(shape),
-                                  normalizePartition(probeProfile.singleIndex))) !=
+                                  normalizePartition(
+                                      *probeFacts.singleBasisElementIndex))) !=
                 kostkaNumberCache.end()
-            ? KnownState::True : KnownState::False;
+            ? InnerProductCacheState::Present : InnerProductCacheState::Absent;
       }
 
     int pId = basisIdForKind(BasisKind::PowerSum);
     if (candidate.route != InnerProductRoute::ViaDualBasisCoefficient ||
-        expansionProfile.expandedBasis != pId || !probeProfile.singleBasisId)
-      return KnownState::Unknown;
+        expansionFacts.expandedBasis != pId ||
+        !probeFacts.singleBasisElementId)
+      return InnerProductCacheState::Unknown;
     std::string targetDisplay = displayForBasis(candidate.coefficientBasisId);
     BasisKind targetKind = basisKindForId(candidate.coefficientBasisId);
     if (targetKind != BasisKind::HallLittlewoodQ &&
         targetKind != BasisKind::HallLittlewoodP &&
         targetKind != BasisKind::HallLittlewoodB &&
         targetKind != BasisKind::HallLittlewoodPOmega)
-      return KnownState::Unknown;
+      return InnerProductCacheState::Unknown;
 
     CoeffMap powerSums;
     if (!coefficientsInBasisIfPossible(expansion, pId, powerSums))
-      return KnownState::Unknown;
-    Partition target = normalizePartition(probeProfile.singleIndex);
+      return InnerProductCacheState::Unknown;
+    Partition target =
+        normalizePartition(*probeFacts.singleBasisElementIndex);
     for (const auto& term : powerSums)
       {
         Partition cycleType = normalizePartition(term.first);
@@ -246,9 +151,9 @@ SymmetricEngineRing::innerProductTransitionCacheState(
         std::string key = partitionKey(target) + "|" + partitionKey(cycleType);
         if (hallLittlewoodPowerSumToCapitalCoefficientCache.find(key) ==
             hallLittlewoodPowerSumToCapitalCoefficientCache.end())
-          return KnownState::False;
+          return InnerProductCacheState::Absent;
       }
-    return KnownState::True;
+    return InnerProductCacheState::Present;
   }
 
 size_t SymmetricEngineRing::estimateInnerProductCandidateCost(
@@ -257,21 +162,17 @@ size_t SymmetricEngineRing::estimateInnerProductCandidateCost(
 {
     candidate.transitionCached =
         innerProductTransitionCacheState(candidate, request);
-    const InnerProductProfile& expansionProfile =
+    const ExpressionFacts& expansionFacts =
         candidate.orientation == InnerProductOrientation::Original
-            ? request.leftProfile : request.rightProfile;
-    const InnerProductProfile& probeProfile =
+            ? request.leftFacts : request.rightFacts;
+    const ExpressionFacts& probeFacts =
         candidate.orientation == InnerProductOrientation::Original
-            ? request.rightProfile : request.leftProfile;
-    ring_elem expansion = candidate.orientation == InnerProductOrientation::Original
-        ? request.left : request.right;
-    ring_elem probe = candidate.orientation == InnerProductOrientation::Original
-        ? request.right : request.left;
-    size_t expansionTerms = expansionProfile.termCount.value_or(1);
-    size_t probeTerms = probeProfile.termCount.value_or(1);
+            ? request.rightFacts : request.leftFacts;
+    size_t expansionTerms = expansionFacts.termCount;
+    size_t probeTerms = probeFacts.termCount;
     size_t weight = static_cast<size_t>(std::max(
-        1, expansionProfile.homogeneousWeight.value_or(
-               probeProfile.homogeneousWeight.value_or(1))));
+        1, expansionFacts.homogeneousWeight.value_or(
+               probeFacts.homogeneousWeight.value_or(1))));
 
     switch (candidate.route)
       {
@@ -282,26 +183,27 @@ size_t SymmetricEngineRing::estimateInnerProductCandidateCost(
         case InnerProductRoute::ViaSchurElementaryConjugateKostkaNumbers:
         case InnerProductRoute::ViaSchurOmegaCompleteConjugateKostkaNumbers:
         case InnerProductRoute::ViaSchurOmegaElementaryKostkaNumbers:
-          if (candidate.transitionCached == KnownState::True) return 1;
+          if (candidate.transitionCached == InnerProductCacheState::Present) return 1;
           return weight * std::max(
-              innerProductMaximumPartitionLength(expansion, expansionProfile),
-              innerProductMaximumPartitionLength(probe, probeProfile));
+              expansionFacts.maximumPartitionLength,
+              probeFacts.maximumPartitionLength);
         case InnerProductRoute::ViaDualBasisCoefficient:
-          if (expansionProfile.expandedBasis == candidate.coefficientBasisId)
+          if (expansionFacts.expandedBasis == candidate.coefficientBasisId)
             return expansionTerms;
-          if (candidate.transitionCached == KnownState::True)
+          if (candidate.transitionCached == InnerProductCacheState::Present)
             return expansionTerms + 1;
-          if (expansionProfile.expandedBasis == basisIdForKind(BasisKind::PowerSum))
+          if (expansionFacts.expandedBasis ==
+              basisIdForKind(BasisKind::PowerSum))
             // A single dual coefficient evaluates one targeted transition
             // functional on each p-term.  It does not construct the complete
             // transition column, so weight is not an appropriate multiplier.
             return expansionTerms *
-                (1 + innerProductMaximumPartitionLength(probe, probeProfile));
+                (1 + probeFacts.maximumPartitionLength);
           return 100 + expansionTerms * weight;
         case InnerProductRoute::ViaWeightedSchurCharacters:
           return expansionTerms * probeTerms *
-              std::max<size_t>(1, innerProductMaximumPartitionLength(
-                                      expansion, expansionProfile));
+              std::max<size_t>(
+                  1, expansionFacts.maximumPartitionLength);
         case InnerProductRoute::ViaConvertBothToPowerSums:
           return 1000 + weight * (expansionTerms + probeTerms);
       }
@@ -390,9 +292,9 @@ void SymmetricEngineRing::traceInnerProductRouteSelection(
         candidate.orientation == InnerProductOrientation::Original
             ? "original" : "swapped",
         candidate.estimatedCost,
-        candidate.transitionCached == KnownState::True
+        candidate.transitionCached == InnerProductCacheState::Present
             ? "warm"
-            : candidate.transitionCached == KnownState::False ? "cold" : "unknown");
+            : candidate.transitionCached == InnerProductCacheState::Absent ? "cold" : "unknown");
   }
 
 
@@ -484,22 +386,22 @@ SymmetricEngineRing::selectInnerProductPipeline(
         ERROR("only the fallback-power-sums inner-product pipeline can be forced");
         return InnerProductPipeline::FallbackPowerSums;
       }
-    if (request.leftProfile.expandedBasis &&
-        request.rightProfile.expandedBasis)
+    if (request.leftFacts.expandedBasis &&
+        request.rightFacts.expandedBasis)
       for (const auto& pairing : request.context.pairings)
-        if ((*request.leftProfile.expandedBasis == pairing.first &&
-             *request.rightProfile.expandedBasis ==
+        if ((*request.leftFacts.expandedBasis == pairing.first &&
+             *request.rightFacts.expandedBasis ==
                  pairing.second.dualBasisId) ||
-            (*request.rightProfile.expandedBasis == pairing.first &&
-             *request.leftProfile.expandedBasis ==
+            (*request.rightFacts.expandedBasis == pairing.first &&
+             *request.leftFacts.expandedBasis ==
                  pairing.second.dualBasisId))
           return InnerProductPipeline::DiagonalBasis;
-    if (request.leftProfile.singleBasisElement == KnownState::True ||
-        request.rightProfile.singleBasisElement == KnownState::True)
+    if (request.leftFacts.singleBasisElement() ||
+        request.rightFacts.singleBasisElement())
       return InnerProductPipeline::SingleBasisElement;
     int pId = basisIdForKind(BasisKind::PowerSum);
-    if (request.leftProfile.expandedBasis == pId ||
-        request.rightProfile.expandedBasis == pId)
+    if (request.leftFacts.expandedBasis == pId ||
+        request.rightFacts.expandedBasis == pId)
       return InnerProductPipeline::PowerSumsStructured;
     return InnerProductPipeline::FallbackPowerSums;
   }
@@ -524,11 +426,11 @@ void SymmetricEngineRing::traceInnerProductPipelineSelection(
     const InnerProductRequest& request) const
 {
     if (std::getenv("M2_SYMMETRIC_RINGS_TRACE_INNER_PRODUCT") == nullptr) return;
-    auto basisName = [&](const InnerProductProfile& profile) {
-      return profile.expandedBasis
-          ? displayForBasis(*profile.expandedBasis)
-          : profile.pureBasis ? displayForBasis(*profile.pureBasis)
-                              : std::string("unknown");
+    auto basisName = [&](const ExpressionFacts& facts) {
+      return facts.expandedBasis
+          ? displayForBasis(*facts.expandedBasis)
+          : facts.pureBasis ? displayForBasis(*facts.pureBasis)
+                            : std::string("unknown");
     };
     auto optionalValue = [](const auto& value) {
       return value ? std::to_string(*value) : std::string("unknown");
@@ -538,12 +440,12 @@ void SymmetricEngineRing::traceInnerProductPipelineSelection(
         "SymmetricRings inner-product: pipeline=%s context=%s leftBasis=%s rightBasis=%s leftWeight=%s rightWeight=%s leftTerms=%s rightTerms=%s\n",
         innerProductPipelineName(pipeline),
         innerProductKindName(request.context.kind),
-        basisName(request.leftProfile).c_str(),
-        basisName(request.rightProfile).c_str(),
-        optionalValue(request.leftProfile.homogeneousWeight).c_str(),
-        optionalValue(request.rightProfile.homogeneousWeight).c_str(),
-        optionalValue(request.leftProfile.termCount).c_str(),
-        optionalValue(request.rightProfile.termCount).c_str());
+        basisName(request.leftFacts).c_str(),
+        basisName(request.rightFacts).c_str(),
+        optionalValue(request.leftFacts.homogeneousWeight).c_str(),
+        optionalValue(request.rightFacts.homogeneousWeight).c_str(),
+        std::to_string(request.leftFacts.termCount).c_str(),
+        std::to_string(request.rightFacts.termCount).c_str());
   }
 
 
@@ -579,10 +481,10 @@ ring_elem SymmetricEngineRing::executeInnerProductPipeline(
 ring_elem SymmetricEngineRing::hallInnerProductDispatch(
     const InnerProductRequest& request) const
 {
-    if (request.leftProfile.homogeneousWeight &&
-        request.rightProfile.homogeneousWeight &&
-        *request.leftProfile.homogeneousWeight !=
-            *request.rightProfile.homogeneousWeight)
+    if (request.leftFacts.homogeneousWeight &&
+        request.rightFacts.homogeneousWeight &&
+        *request.leftFacts.homogeneousWeight !=
+            *request.rightFacts.homogeneousWeight)
       return coefficientRing->zero();
     InnerProductPipeline pipeline = selectInnerProductPipeline(request);
     traceInnerProductPipelineSelection(pipeline, request);
@@ -604,15 +506,15 @@ SymmetricEngineRing::selectDiagonalBasisRoute(
         InnerProductRoute::ViaConvertBothToPowerSums,
         InnerProductOrientation::Original};
     fallback.estimatedCost = std::numeric_limits<size_t>::max();
-    if (!request.leftProfile.expandedBasis ||
-        !request.rightProfile.expandedBasis)
+    if (!request.leftFacts.expandedBasis ||
+        !request.rightFacts.expandedBasis)
       return fallback;
 
     std::vector<InnerProductCandidate> candidates;
     for (const auto& pairing : request.context.pairings)
       {
-        if (*request.leftProfile.expandedBasis == pairing.first &&
-            *request.rightProfile.expandedBasis == pairing.second.dualBasisId)
+        if (*request.leftFacts.expandedBasis == pairing.first &&
+            *request.rightFacts.expandedBasis == pairing.second.dualBasisId)
           {
             InnerProductCandidate candidate{
               InnerProductPipeline::DiagonalBasis,
@@ -625,8 +527,8 @@ SymmetricEngineRing::selectDiagonalBasisRoute(
             candidate.pairingKind = pairing.second.kind;
             candidates.push_back(candidate);
           }
-        if (*request.rightProfile.expandedBasis == pairing.first &&
-            *request.leftProfile.expandedBasis == pairing.second.dualBasisId)
+        if (*request.rightFacts.expandedBasis == pairing.first &&
+            *request.leftFacts.expandedBasis == pairing.second.dualBasisId)
           {
             InnerProductCandidate candidate{
               InnerProductPipeline::DiagonalBasis,
@@ -671,21 +573,21 @@ SymmetricEngineRing::selectSingleBasisElementRoute(
     int pId = basisIdForKind(BasisKind::PowerSum);
 
     if (request.context.kind == InnerProductKind::OrdinaryHall &&
-        request.leftProfile.singleBasisElement == KnownState::True &&
-        request.rightProfile.singleBasisElement == KnownState::True)
+        request.leftFacts.singleBasisElement() &&
+        request.rightFacts.singleBasisElement())
       {
         auto addKostkaCandidate = [&](int leftBasisId,
                                       int rightBasisId,
                                       InnerProductRoute route,
                                       InnerProductOrientation orientation) {
-          const InnerProductProfile& left =
+          const ExpressionFacts& left =
               orientation == InnerProductOrientation::Original
-                  ? request.leftProfile : request.rightProfile;
-          const InnerProductProfile& right =
+                  ? request.leftFacts : request.rightFacts;
+          const ExpressionFacts& right =
               orientation == InnerProductOrientation::Original
-                  ? request.rightProfile : request.leftProfile;
-          if (left.singleBasisId == leftBasisId &&
-              right.singleBasisId == rightBasisId)
+                  ? request.rightFacts : request.leftFacts;
+          if (left.singleBasisElementId == leftBasisId &&
+              right.singleBasisElementId == rightBasisId)
             candidates.push_back(InnerProductCandidate{
                 InnerProductPipeline::SingleBasisElement,
                 route,
@@ -717,16 +619,16 @@ SymmetricEngineRing::selectSingleBasisElementRoute(
           }
       }
 
-    auto addDualCoefficientCandidates = [&](const InnerProductProfile& expansion,
-                                            const InnerProductProfile& probe,
+    auto addDualCoefficientCandidates = [&](const ExpressionFacts& probe,
                                             InnerProductOrientation orientation) {
-      if (probe.singleBasisElement != KnownState::True ||
-          !probe.singleBasisId)
+      if (!probe.singleBasisElement() ||
+          !probe.singleBasisElementId)
         return;
       for (const auto& pairing : request.context.pairings)
         {
           if (pairing.second.kind != InnerProductPairingKind::Dual ||
-              pairing.second.dualBasisId != *probe.singleBasisId)
+              pairing.second.dualBasisId !=
+                  *probe.singleBasisElementId)
             continue;
           InnerProductCandidate candidate{
               InnerProductPipeline::SingleBasisElement,
@@ -739,21 +641,19 @@ SymmetricEngineRing::selectSingleBasisElementRoute(
           candidates.push_back(candidate);
         }
     };
-    addDualCoefficientCandidates(request.leftProfile,
-                                 request.rightProfile,
+    addDualCoefficientCandidates(request.rightFacts,
                                  InnerProductOrientation::Original);
-    addDualCoefficientCandidates(request.rightProfile,
-                                 request.leftProfile,
+    addDualCoefficientCandidates(request.leftFacts,
                                  InnerProductOrientation::Swapped);
 
-    if (request.leftProfile.expandedBasis == pId &&
-        request.rightProfile.singleBasisId == schurId)
+    if (request.leftFacts.expandedBasis == pId &&
+        request.rightFacts.singleBasisElementId == schurId)
       candidates.push_back(InnerProductCandidate{
           InnerProductPipeline::SingleBasisElement,
           InnerProductRoute::ViaWeightedSchurCharacters,
           InnerProductOrientation::Original});
-    if (request.rightProfile.expandedBasis == pId &&
-        request.leftProfile.singleBasisId == schurId)
+    if (request.rightFacts.expandedBasis == pId &&
+        request.leftFacts.singleBasisElementId == schurId)
       candidates.push_back(InnerProductCandidate{
           InnerProductPipeline::SingleBasisElement,
           InnerProductRoute::ViaWeightedSchurCharacters,
@@ -788,14 +688,14 @@ SymmetricEngineRing::selectPowerSumsStructuredRoute(
     int pId = basisIdForKind(BasisKind::PowerSum);
     int schurId = basisIdForKind(BasisKind::Schur);
     std::vector<InnerProductCandidate> candidates;
-    if (request.leftProfile.expandedBasis == pId &&
-        request.rightProfile.expandedBasis == schurId)
+    if (request.leftFacts.expandedBasis == pId &&
+        request.rightFacts.expandedBasis == schurId)
       candidates.push_back(InnerProductCandidate{
           InnerProductPipeline::PowerSumsStructured,
           InnerProductRoute::ViaWeightedSchurCharacters,
           InnerProductOrientation::Original});
-    if (request.rightProfile.expandedBasis == pId &&
-        request.leftProfile.expandedBasis == schurId)
+    if (request.rightFacts.expandedBasis == pId &&
+        request.leftFacts.expandedBasis == schurId)
       candidates.push_back(InnerProductCandidate{
           InnerProductPipeline::PowerSumsStructured,
           InnerProductRoute::ViaWeightedSchurCharacters,
@@ -877,10 +777,10 @@ ring_elem SymmetricEngineRing::hallInnerProductElements(
     ring_elem f,
     ring_elem g,
     InnerProductKind kind,
-    const std::map<int, InnerProductTarget>& metadata) const
+    const std::map<int, InnerProductTarget>& pairings) const
 {
     return hallInnerProductDispatch(
-        buildInnerProductRequest(f, g, kind, metadata));
+        buildInnerProductRequest(f, g, kind, pairings));
   }
 
 ring_elem SymmetricEngineRing::hallInnerProduct(
@@ -891,11 +791,12 @@ ring_elem SymmetricEngineRing::hallInnerProduct(
 {
     InnerProductKind kind = innerProductKindFromCode(kindCode);
     if (error()) return coefficientRing->zero();
-    std::map<int, InnerProductTarget> metadata =
+    std::map<int, InnerProductTarget> pairings =
         innerProductTargetMap(innerProductMap);
     if (error()) return coefficientRing->zero();
     return hallInnerProductDispatch(
-        buildInnerProductRequest(f, g, kind, std::move(metadata)));
+        buildInnerProductRequest(
+            f, g, kind, std::move(pairings)));
   }
 
 } // namespace symmetric_rings

@@ -124,8 +124,8 @@ raw dispatch entry points.
   evaluator, and ordered expression-piece partitioning.
 - `basis-conversion-plans.cpp`: policy-free complete conversion plans.
 - `basis-conversion-picker.cpp`: endpoint-specific ordered performance policy.
-- `basis-conversion.*`: expression facts, plan validation and generic
-  execution, and conversion workflow.
+- `basis-conversion.*`: plan validation and generic execution, and conversion
+  workflow.
 - `basis-coefficient.*`: targeted coefficient routes and their default
   full-conversion fallback.
 - `basis-conversion-kernels.*`: conversion formulas and recurrence helpers.
@@ -143,12 +143,14 @@ raw dispatch entry points.
   multiplicative products, generic target-closed folds, and complete
   fallbacks.
 - `presentation.cpp`: presentation ordering and string rendering.
-- `expression-helpers.*`: shared expression facts and metadata, basis-expansion
-  probes, decomposition, reconstruction, structural inspection, and
-  configurable normalization helpers.
+- `storage.*`: canonical storage and the shared `ExpressionFacts` record/cache.
+- `expression-helpers.*`: shared fact inference and cache lifecycle,
+  basis-expansion probes, decomposition, reconstruction, structural
+  inspection, and configurable normalization helpers.
 - `plethysm.*` and `omega.*`: their respective major operations.
-- `inner-product-dispatch.*`: inner-product requests, profiles, selectors,
-  tracing, pipeline orchestration, and public entry points.
+- `inner-product-dispatch.*`: inner-product requests over shared
+  `ExpressionFacts`, selectors, tracing, pipeline orchestration, and public
+  entry points.
 - `inner-product-kernels.*`: scalar formulas and coefficient-map pairing
   kernels.
 

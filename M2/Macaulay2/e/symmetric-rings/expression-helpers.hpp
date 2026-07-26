@@ -11,59 +11,6 @@
 // These helpers expose stable mathematical decompositions and normalization
 // operations. They do not contain operation-specific selection policy.
 
-  struct ExpressionFacts
-  {
-    // Every ExpressionFacts value is an exact description of one realized
-    // expression. Canonical-output contracts are plan/kernel properties and
-    // must never be represented by invented support counts in this type.
-    bool normalized = true;
-    bool skewFree = true;
-    bool collected = true;
-    CombinatorialTags combinatorialTags = 0;
-    size_t termCount = 0;
-    size_t scalarTermCount = 0;
-    size_t singleFactorTermCount = 0;
-    size_t productTermCount = 0;
-    size_t maximumFactorsPerTerm = 0;
-    std::vector<int> factorBases;
-    size_t skewFactorCount = 0;
-    std::optional<int> pureBasis;
-    std::optional<int> expandedBasis;
-    std::optional<int> homogeneousWeight;
-    size_t maximumPartitionLength = 0;
-    std::optional<int> singleBasisElementId;
-    std::optional<Partition> singleBasisElementIndex;
-    std::optional<bool> singleBasisElementCoefficientOne;
-
-    bool noProducts() const { return productTermCount == 0; }
-    bool singleTerm() const { return termCount == 1; }
-    bool mixedBasis() const { return factorBases.size() > 1; }
-    bool provenanceUnknown() const { return combinatorialTags == 0; }
-    bool provenanceMixed() const
-    {
-      return combinatorialTags != 0 &&
-             (combinatorialTags & (combinatorialTags - 1)) != 0;
-    }
-    bool singleBasisElement() const
-    {
-      return termCount == 1 &&
-             scalarTermCount == 0 &&
-             singleFactorTermCount == 1 &&
-             productTermCount == 0 &&
-             normalized &&
-             skewFree &&
-             collected;
-    }
-    bool canonicalExpansionInBasis(int basisId) const
-    {
-      if (!normalized || !skewFree || !collected || !noProducts())
-        return false;
-      // Zero and scalar expressions are canonical in every basis.
-      return singleFactorTermCount == 0 ||
-             (expandedBasis && *expandedBasis == basisId);
-    }
-  };
-
  public:
   struct HomogeneousComponent
   {
@@ -101,6 +48,8 @@
     std::optional<int> homogeneousWeight;
     std::optional<int> pureBasis;
     std::optional<int> expandedBasis;
+    // These names are part of the established M2 expressionShape result.
+    // "FactsComplete" means the complete canonical cache contract.
     bool hasMetadata = false;
     bool metadataFactsComplete = false;
     bool metadataNormalized = false;
@@ -123,10 +72,10 @@
     ring_elem expression;
     ExpressionFacts facts;
     std::vector<size_t> factorsPerTerm;
-    bool usedCompleteMetadataBypass = false;
+    bool usedCompleteCanonicalFactsBypass = false;
     bool usedAlreadyPreparedBypass = false;
-    bool bypassedStraighteningFromMetadata = false;
-    bool bypassedSkewExpansionFromMetadata = false;
+    bool bypassedStraighteningFromCache = false;
+    bool bypassedSkewExpansionFromCache = false;
     bool performedStraightening = false;
     bool performedSkewExpansion = false;
     bool resolvedProducts = false;
@@ -183,22 +132,21 @@
       const SymmetricMonomial& monomial,
       size_t pos,
       ring_elem coefficient) const;
-  std::optional<ExpressionFacts> expressionFactsFromMetadata(
+  std::optional<ExpressionFacts> canonicalExpressionFactsFromCache(
       ring_elem f) const;
-  void invalidateExactExpressionFacts(
-      SymmetricConversionMetadataSlot& metadata) const;
+  ExpressionFacts exactExpressionFacts(ring_elem f) const;
+  void discardSupportDependentFacts(
+      ExpressionFactsCacheSlot& cache) const;
   void refreshSingleBasisElementCoefficientFact(
-      SymmetricConversionMetadata& metadata,
+      ExpressionFactsCache& cache,
       const SymmetricRingPoly *poly) const;
-  SymmetricConversionMetadata metadataAfterAddition(
-      const SymmetricConversionMetadata& left,
-      const SymmetricConversionMetadata& right,
-      const SymmetricRingPoly *result) const;
-  SymmetricConversionMetadata metadataAfterProduct(
-      const SymmetricConversionMetadata& left,
-      const SymmetricConversionMetadata& right,
-      const SymmetricRingPoly *result) const;
-  void attachExpressionFacts(
+  ExpressionFactsCache expressionFactsCacheAfterAddition(
+      const ExpressionFactsCache& left,
+      const ExpressionFactsCache& right) const;
+  ExpressionFactsCache expressionFactsCacheAfterProduct(
+      const ExpressionFactsCache& left,
+      const ExpressionFactsCache& right) const;
+  void attachCanonicalExpansionFacts(
       ring_elem f,
       const ExpressionFacts& facts,
       int targetBasisId,
@@ -216,10 +164,10 @@
   ring_elem expressionFromBasisElement(
       const SymmetricMonomial& monomial,
       size_t position) const;
-  ring_elem expressionHelperFromTerms(
+  ring_elem expressionFromTermsWithFacts(
       VECTOR(SymmetricTerm)& terms,
       CombinatorialTags tags) const;
-  void attachExpressionHelperFacts(
+  void attachInspectedExpressionFacts(
       ring_elem expression,
       const ExpressionFacts& facts) const;
 

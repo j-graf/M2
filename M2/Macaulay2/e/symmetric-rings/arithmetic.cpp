@@ -113,7 +113,7 @@ ring_elem SymmetricEngineRing::copyPolyValue(const SymmetricRingPoly *poly) cons
 {
     auto result = new SymmetricRingPoly;
     result->combinatorialTags = poly->combinatorialTags;
-    result->conversionMetadata = poly->conversionMetadata;
+    result->expressionFactsCache = poly->expressionFactsCache;
     result->terms.reserve(poly->terms.size());
     for (const auto& term : poly->terms)
       result->terms.push_back({coefficientRing->copy(term.coeff), term.monomial});
@@ -497,15 +497,15 @@ ring_elem SymmetricEngineRing::negate(const ring_elem f) const
     auto result = new SymmetricRingPoly;
     const auto *poly = polyValue(f);
     result->combinatorialTags = poly->combinatorialTags;
-    result->conversionMetadata = poly->conversionMetadata;
+    result->expressionFactsCache = poly->expressionFactsCache;
     result->terms.reserve(poly->terms.size());
     for (const auto& term : poly->terms)
       result->terms.push_back({coefficientRing->negate(term.coeff), term.monomial});
     // Negation preserves support and canonical form. Refresh the only
-    // coefficient-sensitive exact fact instead of discarding the full profile.
-    if (result->conversionMetadata)
+    // coefficient-sensitive exact fact instead of discarding the full cache.
+    if (result->expressionFactsCache)
       refreshSingleBasisElementCoefficientFact(
-          *result->conversionMetadata, result);
+          *result->expressionFactsCache, result);
     return makePolyValue(result);
   }
 
@@ -513,15 +513,16 @@ ring_elem SymmetricEngineRing::add(const ring_elem f, const ring_elem g) const
 {
     const auto *left = polyValue(f);
     const auto *right = polyValue(g);
-    auto preserveMetadata = [&](ring_elem value) {
+    auto preserveExpressionFacts = [&](ring_elem value) {
       mutablePolyValue(value)->combinatorialTags =
           left->combinatorialTags | right->combinatorialTags;
-      if (!left->conversionMetadata || !right->conversionMetadata) return value;
-      const auto *resultPoly = polyValue(value);
-      mutablePolyValue(value)->conversionMetadata = metadataAfterAddition(
-          *left->conversionMetadata,
-          *right->conversionMetadata,
-          resultPoly);
+      if (!left->expressionFactsCache ||
+          !right->expressionFactsCache)
+        return value;
+      mutablePolyValue(value)->expressionFactsCache =
+          expressionFactsCacheAfterAddition(
+              *left->expressionFactsCache,
+              *right->expressionFactsCache);
       return value;
     };
     if (left->terms.empty()) return copyPolyValue(right);
@@ -529,10 +530,10 @@ ring_elem SymmetricEngineRing::add(const ring_elem f, const ring_elem g) const
 
     if (compareMonomials(left->terms.back().monomial,
                          right->terms.front().monomial) == LT)
-      return preserveMetadata(concatenateTerms(left, right));
+      return preserveExpressionFacts(concatenateTerms(left, right));
     if (compareMonomials(right->terms.back().monomial,
                          left->terms.front().monomial) == LT)
-      return preserveMetadata(concatenateTerms(right, left));
+      return preserveExpressionFacts(concatenateTerms(right, left));
 
     auto result = new SymmetricRingPoly;
     result->terms.reserve(left->terms.size() + right->terms.size());
@@ -557,7 +558,7 @@ ring_elem SymmetricEngineRing::add(const ring_elem f, const ring_elem g) const
       }
     result->terms.insert(result->terms.end(), left->terms.begin() + i, left->terms.end());
     result->terms.insert(result->terms.end(), right->terms.begin() + j, right->terms.end());
-    return preserveMetadata(makePolyValue(result));
+    return preserveExpressionFacts(makePolyValue(result));
   }
 
 ring_elem SymmetricEngineRing::subtract(const ring_elem f, const ring_elem g) const
@@ -575,20 +576,21 @@ SymmetricRingPoly *SymmetricEngineRing::multByCoefficient(ring_elem coeff,
     auto result = new SymmetricRingPoly;
     if (coefficientRing->is_zero(coeff)) return result;
     result->combinatorialTags = poly->combinatorialTags;
-    result->conversionMetadata = poly->conversionMetadata;
+    result->expressionFactsCache = poly->expressionFactsCache;
     result->terms.reserve(poly->terms.size());
     for (const auto& term : poly->terms)
       {
         ring_elem c = coefficientRing->mult(coeff, term.coeff);
         if (!coefficientRing->is_zero(c)) result->terms.push_back({c, term.monomial});
       }
-    if (result->conversionMetadata)
+    if (result->expressionFactsCache)
       {
         if (result->terms.size() != poly->terms.size())
-          invalidateExactExpressionFacts(result->conversionMetadata);
+          discardSupportDependentFacts(
+              result->expressionFactsCache);
         else
           refreshSingleBasisElementCoefficientFact(
-              *result->conversionMetadata, result);
+              *result->expressionFactsCache, result);
       }
     return result;
   }
@@ -696,14 +698,15 @@ ring_elem SymmetricEngineRing::mult(const ring_elem f, const ring_elem g) const
     const auto *left = polyValue(f);
     const auto *right = polyValue(g);
     const CombinatorialTags productTags = selectMultiplicationTags(f, g);
-    auto preserveProductMetadata = [&](ring_elem value) {
+    auto preserveProductFacts = [&](ring_elem value) {
       mutablePolyValue(value)->combinatorialTags = productTags;
-      if (!left->conversionMetadata || !right->conversionMetadata) return value;
-      const auto *resultPoly = polyValue(value);
-      mutablePolyValue(value)->conversionMetadata = metadataAfterProduct(
-          *left->conversionMetadata,
-          *right->conversionMetadata,
-          resultPoly);
+      if (!left->expressionFactsCache ||
+          !right->expressionFactsCache)
+        return value;
+      mutablePolyValue(value)->expressionFactsCache =
+          expressionFactsCacheAfterProduct(
+              *left->expressionFactsCache,
+              *right->expressionFactsCache);
       return value;
     };
     if (getScalar(left, scalar)) return makePolyValue(multByCoefficient(scalar, right));
@@ -717,7 +720,7 @@ ring_elem SymmetricEngineRing::mult(const ring_elem f, const ring_elem g) const
           result->terms.push_back({coeff,
                                    multiplyMonomials(left->terms[0].monomial,
                                                      right->terms[0].monomial)});
-        return preserveProductMetadata(makePolyValue(result));
+        return preserveProductFacts(makePolyValue(result));
       }
     VECTOR(SymmetricTerm) products;
     if (left->terms.size() != 0 &&
@@ -739,7 +742,7 @@ ring_elem SymmetricEngineRing::mult(const ring_elem f, const ring_elem g) const
             products.push_back(
                 {coeff, multiplyMonomials(lt.monomial, rt.monomial)});
         }
-    return preserveProductMetadata(fromTermVector(products, false));
+    return preserveProductFacts(fromTermVector(products, false));
   }
 
 // ============================================================================
@@ -765,7 +768,7 @@ bool SymmetricEngineRing::promoteCollectedExpansion(
     // Coefficient promotion cannot disturb an already collected monomial order.
     target->terms.reserve(source->terms.size());
     target->combinatorialTags = source->combinatorialTags;
-    target->conversionMetadata = source->conversionMetadata;
+    target->expressionFactsCache = source->expressionFactsCache;
     bool supportPreserved = true;
     for (const auto& term : source->terms)
       {
@@ -785,13 +788,14 @@ bool SymmetricEngineRing::promoteCollectedExpansion(
     // rememberBasesFrom preserves the numeric basis-ID map used by transported
     // monomials.  Exact structural facts therefore remain valid when support is
     // unchanged; only the coefficient-one predicate must be refreshed.
-    if (target->conversionMetadata)
+    if (target->expressionFactsCache)
       {
-        auto& metadata = *target->conversionMetadata;
+        auto& cache = *target->expressionFactsCache;
         if (!supportPreserved)
-          invalidateExactExpressionFacts(target->conversionMetadata);
+          discardSupportDependentFacts(
+              target->expressionFactsCache);
         else
-          refreshSingleBasisElementCoefficientFact(metadata, target);
+          refreshSingleBasisElementCoefficientFact(cache, target);
       }
     result = makePolyValue(target);
     return true;
@@ -816,7 +820,7 @@ bool SymmetricEngineRing::liftCollectedExpansion(
     auto target = new SymmetricRingPoly;
     target->terms.reserve(source->terms.size());
     target->combinatorialTags = source->combinatorialTags;
-    target->conversionMetadata = source->conversionMetadata;
+    target->expressionFactsCache = source->expressionFactsCache;
     bool supportPreserved = true;
     for (const auto& term : source->terms)
       {
@@ -851,13 +855,14 @@ bool SymmetricEngineRing::liftCollectedExpansion(
         else
           supportPreserved = false;
       }
-    if (target->conversionMetadata)
+    if (target->expressionFactsCache)
       {
-        auto& metadata = *target->conversionMetadata;
+        auto& cache = *target->expressionFactsCache;
         if (!supportPreserved)
-          invalidateExactExpressionFacts(target->conversionMetadata);
+          discardSupportDependentFacts(
+              target->expressionFactsCache);
         else
-          refreshSingleBasisElementCoefficientFact(metadata, target);
+          refreshSingleBasisElementCoefficientFact(cache, target);
       }
     result = makePolyValue(target);
     return true;

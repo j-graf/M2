@@ -465,7 +465,7 @@ const RingElement *rawSymmetricRingsPlethysmToBasis(const RingElement *f,
 }
 
 // ============================================================================
-// Conversion Metadata Interface
+// Expression-Facts Cache Interface
 // ============================================================================
 
 int rawSymmetricRingsSingleBasisId(const RingElement *f)
@@ -504,22 +504,24 @@ bool rawSymmetricRingsHasPlethysmProvenance(const RingElement *f)
 bool rawSymmetricRingsCopyConversionMetadata(const RingElement *source,
                                              const RingElement *target)
 {
+  // Keep the established raw name for M2 compatibility. The transported
+  // payload is now the shared expression-facts cache plus provenance tags.
   try
     {
       const auto *sourceRing = symmetricRingFromElement(source);
       if (error()) return false;
       const auto *targetRing = symmetricRingFromElement(target);
       if (error()) return false;
-      auto metadata = polyValue(source->get_value())->conversionMetadata;
-      if (metadata && sourceRing != targetRing)
+      auto cache = polyValue(source->get_value())->expressionFactsCache;
+      if (cache && sourceRing != targetRing)
         {
           // Basis IDs are ring-local. The M2 fallback reconstructs atoms on
-          // the target ring, so basis identity and the exact facts profile
+          // the target ring, so basis identity and the exact cached facts
           // must be recomputed together.
-          metadata->discardRingLocalBasisFacts();
+          cache->discardRingLocalBasisFacts();
         }
-      mutablePolyValue(target->get_value())->conversionMetadata =
-          std::move(metadata);
+      mutablePolyValue(target->get_value())->expressionFactsCache =
+          std::move(cache);
       mutablePolyValue(target->get_value())->combinatorialTags =
           polyValue(source->get_value())->combinatorialTags;
       return true;

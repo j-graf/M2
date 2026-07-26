@@ -127,10 +127,10 @@ isPowerSumConversionApplicable = F ->
 needsM2PowerSumConversion = F ->
     (expressionConversionCapabilities F)#"NeedsPowerSumHook"
 
--- Inspects the M2-owned conversion boundary once.  The profile records only
+-- Inspects the M2-owned conversion boundary once.  The record contains only
 -- facts needed to choose between custom hooks, the native engine, and the
 -- constant-QQ working ring; mathematical plan selection remains in C++.
-conversionDispatchProfile = (f, B) -> (
+conversionDispatchData = (f, B) -> (
     R0 := ring f;
     sourceCapabilities := expressionConversionCapabilities f;
     sourceId := sourceCapabilities#"SourceBasisId";
@@ -448,7 +448,7 @@ executeApplicableBasisConversion = (f, dispatchData) -> (
 toBasisFallback = (f, target) -> (
     R0 := ring f;
     B := targetBasisOnRing(R0, target);
-    executeApplicableBasisConversion(f, conversionDispatchProfile(f, B))
+    executeApplicableBasisConversion(f, conversionDispatchData(f, B))
     )
 
 -- Product-aware multiplication followed by conversion to a target basis.
@@ -458,12 +458,12 @@ multiplyToBasis(SymmetricRingElement, SymmetricRingElement, Thing) := (f, g, tar
     R0 := ring f;
     if ring g =!= R0 then error "expected elements in the same symmetric ring";
     B := targetBasisOnRing(R0, target);
-    leftProfile := conversionDispatchProfile(f, B);
-    rightProfile := conversionDispatchProfile(g, B);
+    leftDispatchData := conversionDispatchData(f, B);
+    rightDispatchData := conversionDispatchData(g, B);
     isNativeMultiplicationApplicable :=
-        leftProfile#"SourceUsesOnlyEngineBases"
-        and rightProfile#"SourceUsesOnlyEngineBases"
-        and leftProfile#"TargetIsEngineReadable";
+        leftDispatchData#"SourceUsesOnlyEngineBases"
+        and rightDispatchData#"SourceUsesOnlyEngineBases"
+        and leftDispatchData#"TargetIsEngineReadable";
     if isNativeMultiplicationApplicable then
         userSymmetricElement(R0, rawSymmetricRingsMultiplyToBasis(
             raw f, raw g, B#"BasisId"))
@@ -488,7 +488,7 @@ toBasis = method()
 toBasis(SymmetricRingElement, Thing) := (f, target) -> (
     R0 := ring f;
     B := targetBasisOnRing(R0, target);
-    dispatchData := conversionDispatchProfile(f, B);
+    dispatchData := conversionDispatchData(f, B);
     preferConstantQQ := dispatchData#"PreferConstantQQ";
     if preferConstantQQ then (
         workingInputs := toConstantQQIfPossible({f}, true);

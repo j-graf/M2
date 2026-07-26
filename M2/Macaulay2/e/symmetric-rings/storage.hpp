@@ -41,7 +41,7 @@ struct SymmetricTerm
 };
 
 // ============================================================================
-// Semantic Tags And Conversion Metadata
+// Semantic Tags And Expression-Facts Cache
 // ============================================================================
 
 enum class CombinatorialTag : uint32_t
@@ -66,37 +66,180 @@ constexpr bool hasCombinatorialTag(CombinatorialTags tags,
   return (tags & combinatorialTagMask(tag)) != 0;
 }
 
-class SymmetricConversionMetadata : public our_gc_cleanup
+// Exact mathematical and structural facts about one realized expression.
+// Operation-specific selectors consume this shared vocabulary rather than
+// maintaining parallel profiles with subtly different derived predicates.
+struct ExpressionFacts
+{
+  bool normalized = true;
+  bool skewFree = true;
+  bool collected = true;
+  CombinatorialTags combinatorialTags = 0;
+  size_t termCount = 0;
+  size_t scalarTermCount = 0;
+  size_t singleFactorTermCount = 0;
+  size_t productTermCount = 0;
+  size_t maximumFactorsPerTerm = 0;
+  std::vector<int> factorBases;
+  size_t skewFactorCount = 0;
+  std::optional<int> pureBasis;
+  std::optional<int> expandedBasis;
+  std::optional<int> homogeneousWeight;
+  size_t maximumPartitionLength = 0;
+  std::optional<int> singleBasisElementId;
+  std::optional<Partition> singleBasisElementIndex;
+  std::optional<bool> singleBasisElementCoefficientOne;
+
+  bool noProducts() const { return productTermCount == 0; }
+  bool singleTerm() const { return termCount == 1; }
+  bool mixedBasis() const { return factorBases.size() > 1; }
+  bool provenanceUnknown() const { return combinatorialTags == 0; }
+  bool provenanceMixed() const
+  {
+    return combinatorialTags != 0 &&
+           (combinatorialTags & (combinatorialTags - 1)) != 0;
+  }
+  bool singleBasisElement() const
+  {
+    return termCount == 1 &&
+           scalarTermCount == 0 &&
+           singleFactorTermCount == 1 &&
+           productTermCount == 0 &&
+           normalized &&
+           skewFree &&
+           collected;
+  }
+  bool canonicalExpansionInBasis(int basisId) const
+  {
+    if (!normalized || !skewFree || !collected || !noProducts())
+      return false;
+    // Zero and scalar expressions are canonical in every basis.
+    return singleFactorTermCount == 0 ||
+           (expandedBasis && *expandedBasis == basisId);
+  }
+};
+
+// A stored cache may contain either complete canonical ExpressionFacts or a
+// small set of facts that arithmetic can preserve without rescanning its
+// result. Only fields covered by this mask, or by CompleteCanonical as a
+// whole-record contract, are authoritative.
+enum class ExpressionFactKnowledge : uint32_t
+{
+  Normalized = 1u << 0,
+  SkewFree = 1u << 1,
+  Collected = 1u << 2,
+  PureBasis = 1u << 3,
+  ExpandedBasis = 1u << 4,
+  HomogeneousWeight = 1u << 5,
+  MaximumPartitionLength = 1u << 6,
+  FactorBases = 1u << 7,
+  CompleteCanonical = 1u << 8
+};
+
+constexpr uint32_t expressionFactKnowledgeMask(
+    ExpressionFactKnowledge knowledge)
+{
+  return static_cast<uint32_t>(knowledge);
+}
+
+class ExpressionFactsCache : public our_gc_cleanup
 {
  public:
-  SymmetricConversionMetadata() = default;
+  ExpressionFactsCache() = default;
 
-  // A metadata object owns ordinary STL containers, so it is finalized
+  // A cache owns ordinary STL containers, so it is finalized
   // independently of its containing polynomial.  Copy and move construction
   // must run the default our_gc_cleanup constructor to register that new
   // allocation with the collector before assigning the stored facts.
-  SymmetricConversionMetadata(const SymmetricConversionMetadata& other)
+  ExpressionFactsCache(const ExpressionFactsCache& other)
       : our_gc_cleanup()
   {
     *this = other;
   }
-  SymmetricConversionMetadata(SymmetricConversionMetadata&& other)
+  ExpressionFactsCache(ExpressionFactsCache&& other)
       : our_gc_cleanup()
   {
     *this = std::move(other);
   }
-  SymmetricConversionMetadata& operator=(
-      const SymmetricConversionMetadata&) = default;
-  SymmetricConversionMetadata& operator=(
-      SymmetricConversionMetadata&&) = default;
+  ExpressionFactsCache& operator=(
+      const ExpressionFactsCache&) = default;
+  ExpressionFactsCache& operator=(
+      ExpressionFactsCache&&) = default;
 
-  // Exact canonical facts form one indivisible contract. Arithmetic may keep
-  // individually valid hints after invalidating that contract, but no caller
-  // may use the remaining fields to justify a canonical-workflow bypass.
-  void invalidateExactExpressionFacts()
+  bool knows(ExpressionFactKnowledge fact) const
   {
-    expressionFactsComplete = false;
-    singleBasisElementCoefficientOne.reset();
+    return (knowledge & expressionFactKnowledgeMask(fact)) != 0;
+  }
+
+  void remember(ExpressionFactKnowledge fact)
+  {
+    knowledge |= expressionFactKnowledgeMask(fact);
+  }
+
+  void forget(ExpressionFactKnowledge fact)
+  {
+    knowledge &= ~expressionFactKnowledgeMask(fact);
+  }
+
+  bool hasCompleteCanonicalFacts() const
+  {
+    return knows(
+        ExpressionFactKnowledge::CompleteCanonical);
+  }
+
+  void setCompleteCanonicalFacts(ExpressionFacts value)
+  {
+    facts = std::move(value);
+    knowledge =
+        expressionFactKnowledgeMask(ExpressionFactKnowledge::Normalized) |
+        expressionFactKnowledgeMask(ExpressionFactKnowledge::SkewFree) |
+        expressionFactKnowledgeMask(ExpressionFactKnowledge::Collected) |
+        expressionFactKnowledgeMask(ExpressionFactKnowledge::PureBasis) |
+        expressionFactKnowledgeMask(ExpressionFactKnowledge::ExpandedBasis) |
+        expressionFactKnowledgeMask(
+            ExpressionFactKnowledge::HomogeneousWeight) |
+        expressionFactKnowledgeMask(
+            ExpressionFactKnowledge::MaximumPartitionLength) |
+        expressionFactKnowledgeMask(ExpressionFactKnowledge::FactorBases) |
+        expressionFactKnowledgeMask(
+            ExpressionFactKnowledge::CompleteCanonical);
+  }
+
+  // Coefficient operations can remove terms without changing the surviving
+  // monomials. Preserve structural postconditions, but discard every fact
+  // whose exact value depends on which terms remain.
+  void discardSupportDependentFacts()
+  {
+    forget(ExpressionFactKnowledge::CompleteCanonical);
+    if (knows(ExpressionFactKnowledge::Normalized) &&
+        !facts.normalized)
+      {
+        forget(ExpressionFactKnowledge::Normalized);
+        facts.normalized = true;
+      }
+    if (knows(ExpressionFactKnowledge::SkewFree) &&
+        !facts.skewFree)
+      {
+        forget(ExpressionFactKnowledge::SkewFree);
+        facts.skewFree = true;
+      }
+    if (knows(ExpressionFactKnowledge::HomogeneousWeight) &&
+        !facts.homogeneousWeight)
+      {
+        forget(ExpressionFactKnowledge::HomogeneousWeight);
+        facts.homogeneousWeight.reset();
+      }
+    forget(ExpressionFactKnowledge::PureBasis);
+    forget(ExpressionFactKnowledge::ExpandedBasis);
+    forget(ExpressionFactKnowledge::MaximumPartitionLength);
+    forget(ExpressionFactKnowledge::FactorBases);
+    facts.pureBasis.reset();
+    facts.expandedBasis.reset();
+    facts.maximumPartitionLength = 0;
+    facts.factorBases.clear();
+    facts.singleBasisElementId.reset();
+    facts.singleBasisElementIndex.reset();
+    facts.singleBasisElementCoefficientOne.reset();
   }
 
   // Numeric basis IDs describe one SymmetricEngineRing. Cross-ring fallback
@@ -104,123 +247,110 @@ class SymmetricConversionMetadata : public our_gc_cleanup
   // ID map, so discard the complete basis-identity cluster together.
   void discardRingLocalBasisFacts()
   {
-    invalidateExactExpressionFacts();
-    pureBasis.reset();
-    expandedBasis.reset();
-    factorBases.reset();
-    singleBasisElementId.reset();
-    singleBasisElementIndex.reset();
+    forget(ExpressionFactKnowledge::CompleteCanonical);
+    forget(ExpressionFactKnowledge::PureBasis);
+    forget(ExpressionFactKnowledge::ExpandedBasis);
+    forget(ExpressionFactKnowledge::FactorBases);
+    facts.pureBasis.reset();
+    facts.expandedBasis.reset();
+    facts.factorBases.clear();
+    facts.singleBasisElementId.reset();
+    facts.singleBasisElementIndex.reset();
+    facts.singleBasisElementCoefficientOne.reset();
   }
 
-  // True only when the exact canonical core needed for a workflow bypass was
-  // attached together. Expensive selector-only profiles remain optional and
-  // are enriched lazily from the expression when a policy consumes them.
-  // Arithmetic that can change the core leaves this false. Predicates such as
-  // single-term, single-basis-element, and product-free are deliberately not
-  // stored: consumers derive them from the counts below.
-  bool expressionFactsComplete = false;
-  std::optional<int> pureBasis;
-  std::optional<int> expandedBasis;
-  std::optional<int> homogeneousWeight;
-  std::optional<size_t> termCount;
-  std::optional<size_t> scalarTermCount;
-  std::optional<size_t> singleFactorTermCount;
-  std::optional<size_t> maximumPartitionLength;
-  std::optional<std::vector<int>> factorBases;
-  std::optional<int> singleBasisElementId;
-  std::optional<Partition> singleBasisElementIndex;
-  std::optional<bool> singleBasisElementCoefficientOne;
-  bool normalized = false;
-  bool skewFree = false;
-  bool collected = false;
+  ExpressionFacts facts;
+
+ private:
+  uint32_t knowledge = 0;
 };
 
 // Polynomial objects are the engine's pervasive value representation. Keep
-// their uncommon, comparatively large conversion profile out of line and
+// their uncommon, comparatively large expression-facts cache out of line and
 // share it across ordinary copies. A mutable access detaches first, preserving
-// the previous value semantics without copying profiles that are only read.
-class SymmetricConversionMetadataSlot
+// the previous value semantics without copying caches that are only read.
+class ExpressionFactsCacheSlot
 {
  public:
-  SymmetricConversionMetadataSlot() = default;
-  SymmetricConversionMetadataSlot(const SymmetricConversionMetadata& value)
-      : mValue(new SymmetricConversionMetadata(value))
+  ExpressionFactsCacheSlot() = default;
+  ExpressionFactsCacheSlot(const ExpressionFactsCache& value)
+      : mValue(new ExpressionFactsCache(value))
   {
   }
-  SymmetricConversionMetadataSlot(SymmetricConversionMetadata&& value)
-      : mValue(new SymmetricConversionMetadata(std::move(value)))
+  ExpressionFactsCacheSlot(ExpressionFactsCache&& value)
+      : mValue(new ExpressionFactsCache(std::move(value)))
   {
   }
-  SymmetricConversionMetadataSlot(
-      const SymmetricConversionMetadataSlot& other)
+  ExpressionFactsCacheSlot(
+      const ExpressionFactsCacheSlot& other)
       : mValue(other.mValue)
   {
   }
-  SymmetricConversionMetadataSlot(
-      SymmetricConversionMetadataSlot&& other) noexcept
+  ExpressionFactsCacheSlot(
+      ExpressionFactsCacheSlot&& other) noexcept
       : mValue(other.mValue)
   {
     other.mValue = nullptr;
   }
 
-  SymmetricConversionMetadataSlot& operator=(
-      const SymmetricConversionMetadataSlot& other)
+  ExpressionFactsCacheSlot& operator=(
+      const ExpressionFactsCacheSlot& other)
   {
     mValue = other.mValue;
     return *this;
   }
-  SymmetricConversionMetadataSlot& operator=(
-      SymmetricConversionMetadataSlot&& other) noexcept
+  ExpressionFactsCacheSlot& operator=(
+      ExpressionFactsCacheSlot&& other) noexcept
   {
     mValue = other.mValue;
     other.mValue = nullptr;
     return *this;
   }
-  SymmetricConversionMetadataSlot& operator=(
-      const SymmetricConversionMetadata& value)
+  ExpressionFactsCacheSlot& operator=(
+      const ExpressionFactsCache& value)
   {
-    mValue = new SymmetricConversionMetadata(value);
+    mValue = new ExpressionFactsCache(value);
     return *this;
   }
-  SymmetricConversionMetadataSlot& operator=(
-      SymmetricConversionMetadata&& value)
+  ExpressionFactsCacheSlot& operator=(
+      ExpressionFactsCache&& value)
   {
-    mValue = new SymmetricConversionMetadata(std::move(value));
+    mValue = new ExpressionFactsCache(std::move(value));
     return *this;
   }
 
   explicit operator bool() const { return mValue != nullptr; }
-  SymmetricConversionMetadata& operator*()
+  ExpressionFactsCache& operator*()
   {
     detach();
     return *mValue;
   }
-  const SymmetricConversionMetadata& operator*() const { return *mValue; }
-  SymmetricConversionMetadata *operator->()
+  const ExpressionFactsCache& operator*() const { return *mValue; }
+  ExpressionFactsCache *operator->()
   {
     detach();
     return mValue;
   }
-  const SymmetricConversionMetadata *operator->() const { return mValue; }
+  const ExpressionFactsCache *operator->() const { return mValue; }
 
  private:
   void detach()
   {
     if (mValue == nullptr) return;
-    mValue = new SymmetricConversionMetadata(*mValue);
+    mValue = new ExpressionFactsCache(*mValue);
   }
 
-  SymmetricConversionMetadata *mValue = nullptr;
+  ExpressionFactsCache *mValue = nullptr;
 };
 
 class SymmetricRingPoly : public our_new_delete
 {
  public:
   VECTOR(SymmetricTerm) terms;
-  // Semantic operation tags are independent of conversion-profile metadata:
+  // Semantic operation tags are independent of structural fact caching:
   // ordinary arithmetic can create them even when no conversion has run.
   CombinatorialTags combinatorialTags = 0;
-  SymmetricConversionMetadataSlot conversionMetadata;
+  ExpressionFactsCacheSlot expressionFactsCache;
 };
 
 // ============================================================================

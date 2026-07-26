@@ -82,7 +82,7 @@ const RingElement *rawSymmetricRingsPlethysmToBasis(const RingElement *f,
                                                     int targetBasisId);
 
 // ============================================================================
-// Conversion Metadata Interface
+// Expression-Facts Cache Interface
 // ============================================================================
 
 int rawSymmetricRingsSingleBasisId(const RingElement *f);

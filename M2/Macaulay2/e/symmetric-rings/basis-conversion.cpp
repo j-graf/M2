@@ -18,7 +18,7 @@
 namespace symmetric_rings {
 
 // Contributor map:
-//   1. exact expression facts and persistent metadata;
+//   1. shared exact expression facts and their stored cache;
 //   2. condition-driven expression-piece facts;
 //   3. plan indexing, structural contracts, and generic execution;
 //   4. canonical source-group conversion;
@@ -1236,13 +1236,13 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
       }
     const bool trace = basisConversionTraceEnabled();
 
-    // Exact zero/scalar metadata satisfies the target contract without basis
+    // Exact zero/scalar facts satisfy the target contract without basis
     // grouping or plan selection.
     if (knownFacts != nullptr &&
         knownFacts->singleFactorTermCount == 0)
       {
         ring_elem result = copyPolyValue(polyValue(f));
-        attachExpressionFacts(
+        attachCanonicalExpansionFacts(
             result,
             *knownFacts,
             targetBasisId,
@@ -1284,11 +1284,11 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
           }
         if (!resultFacts.canonicalExpansionInBasis(targetBasisId))
           {
-            ERROR("the canonical metadata bypass did not produce "
+            ERROR("the canonical fact-cache bypass did not produce "
                   "a target-basis expansion");
             return zero();
           }
-        attachExpressionFacts(
+        attachCanonicalExpansionFacts(
             result,
             resultFacts,
             targetBasisId,
@@ -1407,7 +1407,7 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
         return zero();
       }
     mutablePolyValue(result)->combinatorialTags = combinatorialTags;
-    attachExpressionFacts(
+    attachCanonicalExpansionFacts(
         result,
         resultFacts,
         targetBasisId,
@@ -1419,8 +1419,9 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
 // Basis-Conversion Input Preparation
 // ============================================================================
 // This stage establishes the normalized, skew-free factor expansion required
-// before products can be resolved. A canonical element or exact metadata proves
-// that the same mathematical preparation has already been completed.
+// before products can be resolved. A canonical element or a complete
+// canonical fact cache proves that the same mathematical preparation has
+// already been completed.
 
 SymmetricEngineRing::PreparedBasisConversionInput
 SymmetricEngineRing::prepareBasisConversionInput(
@@ -1452,13 +1453,13 @@ SymmetricEngineRing::prepareBasisConversionInput(
               combinatorialTags};
       }
     auto knownFacts =
-        expressionFactsFromMetadata(expression);
+        canonicalExpressionFactsFromCache(expression);
     if (knownFacts)
       {
         if (trace)
           std::fprintf(stderr,
                        "SymmetricRings toBasis: "
-                       "bypass=canonical-metadata target=%s\n",
+                       "bypass=canonical-facts-cache target=%s\n",
                        displayForBasis(targetBasisId).c_str());
         return {
             expression,
@@ -1602,7 +1603,7 @@ SymmetricEngineRing::resolveProductsForBasisConversion(
                   "basis contract");
             return {zero(), std::nullopt, false};
           }
-        attachExpressionFacts(
+        attachCanonicalExpansionFacts(
             productFree,
             productFreeFacts,
             targetBasisId,

@@ -39,7 +39,7 @@ toBasisBenchMedian = measurements -> (
 -- calls the separate development raw entry point rather than public toBasis.
 toBasisBenchExecute = (f, B, plan, track) -> (
     R0 := ring f;
-    dispatchData := conversionDispatchProfile(f, B);
+    dispatchData := conversionDispatchData(f, B);
     if not isNativeBasisConversionApplicable dispatchData then
         error "toBasisBench supports only built-in engine conversions";
     planIdentifier := toBasisBenchPlanIdentifier plan;
@@ -131,7 +131,7 @@ toBasisBench = args -> (
     R0 := ring f;
     B := targetBasisOnRing(R0, target);
     if not isNativeBasisConversionApplicable(
-        conversionDispatchProfile(f, B)) then
+        conversionDispatchData(f, B)) then
         error "toBasisBench supports only built-in engine conversions";
 
     -- Warm every requested plan equally before collecting measurements.
@@ -308,12 +308,12 @@ multiplyToBasisBench = args -> (
 
     R := ring f;
     B := targetBasisOnRing(R, target);
-    leftProfile := conversionDispatchProfile(f, B);
-    rightProfile := conversionDispatchProfile(g, B);
-    if not leftProfile#"SourceUsesOnlyEngineBases"
-        or not rightProfile#"SourceUsesOnlyEngineBases"
-        or not leftProfile#"TargetIsEngineReadable"
-        or not rightProfile#"TargetIsEngineReadable" then
+    leftDispatchData := conversionDispatchData(f, B);
+    rightDispatchData := conversionDispatchData(g, B);
+    if not leftDispatchData#"SourceUsesOnlyEngineBases"
+        or not rightDispatchData#"SourceUsesOnlyEngineBases"
+        or not leftDispatchData#"TargetIsEngineReadable"
+        or not rightDispatchData#"TargetIsEngineReadable" then
         error "multiplyToBasisBench supports only built-in engine bases";
 
     for warmup from 1 to warmups do

@@ -427,8 +427,8 @@ SymmetricEngineRing::selectBasisConversionPlan(
         basisKindForId(targetBasisId);
     const std::optional<std::string>& requested =
         forcedIdentifier;
-    ExpressionFacts selectionProfile = facts;
-    selectionProfile.combinatorialTags = combinatorialTags;
+    ExpressionFacts selectionFacts = facts;
+    selectionFacts.combinatorialTags = combinatorialTags;
 
     if (!requested &&
         plans.empty() &&
@@ -437,7 +437,7 @@ SymmetricEngineRing::selectBasisConversionPlan(
         return powerSumFallback;
       }
     // Most remaining endpoints have one unconditional specific mathematical
-    // plan. Return it without allocating a profile or running general
+    // plan. Return it without constructing piece facts or running general
     // conditional policy.
     if (!requested &&
         plans.size() == 1 &&
@@ -462,7 +462,7 @@ SymmetricEngineRing::selectBasisConversionPlan(
           if (plan.definition->id.value == *requested)
             {
               if (basisConversionPlanApplicable(
-                      plan, expression, selectionProfile))
+                      plan, expression, selectionFacts))
                 return plan;
               break;
             }
@@ -482,16 +482,16 @@ SymmetricEngineRing::selectBasisConversionPlan(
         return {};
       }
 
-    bool needsProfile = false;
+    bool needsPieceFacts = false;
     for (const auto& item : picker->preferences)
       if (item.condition.kind !=
           ExpressionConditionKind::Otherwise)
         {
-          needsProfile = true;
+          needsPieceFacts = true;
           break;
         }
     std::vector<ExpressionPieceFacts> pieceFacts;
-    if (needsProfile)
+    if (needsPieceFacts)
       {
         std::vector<ExpressionCondition> preferenceConditions;
         preferenceConditions.reserve(
@@ -501,7 +501,7 @@ SymmetricEngineRing::selectBasisConversionPlan(
         pieceFacts = inspectExpressionPieces(
             expression,
             ExpressionPieceKind::WholeExpression,
-            selectionProfile,
+            selectionFacts,
             expressionFactRequirements(
                 preferenceConditions));
         if (pieceFacts.size() != 1)
@@ -517,7 +517,7 @@ SymmetricEngineRing::selectBasisConversionPlan(
         const bool preferred =
             item.condition.kind ==
                 ExpressionConditionKind::Otherwise ||
-            (needsProfile &&
+            (needsPieceFacts &&
              expressionConditionHolds(
                  item.condition, pieceFacts.front()));
         if (!preferred)
@@ -547,7 +547,7 @@ SymmetricEngineRing::selectBasisConversionPlan(
         if (basisConversionPlanApplicable(
                 selected,
                 expression,
-                selectionProfile))
+                selectionFacts))
           return selected;
       }
 

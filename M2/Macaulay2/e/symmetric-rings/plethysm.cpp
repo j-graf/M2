@@ -321,7 +321,7 @@ ring_elem SymmetricEngineRing::executePlethysmToBasisRoute(
             targetBasisId,
             partitionWeight(outer) * partitionWeight(inner));
         if (error()) return zero();
-        attachExpressionFacts(
+        attachCanonicalExpansionFacts(
             result,
             facts,
             targetBasisId,
@@ -381,7 +381,8 @@ ring_elem SymmetricEngineRing::plethysm(ring_elem f, ring_elem g) const
     auto *resultPoly = mutablePolyValue(result);
     resultPoly->combinatorialTags = tags;
     resultFacts.combinatorialTags = tags;
-    attachExpressionFacts(result, resultFacts, pBasisId, tags);
+    attachCanonicalExpansionFacts(
+        result, resultFacts, pBasisId, tags);
     return result;
   }
 

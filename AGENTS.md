@@ -119,17 +119,19 @@ Use Schur Omega/`SchurOmega` for `Somega` and Hall-Littlewood P Omega/
 The engine subsystem is `M2/Macaulay2/e/symmetric-rings/`:
 
 - `partitions.*`: partition operations, ordering, straightening, characters.
-- `storage.*`: term/atom-block storage, ordering, and flattened atoms.
+- `storage.*`: term/atom-block storage, ordering, flattened atoms, and the
+  shared expression-facts record/cache.
 - `presentation.cpp`: stable user-facing ordering and display formatting.
 - `symmetric-engine-ring.*`: engine ring class and shared state.
 - `arithmetic.*`: arithmetic, comparison, hashing, terms, weights, constructors.
-- `expression-helpers.*`: shared expression facts and metadata, basis-expansion
-  probes, decomposition, reconstruction, inspection, and normalization workflows.
+- `expression-helpers.*`: shared fact inference and cache lifecycle,
+  basis-expansion probes, decomposition, reconstruction, inspection, and
+  normalization workflows.
 - `basis-conversion-policy.*`: reusable performance-only selector facts.
 - `basis-conversion-plans.cpp`: policy-free complete conversion plans.
 - `basis-conversion-picker.cpp`: ordered endpoint performance policy.
-- `basis-conversion.*`: expression facts, plan validation and generic
-  execution, and conversion entry points.
+- `basis-conversion.*`: plan validation and generic execution, and conversion
+  entry points.
 - `basis-coefficient.*`: targeted coefficient selection and scalar transitions.
 - `basis-conversion-kernels.*`: basis-family formulas, Jacobi–Trudi,
   characters, Hall--Littlewood transitions, recurrence helpers, and direct
@@ -142,7 +144,8 @@ The engine subsystem is `M2/Macaulay2/e/symmetric-rings/`:
   applicability, validation, and performance policy.
 - `binary-multiplication.*`: strict two-term multiplication workflows.
 - `multiplication.*`: bilinear extension and complete product-term strategies.
-- `inner-product*.*`: Hall inner-product profiles, selection, and kernels.
+- `inner-product*.*`: Hall inner-product requests, selection, and kernels;
+  operand structure uses the shared expression-facts service.
 - `plethysm.*`: plethysm and combined plethysm-to-basis paths.
 - `omega.*`: omega involution logic.
 - `raw-interface.*`: internal wrappers used by `e/interface`.

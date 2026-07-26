@@ -52,7 +52,7 @@ bool SymmetricEngineRing::multiplicationWorkflowTraceEnabled() const
 // Policy-Free Result And Product Helpers
 // ============================================================================
 
-SymmetricEngineRing::ExpressionFacts
+ExpressionFacts
 SymmetricEngineRing::finalizeCanonicalMultiplicationResult(
     ring_elem result,
     int targetBasisId,
@@ -68,7 +68,7 @@ SymmetricEngineRing::finalizeCanonicalMultiplicationResult(
               "contract");
         return facts;
       }
-    attachExpressionFacts(
+    attachCanonicalExpansionFacts(
         result,
         facts,
         targetBasisId,
@@ -124,7 +124,7 @@ SymmetricEngineRing::prepareMultiplicationOperands(
             ExpressionFacts& facts,
             std::vector<PreparedMultiplicationTerm>& terms) {
           auto knownFacts =
-              expressionFactsFromMetadata(input);
+              canonicalExpressionFactsFromCache(input);
           if (knownFacts)
             {
               expression = input;

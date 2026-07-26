@@ -164,14 +164,14 @@ expansions.
 ### Engine workflow
 
 `toBasis(f, v)` accepts pure, mixed-basis, skew, and product-bearing input. A
-single canonical basis element or an expression with exact canonical metadata
+single canonical basis element or an expression with exact canonical facts
 can enter group conversion immediately. Other input is normalized by
 straightening indices, expanding skew elements, canonicalizing factors, and
 collecting terms.
 
 ```mermaid
 flowchart TD
-    A["toBasis(f, v)"] --> B{"Canonical single element<br/>or exact canonical metadata?"}
+    A["toBasis(f, v)"] --> B{"Canonical single element<br/>or complete canonical cached facts?"}
 
     B -->|"Yes"| G["Canonical group-conversion helper"]
     B -->|"No"| C["Normalize expression<br/>Straighten indices, expand skew elements,<br/>canonicalize factors, and collect"]
@@ -219,7 +219,7 @@ Canonical target output is an unconditional kernel and plan invariant.
 Execution checks it whenever exact result facts or an intermediate are needed,
 and each owning conversion or multiplication workflow validates its final
 target contract. A plan's `outputGuarantee` condition records only a stronger
-shape or profile postcondition needed by a later component; `always()` means that
+structural postcondition needed by a later component; `always()` means that
 no stronger condition is claimed.
 
 If resolving products leaves only target terms, the workflow attaches exact
@@ -229,17 +229,18 @@ execution.
 The expression-facts contract contains only exact facts about a realized
 expression: canonical form, basis composition, homogeneous weight, term and
 factor counts, skew counts, single-element index, and provenance. Derived
-flags are computed from those values. Whole-expression profiles needed by a
-picker are computed lazily. The condition language declares which
-target-independent power-sum support facts it needs, and one inspector computes
-those facts for whole expressions, terms, or homogeneous components from the
-actual assigned support. Exact metadata lets canonical input bypass
-normalization and general rescanning.
+flags are computed from those values. A stored cache holds either those exact
+facts or the small set of postconditions arithmetic can preserve safely.
+Selector-specific power-sum support facts are still computed lazily. The
+condition language declares which target-independent support facts it needs,
+and one inspector computes them for whole expressions, terms, or homogeneous
+components from the actual assigned support. A complete canonical fact cache
+lets canonical input bypass normalization and general rescanning.
 
-Arithmetic may retain individually valid hints after it invalidates the exact
-canonical-core marker. Only the complete marker can justify a conversion
-bypass. Numeric basis IDs are allocated by the package registry and remain
-stable, but each engine ring has its own available-basis descriptors.
+Arithmetic may retain individually valid facts after it invalidates the
+complete canonical marker. Only that whole-record marker can justify a
+conversion bypass. Numeric basis IDs are allocated by the package registry
+and remain stable, but each engine ring has its own available-basis descriptors.
 Cross-ring fallback transport therefore discards basis-identity facts and
 reconstructs them from the realized target-ring expression.
 
@@ -460,7 +461,7 @@ flowchart TD
     B -->|"No"| C["Call plethysm(f, g)"]
     C --> P1["Convert f and g to power sums"]
     P1 --> P2["Apply Adams-operation substitution"]
-    P2 --> P3["Attach canonical power-sum metadata<br/>and plethysm provenance"]
+    P2 --> P3["Attach canonical power-sum facts<br/>and plethysm provenance"]
     P3 --> D["Call toBasis(result, v)<br/>through the canonical power-sum bypass"]
 
     SM --> R["Return canonical result in v"]
@@ -493,13 +494,13 @@ are orthogonal, so known unequal homogeneous weights give zero immediately.
 
 The current implementation uses four top-level pipelines; the unified
 weight-splitting workflow in `TODO-pipelines.md` is not yet implemented. The
-public entry builds operand profiles and a pairing context, applies the known
-unequal-weight zero test, and then selects one pipeline for the complete
-expressions.
+public entry obtains shared exact facts for both operands, builds a pairing
+context, applies the known unequal-weight zero test, and then selects one
+pipeline for the complete expressions.
 
 ```mermaid
 flowchart TD
-    A["hallInnerProduct(f, g, context)"] --> B["Build operand profiles<br/>and resolve pairing metadata"]
+    A["hallInnerProduct(f, g, context)"] --> B["Obtain shared expression facts<br/>and resolve pairing metadata"]
     B --> C{"Both homogeneous weights known<br/>and unequal?"}
     C -->|"Yes"| Z["Return zero"]
     C -->|"No"| D{"Select one top-level pipeline"}
@@ -588,10 +589,11 @@ Pieri, vertical Pieri, border strips, or Littlewood--Richardson structure.
 Tags describe the dominant mathematical origin of an expression; they are
 selection evidence, not a claim that a particular kernel already ran.
 
-Scalar multiplication preserves tags and exact structural metadata when its
+Scalar multiplication preserves tags and exact structural facts when its
 support is unchanged, refreshing coefficient-sensitive facts. General
-addition and multiplication retain conservative basis, weight, and shape
-hints; workflows attach complete exact metadata only after inspecting a
+addition and multiplication retain only provable positive basis, weight, and
+normalization postconditions; workflows attach complete exact facts only after
+inspecting a
 canonical realized result.
 
 ## Contributor map
@@ -607,14 +609,17 @@ grouped with their own mathematics.
 - `basis-conversion-policy.*` owns reusable performance-only selection facts.
 - `expression-conditions.*` owns inspectable mathematical conditions, logical
   composition, diagnostics, and ordered expression-piece partitioning.
-- `basis-conversion.hpp` declares expression facts, conversion-plan contracts,
-  database indexes, pickers, executors, and conversion entry points.
+- `storage.hpp` declares the shared expression-facts record and stored cache.
+- `expression-helpers.hpp` declares fact inference, cache lifecycle,
+  inspection, decomposition, and normalization helpers.
+- `basis-conversion.hpp` declares conversion-plan contracts, database indexes,
+  pickers, executors, and conversion entry points.
 - `basis-conversion-plans.cpp` inventories complete named conversion plans and
   any fixed piecewise formula policies inside them.
 - `basis-conversion-picker.cpp` inventories top-level endpoint performance
   choices among complete plans.
-- `basis-conversion.cpp` implements preparation, metadata, plan indexing and
-  validation, generic execution, product resolution handoff, and conversion.
+- `basis-conversion.cpp` implements preparation, plan indexing and validation,
+  generic execution, product resolution handoff, and conversion.
 - `basis-conversion-kernels.*` owns basis-family conversion mathematics.
 - `basis-normalization.*` owns the declarative straightening and skew-expansion
   rules used before conversion plans see an expression.

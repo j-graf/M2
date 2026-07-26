@@ -43,16 +43,16 @@ The principal files are:
 |---|---|
 | `symmetric-engine-ring.*` | The engine ring and its central data types |
 | `operation-records.hpp` | Compact records shared between engine state and operation modules |
-| `storage.*` | Canonical storage, term collection, and representation helpers |
+| `storage.*` | Canonical storage, term collection, representation helpers, and the shared expression-facts record/cache |
 | `presentation.*` | Stable presentation ordering and string rendering |
 | `partitions.*` | Partition utilities and combinatorial enumeration |
 | `arithmetic.*` | Addition, multiplication, scalar operations, and product tagging |
-| `expression-helpers.*` | Shared facts and metadata, basis-expansion probes, decomposition, reconstruction, inspection, and configurable normalization |
+| `expression-helpers.*` | Shared fact inference and cache lifecycle, basis-expansion probes, decomposition, reconstruction, inspection, and configurable normalization |
 | `expression-conditions.*` | Inspectable plan conditions and ordered expression-piece partitioning |
 | `basis-conversion-policy.*` | Reusable performance-only selection facts |
 | `basis-conversion-plans.cpp` | Policy-free complete conversion plans whose cases use a kernel or a nonempty fixed composition |
 | `basis-conversion-picker.cpp` | Ordered performance policy for choosing among complete plans |
-| `basis-conversion.*` | Expression facts, plan validation and execution, and conversion workflow |
+| `basis-conversion.*` | Plan validation and execution, and conversion workflow |
 | `basis-coefficient.*` | Targeted scalar transitions and default full-conversion fallback |
 | `basis-conversion-kernels.*` | Basis-family formulas, Jacobi--Trudi, characters, Hall--Littlewood transitions, and straightening recurrences |
 | `basis-normalization.*` | Declarative straightening and skew-expansion rules and their generic workflow |
@@ -61,7 +61,7 @@ The principal files are:
 | `multiplication-folds.*` | Declarative target-closed multifactor families and closure validation |
 | `binary-multiplication.*` | Strict multiplication of two canonical basis terms |
 | `multiplication.*` | Bilinear extension and complete product-term strategies |
-| `inner-product-dispatch.*` | Inner-product requests, profiles, cost selection, tracing, orchestration, and public entry points |
+| `inner-product-dispatch.*` | Inner-product requests over shared expression facts, cost selection, tracing, orchestration, and public entry points |
 | `inner-product-kernels.*` | Mathematical inner-product algorithms |
 | `plethysm.*` | Plethysm workflows and their kernels |
 | `omega.*` | The omega involution and omega-assisted conversions |
@@ -74,9 +74,9 @@ object hierarchy.
 The normalization helper exposes a detailed result containing the realized
 expression, exact `ExpressionFacts`, and per-term factor counts. Its pipeline
 preparation preset establishes collected, straightened, skew-free factors
-while deliberately permitting products. Individually valid metadata flags
+while deliberately permitting products. Individually valid cached facts
 bypass already-completed steps; the helper attaches the postconditions it
-establishes, and marks the complete metadata core when the result is also
+establishes, and marks the complete canonical fact set when the result is also
 product-free. Conversion and multiplication retain their current preparation
 code until they are migrated deliberately. The helper also preserves
 combinatorial provenance tags, since later conversion policy may distinguish
@@ -152,7 +152,7 @@ conversion and multiplication workflows used by the public operations.
 ## Pipeline architecture
 
 An engine workflow owns one mathematical request from input preparation
-through final contract validation. Exact metadata may prove that preparation
+through final contract validation. Exact cached facts may prove that preparation
 is already complete; otherwise the workflow normalizes and inspects the
 realized input before selecting an algorithm.
 
@@ -174,7 +174,7 @@ The operations preserve different mathematical structure:
 | Basis conversion | Source expansion, target basis, exact facts, and provenance | Fixed composition through power sums |
 | Multiplication to a basis | Both operands, their basis families, and the requested target | Convert to a multiplicative basis, with power sums always available |
 | Plethysm to a basis | Outer operand, inner operand, and target basis | Adams-operation plethysm in power sums followed by conversion |
-| Hall inner product | Both operand profiles and an explicit pairing context | Convert both operands to power sums and apply the diagonal pairing |
+| Hall inner product | Shared exact facts for both operands and an explicit pairing context | Convert both operands to power sums and apply the diagonal pairing |
 | Basis coefficient | The source expansion and one requested target basis element | Perform one complete basis conversion and look up the coefficient |
 
 The implemented stages, bypasses, and plan-execution contracts are documented
@@ -273,7 +273,7 @@ production selection, so neither belongs in an accepted benchmark run.
 Basis conversion accepts pure, mixed-basis, skew, and product-bearing
 expressions. After normalization and product resolution, canonical terms are
 grouped by source basis. Each source group receives one complete named
-source-to-target plan. Exact metadata may prove that some preparation is
+source-to-target plan. Exact cached facts may prove that some preparation is
 already complete, but it never changes the mathematical contract.
 
 A conversion plan should read like a named casewise identity. Its endpoints
@@ -293,7 +293,7 @@ The picker chooses only among complete available plans with the requested
 endpoints. It does not construct new intermediate-basis paths, and the generic
 executor never calls the picker. See the
 [basis-conversion diagram and contract](README-pipelines.md#basis-conversion)
-for the implemented stages, metadata bypasses, and plan-case semantics.
+for the implemented stages, fact-cache bypasses, and plan-case semantics.
 
 ### Coefficient rings and the constant-QQ shadow ring
 
@@ -384,8 +384,11 @@ metadata ownership separate. See the
 For the ordinary Hall pairing,
 $\langle p_\lambda,p_\mu\rangle=\delta_{\lambda\mu}z_\lambda$; other
 supported contexts supply their corresponding diagonal power-sum weights.
-The request therefore preserves both operand profiles, an explicit pairing
-context, and registered dual or diagonal metadata.
+The request therefore preserves exact shared `ExpressionFacts` for both
+operands, an explicit pairing context, and registered dual or diagonal
+pairing metadata. Complete canonical fact caches are reused when available;
+otherwise the same general expression inspector computes the facts once.
+There is no separate inner-product structural profile.
 
 The current dispatcher has four top-level pipelines and specialized scalar
 routes for diagonal bases, coefficient extraction, Kostka formulas, and

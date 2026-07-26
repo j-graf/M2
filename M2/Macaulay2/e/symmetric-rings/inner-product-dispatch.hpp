@@ -6,28 +6,8 @@
 // Declaration fragment included inside SymmetricEngineRing.
 
   // ============================================================================
-  // Inner-Product Requests And Profiles
+  // Inner-Product Requests And Shared Expression Facts
   // ============================================================================
-
-  // Profile facts may be unavailable until a route requests the corresponding
-  // inspection, so inner-product selection uses an explicit three-state value.
-  enum class KnownState { Unknown, True, False };
-
-  struct InnerProductProfile
-  {
-    std::optional<int> pureBasis;
-    std::optional<int> expandedBasis;
-    std::optional<int> homogeneousWeight;
-    std::optional<size_t> termCount;
-    mutable std::optional<size_t> maximumPartitionLength;
-    std::optional<int> singleBasisId;
-    Partition singleIndex;
-    KnownState singleBasisElement = KnownState::Unknown;
-    KnownState noProducts = KnownState::Unknown;
-    KnownState normalized = KnownState::Unknown;
-    KnownState skewFree = KnownState::Unknown;
-    KnownState collected = KnownState::Unknown;
-  };
 
   enum class InnerProductKind
   {
@@ -57,19 +37,15 @@
     ring_elem left;
     ring_elem right;
     InnerProductContext context;
-    InnerProductProfile leftProfile;
-    InnerProductProfile rightProfile;
+    ExpressionFacts leftFacts;
+    ExpressionFacts rightFacts;
   };
 
-  InnerProductProfile inferInnerProductProfile(ring_elem f) const;
-  size_t innerProductMaximumPartitionLength(
-      ring_elem f,
-      const InnerProductProfile& profile) const;
   InnerProductRequest buildInnerProductRequest(
       ring_elem f,
       ring_elem g,
       InnerProductKind kind,
-      std::map<int, InnerProductTarget> metadata) const;
+      std::map<int, InnerProductTarget> pairings) const;
   InnerProductKind innerProductKindFromCode(int kindCode) const;
   PowerSumPairingKind powerSumPairingKind(
       InnerProductKind kind) const;
@@ -101,6 +77,7 @@
   };
 
   enum class InnerProductOrientation { Original, Swapped };
+  enum class InnerProductCacheState { Unknown, Present, Absent };
 
   struct InnerProductCandidate
   {
@@ -112,10 +89,11 @@
     int pairingDualBasisId = -1;
     InnerProductPairingKind pairingKind = InnerProductPairingKind::Dual;
     size_t estimatedCost = 0;
-    KnownState transitionCached = KnownState::Unknown;
+    InnerProductCacheState transitionCached =
+        InnerProductCacheState::Unknown;
   };
 
-  KnownState innerProductTransitionCacheState(
+  InnerProductCacheState innerProductTransitionCacheState(
       const InnerProductCandidate& candidate,
       const InnerProductRequest& request) const;
   size_t estimateInnerProductCandidateCost(
@@ -190,7 +168,7 @@
       ring_elem f,
       ring_elem g,
       InnerProductKind kind,
-      const std::map<int, InnerProductTarget>& metadata = {}) const;
+      const std::map<int, InnerProductTarget>& pairings = {}) const;
 
  public:
   ring_elem hallInnerProduct(ring_elem f,

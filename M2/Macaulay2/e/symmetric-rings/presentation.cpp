@@ -159,10 +159,13 @@ std::vector<size_t> SymmetricEngineRing::presentationTermOrder(ring_elem f) cons
     const auto *poly = polyValue(f);
     std::vector<PresentationTermKey> keys;
     keys.reserve(poly->terms.size());
-    const bool homogeneous = poly->conversionMetadata &&
-                             poly->conversionMetadata->homogeneousWeight;
+    const bool homogeneous =
+        poly->expressionFactsCache &&
+        poly->expressionFactsCache->knows(
+            ExpressionFactKnowledge::HomogeneousWeight) &&
+        poly->expressionFactsCache->facts.homogeneousWeight;
     const int homogeneousWeight = homogeneous
-        ? *poly->conversionMetadata->homogeneousWeight
+        ? *poly->expressionFactsCache->facts.homogeneousWeight
         : 0;
 
     for (size_t i = 0; i < poly->terms.size(); ++i)

@@ -568,11 +568,14 @@ descriptors whose mathematical factor is understood by the engine.
 
 ### Homogeneous facts and conditions
 
-Replace `InnerProductProfile` with one shared pair-facts construction built
-from exact expression-inspection data. Reuse existing conversion metadata and
-coefficient-map probes instead of creating a second expression classifier.
+`InnerProductProfile` has been removed. Inner-product requests now carry the
+same exact `ExpressionFacts` values used by conversion, multiplication, and
+normalization. Complete canonical fact caches are reused; otherwise the shared
+expression inspector computes each operand's facts once. Pairing descriptors
+and transition-cache state remain operation-specific rather than being folded
+into expression structure.
 
-The facts view should expose, lazily where appropriate:
+The request and selection layer should expose, lazily where appropriate:
 
 - the common homogeneous weight;
 - term counts;
@@ -765,7 +768,7 @@ The exact type names may differ, but the contract must remain general:
   selection.
 
 The function computes exact term weights from the engine representation,
-groups and collects terms once, and preserves reusable exact metadata on each
+groups and collects terms once, and preserves reusable exact facts on each
 result. It belongs to shared expression inspection rather than the
 inner-product module. Inner products are its first consumer, but conversion,
 truncation, generating-series, coefficient, and future Hopf-algebra workflows
@@ -775,7 +778,7 @@ types or policy.
 ### Graded workflow and broad execution
 
 Use the shared `homogeneousComponents` service rather than implementing local
-weight grouping. Preserve exact metadata on a component when known, and infer
+weight grouping. Preserve exact cached facts on a component when known, and infer
 only the facts needed by the selected strategy.
 
 A readability target is:

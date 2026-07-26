@@ -1499,8 +1499,8 @@ doc ///
     normalizeExpression S_{1,3}
     normalizeExpression(S_1*S_1,"ProductTarget"=>S)
    Text
-    Each requested step uses attached engine metadata as a proof that the step
-    may be bypassed when possible.  The result receives metadata for the
+    Each requested step uses attached engine facts as a proof that the step
+    may be bypassed when possible.  The result caches the
     postconditions actually established: normalized indices, skew-freeness,
     collected storage, support, weight, and exact canonical facts when the
     result is product-free.  Request both "StraightenIndices" and "ExpandSkew"
@@ -1546,8 +1546,9 @@ doc ///
     normalization flags, and the homogeneous, pure-basis, or expanded-basis
     certificates when they exist.  The "HasMetadata",
     "MetadataFactsComplete", "MetadataNormalized", "MetadataSkewFree", and
-    "MetadataCollected" entries report which structural facts are attached to
-    the engine value rather than merely inferred during this inspection.
+    "MetadataCollected" entries retain their established public names and
+    report which structural facts are cached on the engine value rather than
+    merely inferred during this inspection.
     @TO basisSupport@ returns just the ring-attached bases occurring in the
     factors.
    Example
