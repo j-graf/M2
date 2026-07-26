@@ -49,7 +49,7 @@
       size_t position) const;
 
 // ============================================================================
-// Generic Normalization Workflow
+// Normalization-Step Execution
 // ============================================================================
 
   ring_elem straightenBasisElement(
@@ -61,10 +61,6 @@
   ring_elem expandSkewBasisElement(
       const SymmetricMonomial& monomial,
       size_t position) const;
-  ring_elem normalizeExpression(
-      ring_elem expression,
-      ExpressionFacts& resultFacts,
-      std::vector<size_t> *termFactorCounts = nullptr) const;
 
  public:
   ring_elem straighten(ring_elem expression) const;

@@ -167,7 +167,9 @@ expansions.
 single canonical basis element or an expression with exact canonical facts
 can enter group conversion immediately. Other input is normalized by
 straightening indices, expanding skew elements, canonicalizing factors, and
-collecting terms.
+collecting terms. The shared configurable normalization service owns these
+steps and term-local product resolution; conversion supplies $v$ as the
+product target and then consumes the returned exact expression facts.
 
 ```mermaid
 flowchart TD
@@ -611,18 +613,20 @@ grouped with their own mathematics.
   composition, diagnostics, and ordered expression-piece partitioning.
 - `storage.hpp` declares the shared expression-facts record and stored cache.
 - `expression-helpers.hpp` declares fact inference, cache lifecycle,
-  inspection, decomposition, and normalization helpers.
+  inspection, decomposition, and the authoritative configurable
+  normalization and term-local product-resolution workflow.
 - `basis-conversion.hpp` declares conversion-plan contracts, database indexes,
   pickers, executors, and conversion entry points.
 - `basis-conversion-plans.cpp` inventories complete named conversion plans and
   any fixed piecewise formula policies inside them.
 - `basis-conversion-picker.cpp` inventories top-level endpoint performance
   choices among complete plans.
-- `basis-conversion.cpp` implements preparation, plan indexing and validation,
-  generic execution, product resolution handoff, and conversion.
+- `basis-conversion.cpp` consumes shared normalization, implements plan
+  indexing and validation, generic execution, and conversion.
 - `basis-conversion-kernels.*` owns basis-family conversion mathematics.
 - `basis-normalization.*` owns the declarative straightening and skew-expansion
-  rules used before conversion plans see an expression.
+  rules and executes those individual steps when requested by the shared
+  normalization service.
 - `multiplication-kernels.*` owns Littlewood--Richardson, Pieri,
   border-strip, and monomial/forgotten binary product mathematics.
 - `multiplication-picker.*` owns the commutative binary-kernel inventory,

@@ -66,9 +66,9 @@
 
   struct ExpressionNormalizationResult
   {
-    // This is the complete preparation payload required by the conversion
-    // and multiplication boundaries. An empty factor-count vector proves
-    // that no product term needs a per-term profile.
+    // This is the complete normalization payload consumed by conversion and
+    // multiplication. An empty factor-count vector proves that no product
+    // term needs a per-term profile.
     ring_elem expression;
     ExpressionFacts facts;
     std::vector<size_t> factorsPerTerm;
@@ -79,6 +79,7 @@
     bool performedStraightening = false;
     bool performedSkewExpansion = false;
     bool resolvedProducts = false;
+    size_t resolvedProductTermCount = 0;
   };
 
   static ExpressionNormalizationOptions
@@ -170,6 +171,9 @@
   void attachInspectedExpressionFacts(
       ring_elem expression,
       const ExpressionFacts& facts) const;
+  ExpressionNormalizationResult resolveProductsInPreparedExpression(
+      ExpressionNormalizationResult prepared,
+      int targetBasisId) const;
 
 #endif
 

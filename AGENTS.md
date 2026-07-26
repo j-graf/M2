@@ -125,8 +125,9 @@ The engine subsystem is `M2/Macaulay2/e/symmetric-rings/`:
 - `symmetric-engine-ring.*`: engine ring class and shared state.
 - `arithmetic.*`: arithmetic, comparison, hashing, terms, weights, constructors.
 - `expression-helpers.*`: shared fact inference and cache lifecycle,
-  basis-expansion probes, decomposition, reconstruction, inspection, and
-  normalization workflows.
+  basis-expansion probes, decomposition, reconstruction, inspection, and the
+  authoritative configurable normalization and term-local product-resolution
+  workflow.
 - `basis-conversion-policy.*`: reusable performance-only selector facts.
 - `basis-conversion-plans.cpp`: policy-free complete conversion plans.
 - `basis-conversion-picker.cpp`: ordered endpoint performance policy.
@@ -137,7 +138,7 @@ The engine subsystem is `M2/Macaulay2/e/symmetric-rings/`:
   characters, Hall--Littlewood transitions, recurrence helpers, and direct
   conversions.
 - `basis-normalization.*`: declarative straightening and skew-expansion rules
-  and the generic normalization workflow.
+  and execution of those individual normalization steps.
 - `multiplication-kernels.*`: LR, Pieri, border-strip, and monomial/forgotten
   binary formulas.
 - `multiplication-picker.*`: commutative binary-kernel declarations,

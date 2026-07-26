@@ -266,40 +266,10 @@
       const ExpressionFacts *knownFacts = nullptr) const;
 
 // ============================================================================
-// Basis-Conversion Workflow Stages
-// ============================================================================
-// Preparation produces normalized, skew-free factors and exact facts. Product
-// resolution then produces the product-free expression on which linear
-// source-basis decomposition is mathematically valid.
-
-  struct PreparedBasisConversionInput
-  {
-    ring_elem expression;
-    ExpressionFacts facts;
-    std::vector<size_t> factorsPerTerm;
-    CombinatorialTags combinatorialTags = 0;
-  };
-
-  struct ProductFreeBasisConversionInput
-  {
-    ring_elem expression;
-    std::optional<ExpressionFacts> exactFacts;
-    // True means product resolution itself completed the requested conversion:
-    // every surviving term is already a canonical target-basis term.
-    bool productResolutionCompletedInTarget = false;
-  };
-
-  PreparedBasisConversionInput prepareBasisConversionInput(
-      ring_elem expression,
-      int targetBasisId) const;
-  ProductFreeBasisConversionInput resolveProductsForBasisConversion(
-      PreparedBasisConversionInput prepared,
-      int targetBasisId) const;
-
-// ============================================================================
 // Public Conversion Entry Points
 // ============================================================================
-// Product resolution is declared in multiplication.hpp and called by toBasis.
+// Shared normalization and term-local product resolution are declared in
+// expression-helpers.hpp and consumed by toBasis before plan selection.
 
  public:
   ring_elem toBasis(ring_elem f, int targetBasisId) const;

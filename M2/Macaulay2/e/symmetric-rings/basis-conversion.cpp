@@ -1416,207 +1416,6 @@ ring_elem SymmetricEngineRing::convertCanonicalExpressionToBasis(
   }
 
 // ============================================================================
-// Basis-Conversion Input Preparation
-// ============================================================================
-// This stage establishes the normalized, skew-free factor expansion required
-// before products can be resolved. A canonical element or a complete
-// canonical fact cache proves that the same mathematical preparation has
-// already been completed.
-
-SymmetricEngineRing::PreparedBasisConversionInput
-SymmetricEngineRing::prepareBasisConversionInput(
-    ring_elem expression,
-    int targetBasisId) const
-{
-    const bool trace = basisConversionTraceEnabled();
-    CombinatorialTags combinatorialTags =
-        polyValue(expression)->combinatorialTags;
-    const auto *inputPoly = polyValue(expression);
-    if (inputPoly->terms.size() == 1 &&
-        !inputPoly->terms.front().monomial.data.empty() &&
-        atomLengthAt(inputPoly->terms.front().monomial, 0) ==
-            inputPoly->terms.front().monomial.data.size())
-      {
-        ExpressionFacts strictFacts =
-            basisElementFactsFromAtom(
-                inputPoly->terms.front().monomial,
-                0,
-                inputPoly->terms.front().coeff);
-        strictFacts.combinatorialTags = combinatorialTags;
-        if (strictFacts.singleBasisElementId &&
-            strictFacts.canonicalExpansionInBasis(
-                *strictFacts.singleBasisElementId))
-          return {
-              expression,
-              std::move(strictFacts),
-              {},
-              combinatorialTags};
-      }
-    auto knownFacts =
-        canonicalExpressionFactsFromCache(expression);
-    if (knownFacts)
-      {
-        if (trace)
-          std::fprintf(stderr,
-                       "SymmetricRings toBasis: "
-                       "bypass=canonical-facts-cache target=%s\n",
-                       displayForBasis(targetBasisId).c_str());
-        return {
-            expression,
-            std::move(*knownFacts),
-            {},
-            combinatorialTags};
-      }
-
-    ExpressionFacts normalizedFacts;
-    std::vector<size_t> normalizedFactorCounts;
-    ring_elem normalized =
-        normalizeExpression(
-            expression,
-            normalizedFacts,
-            &normalizedFactorCounts);
-    if (error())
-      return {zero(), {}, {}, combinatorialTags};
-
-    if (trace)
-      {
-        std::fprintf(stderr,
-                     "SymmetricRings toBasis: target=%s terms=%zu "
-                     "products=%zu bases=%zu\n",
-                     displayForBasis(targetBasisId).c_str(),
-                     normalizedFacts.termCount,
-                     normalizedFacts.productTermCount,
-                     normalizedFacts.factorBases.size());
-      }
-    return {
-        normalized,
-        std::move(normalizedFacts),
-        std::move(normalizedFactorCounts),
-        combinatorialTags};
-  }
-
-// ============================================================================
-// Product Resolution For Basis Conversion
-// ============================================================================
-// Conversion plans act linearly on canonical source-basis expansions. This
-// stage replaces every multifactor term by its canonical target-basis product
-// while retaining scalar and single-factor terms. Its output is therefore
-// product-free and ready for source-basis decomposition.
-
-SymmetricEngineRing::ProductFreeBasisConversionInput
-SymmetricEngineRing::resolveProductsForBasisConversion(
-    PreparedBasisConversionInput prepared,
-    int targetBasisId) const
-{
-    if (prepared.facts.noProducts())
-      return {
-          prepared.expression,
-          std::move(prepared.facts),
-          false};
-
-    const auto& normalizedTerms =
-        polyValue(prepared.expression)->terms;
-    if (prepared.factorsPerTerm.size() !=
-        normalizedTerms.size())
-      {
-        ERROR("normalized factor-count profile is inconsistent");
-        return {zero(), std::nullopt, false};
-      }
-    if (normalizedTerms.size() == 1 &&
-        prepared.factorsPerTerm.front() > 1)
-      {
-        ResolvedProductTerm resolved =
-            multiplyTermToBasis(
-                normalizedTerms.front(),
-                targetBasisId);
-        if (error())
-          return {zero(), std::nullopt, false};
-        resolved.facts.combinatorialTags =
-            prepared.combinatorialTags;
-        // multiplyTermToBasis already attached the same exact structural
-        // facts. Only the semantic tag belongs to the owning outer operation.
-        mutablePolyValue(
-            resolved.expression)->combinatorialTags =
-                prepared.combinatorialTags;
-        return {
-            resolved.expression,
-          std::move(resolved.facts),
-          true};
-      }
-
-    VECTOR(SymmetricTerm) preparedTerms;
-    size_t resolvedProductTerms = 0;
-    bool passthroughTermsAlreadyInTarget = true;
-    for (size_t termPosition = 0;
-         termPosition < normalizedTerms.size();
-         ++termPosition)
-      {
-        const auto& term = normalizedTerms[termPosition];
-        const size_t factorCount =
-            prepared.factorsPerTerm[termPosition];
-        if (factorCount <= 1)
-          {
-            preparedTerms.push_back(term);
-            if (factorCount == 1 &&
-                atomBasisIdAt(term.monomial, 0) != targetBasisId)
-              passthroughTermsAlreadyInTarget = false;
-            continue;
-          }
-        ResolvedProductTerm resolved =
-            multiplyTermToBasis(term, targetBasisId);
-        if (error())
-          return {zero(), std::nullopt, false};
-        for (const auto& convertedTerm :
-             polyValue(resolved.expression)->terms)
-          appendTermIfNonZero(
-              preparedTerms,
-              convertedTerm.coeff,
-              convertedTerm.monomial);
-        ++resolvedProductTerms;
-      }
-
-    if (basisConversionTraceEnabled())
-      std::fprintf(
-          stderr,
-          "SymmetricRings conversion-stage: "
-          "stage=resolve-products resolved=%zu passthrough=%zu\n",
-          resolvedProductTerms,
-          preparedTerms.size());
-
-    ring_elem productFree =
-        fromTermVector(preparedTerms, false);
-    mutablePolyValue(productFree)->combinatorialTags =
-        prepared.combinatorialTags;
-    if (passthroughTermsAlreadyInTarget)
-      {
-        // Every multifactor term was resolved into the target above, and all
-        // scalar/single-factor passthrough terms were already target-native.
-        // The combined expression is therefore target-closed; do not regroup
-        // it merely to execute an identity plan.
-        ExpressionFacts productFreeFacts =
-            inferCanonicalExpansionFacts(
-                productFree, targetBasisId);
-        if (!productFreeFacts.canonicalExpansionInBasis(
-                targetBasisId))
-          {
-            ERROR("resolved product terms did not satisfy the target "
-                  "basis contract");
-            return {zero(), std::nullopt, false};
-          }
-        attachCanonicalExpansionFacts(
-            productFree,
-            productFreeFacts,
-            targetBasisId,
-            prepared.combinatorialTags);
-        return {
-            productFree,
-            std::move(productFreeFacts),
-            true};
-      }
-    return {productFree, std::nullopt, false};
-  }
-
-// ============================================================================
 // Unified Basis-Conversion Entry Workflow
 // ============================================================================
 // This is the sole owning engine workflow for built-in conversion. Its body
@@ -1632,34 +1431,57 @@ ring_elem SymmetricEngineRing::toBasis(
     const ScopedBasisConversionDiagnostics diagnosticScope(
         ordinaryConversion,
         false);
-    requireBasis(targetBasisId);
-    if (error()) return zero();
 
-    PreparedBasisConversionInput prepared =
-        prepareBasisConversionInput(f, targetBasisId);
+    ExpressionNormalizationOptions options =
+        pipelinePreparationNormalizationOptions();
+    options.productTargetBasisId = targetBasisId;
+    ExpressionNormalizationResult normalized =
+        normalizeExpressionWithOptionsDetailed(f, options);
     if (error()) return zero();
     const CombinatorialTags combinatorialTags =
-        prepared.combinatorialTags;
+        normalized.facts.combinatorialTags;
+    if (basisConversionTraceEnabled())
+      {
+        if (normalized.usedCompleteCanonicalFactsBypass)
+          std::fprintf(
+              stderr,
+              "SymmetricRings toBasis: "
+              "bypass=canonical-facts-cache target=%s\n",
+              displayForBasis(targetBasisId).c_str());
+        else
+          std::fprintf(
+              stderr,
+              "SymmetricRings toBasis: target=%s terms=%zu bases=%zu "
+              "straightened=%s skew-expanded=%s "
+              "product-terms-resolved=%zu\n",
+              displayForBasis(targetBasisId).c_str(),
+              normalized.facts.termCount,
+              normalized.facts.factorBases.size(),
+              normalized.performedStraightening ? "yes" : "no",
+              normalized.performedSkewExpansion ? "yes" : "no",
+              normalized.resolvedProductTermCount);
+      }
 
-    ProductFreeBasisConversionInput productFree =
-        resolveProductsForBasisConversion(
-            std::move(prepared), targetBasisId);
-    if (error()) return zero();
-    if (productFree.productResolutionCompletedInTarget)
-      return productFree.expression;
+    if (normalized.resolvedProducts &&
+        normalized.facts.canonicalExpansionInBasis(
+            targetBasisId))
+      {
+        attachCanonicalExpansionFacts(
+            normalized.expression,
+            normalized.facts,
+            targetBasisId,
+            combinatorialTags);
+        return normalized.expression;
+      }
 
     // Linearity now applies: the canonical helper decomposes the expression
     // by source basis, selects one complete source-to-target plan for each
     // summand, executes those plans, and collects their target expansions.
-    const ExpressionFacts *exactFacts =
-        productFree.exactFacts
-            ? &*productFree.exactFacts
-            : nullptr;
     return convertCanonicalExpressionToBasis(
-        productFree.expression,
+        normalized.expression,
         targetBasisId,
         combinatorialTags,
-        exactFacts);
+        &normalized.facts);
   }
 
 ring_elem SymmetricEngineRing::toBasisBench(

@@ -162,6 +162,10 @@ counts needed by those workflows. Normalization
 steps use individually valid metadata flags for bypasses and attach their
 established postconditions; product-free, normalized, skew-free results carry
 the complete metadata contract even when their basis support is mixed.
+Conversion and multiplication both consume this shared result. Conversion
+also requests term-local product resolution in its target basis, while
+multiplication uses the straightened, skew-free preparation preset and
+continues to require product-free operands.
 Product resolution is term-local: its target basis is used only to multiply
 multifactor terms, while scalar and canonical single-factor terms retain their
 existing bases. The existing `terms` function exposes arbitrary additive

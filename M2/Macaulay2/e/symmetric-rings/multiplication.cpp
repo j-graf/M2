@@ -123,15 +123,12 @@ SymmetricEngineRing::prepareMultiplicationOperands(
             ring_elem& expression,
             ExpressionFacts& facts,
             std::vector<PreparedMultiplicationTerm>& terms) {
-          auto knownFacts =
-              canonicalExpressionFactsFromCache(input);
-          if (knownFacts)
-            {
-              expression = input;
-              facts = *knownFacts;
-            }
-          else
-            expression = normalizeExpression(input, facts);
+          const ExpressionNormalizationResult normalized =
+              normalizeExpressionWithOptionsDetailed(
+                  input,
+                  pipelinePreparationNormalizationOptions());
+          expression = normalized.expression;
+          facts = normalized.facts;
           if (error()) return;
           if (!facts.noProducts())
             {

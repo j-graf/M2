@@ -196,7 +196,7 @@ SymmetricEngineRing::expandSkewHallLittlewoodBasisElement(
   }
 
 // ============================================================================
-// Generic Normalization Workflow
+// Normalization-Step Execution
 // ============================================================================
 
 ring_elem SymmetricEngineRing::straightenBasisElement(
@@ -276,109 +276,6 @@ ring_elem SymmetricEngineRing::expandSkewBasisElement(
       }
     return (this->*rule->skewExpansionFormula)(
         monomial, position);
-  }
-
-ring_elem SymmetricEngineRing::normalizeExpression(
-    ring_elem expression,
-    ExpressionFacts& resultFacts,
-    std::vector<size_t> *termFactorCounts) const
-{
-    resultFacts =
-        inferExpressionFacts(
-            expression, termFactorCounts);
-    if (resultFacts.normalized &&
-        resultFacts.skewFree &&
-        resultFacts.collected)
-      return expression;
-
-    VECTOR(SymmetricTerm) normalizedTerms;
-    for (const auto& term :
-         polyValue(expression)->terms)
-      {
-        const ring_elem straightened =
-            scaled(
-                term.coeff,
-                straightenMonomial(term.monomial));
-        if (error()) return zero();
-        for (const auto& straightenedTerm :
-             polyValue(straightened)->terms)
-          {
-            bool hasSkewFactor = false;
-            size_t position = 0;
-            while (position <
-                   straightenedTerm.monomial.data.size())
-              {
-                hasSkewFactor =
-                    hasSkewFactor ||
-                    atomIsSkewAt(
-                        straightenedTerm.monomial,
-                        position);
-                position += atomLengthAt(
-                    straightenedTerm.monomial,
-                    position);
-              }
-            if (!hasSkewFactor)
-              {
-                normalizedTerms.push_back(
-                    straightenedTerm);
-                continue;
-              }
-
-            ring_elem expanded =
-                fromCoeff(straightenedTerm.coeff);
-            position = 0;
-            while (position <
-                   straightenedTerm.monomial.data.size())
-              {
-                ring_elem factor =
-                    atomIsSkewAt(
-                        straightenedTerm.monomial,
-                        position)
-                        ? expandSkewBasisElement(
-                              straightenedTerm.monomial,
-                              position)
-                        : expressionFromBasisElement(
-                              straightenedTerm.monomial,
-                              position);
-                if (error()) return zero();
-                expanded = mult(expanded, factor);
-                if (error()) return zero();
-                position += atomLengthAt(
-                    straightenedTerm.monomial,
-                    position);
-              }
-            const auto *expandedPoly =
-                polyValue(expanded);
-            normalizedTerms.insert(
-                normalizedTerms.end(),
-                expandedPoly->terms.begin(),
-                expandedPoly->terms.end());
-          }
-      }
-    ring_elem result =
-        fromTermVector(normalizedTerms, false);
-    mutablePolyValue(result)->combinatorialTags =
-        polyValue(expression)->combinatorialTags;
-    resultFacts =
-        inferExpressionFacts(
-            result, termFactorCounts);
-    if (!resultFacts.normalized ||
-        !resultFacts.skewFree ||
-        !resultFacts.collected)
-      {
-        ERROR("basis normalization did not establish its "
-              "normalized, skew-free contract");
-        return zero();
-      }
-    if (basisConversionTraceEnabled())
-      std::fprintf(
-          stderr,
-          "SymmetricRings conversion-stage: stage=normalize "
-          "input-terms=%zu output-terms=%zu products=%zu\n",
-          polyValue(expression)->terms.size(),
-          resultFacts.termCount,
-          resultFacts.productTermCount);
-    return result;
   }
 
 ring_elem SymmetricEngineRing::straighten(

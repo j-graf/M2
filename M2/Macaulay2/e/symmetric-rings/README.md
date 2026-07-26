@@ -47,7 +47,7 @@ The principal files are:
 | `presentation.*` | Stable presentation ordering and string rendering |
 | `partitions.*` | Partition utilities and combinatorial enumeration |
 | `arithmetic.*` | Addition, multiplication, scalar operations, and product tagging |
-| `expression-helpers.*` | Shared fact inference and cache lifecycle, basis-expansion probes, decomposition, reconstruction, inspection, and configurable normalization |
+| `expression-helpers.*` | Shared fact inference and cache lifecycle, basis-expansion probes, decomposition, reconstruction, inspection, and the authoritative configurable normalization and term-local product-resolution workflow |
 | `expression-conditions.*` | Inspectable plan conditions and ordered expression-piece partitioning |
 | `basis-conversion-policy.*` | Reusable performance-only selection facts |
 | `basis-conversion-plans.cpp` | Policy-free complete conversion plans whose cases use a kernel or a nonempty fixed composition |
@@ -55,7 +55,7 @@ The principal files are:
 | `basis-conversion.*` | Plan validation and execution, and conversion workflow |
 | `basis-coefficient.*` | Targeted scalar transitions and default full-conversion fallback |
 | `basis-conversion-kernels.*` | Basis-family formulas, Jacobi--Trudi, characters, Hall--Littlewood transitions, and straightening recurrences |
-| `basis-normalization.*` | Declarative straightening and skew-expansion rules and their generic workflow |
+| `basis-normalization.*` | Declarative straightening and skew-expansion rules and execution of those individual steps |
 | `multiplication-kernels.*` | Littlewood--Richardson, Pieri, border-strip, and monomial/forgotten product mathematics |
 | `multiplication-picker.*` | Commutative binary-kernel declarations, applicability, and performance policy |
 | `multiplication-folds.*` | Declarative target-closed multifactor families and closure validation |
@@ -77,13 +77,17 @@ preparation preset establishes collected, straightened, skew-free factors
 while deliberately permitting products. Individually valid cached facts
 bypass already-completed steps; the helper attaches the postconditions it
 establishes, and marks the complete canonical fact set when the result is also
-product-free. Conversion and multiplication retain their current preparation
-code until they are migrated deliberately. The helper also preserves
-combinatorial provenance tags, since later conversion policy may distinguish
-plethysm, Pieri, Littlewood--Richardson, and other structural origins.
-Its product-resolution option is not a full basis conversion: it converts only
-multifactor terms to the requested target and leaves canonical single-factor
-terms in their original bases. The validated
+product-free. Conversion and multiplication both consume this shared detailed
+result rather than maintaining operation-specific normalization code.
+Conversion requests term-local product resolution in its target basis;
+multiplication uses the preparation preset and retains its product-free operand
+contract. The helper preserves combinatorial provenance tags, since later
+conversion policy may distinguish plethysm, Pieri,
+Littlewood--Richardson, and other structural origins. Requesting product
+resolution implies straightening and skew expansion because its multiplication
+formulas require canonical factors. It is not a full basis conversion: it
+converts only multifactor terms to the requested target and leaves canonical
+single-factor terms in their original bases. The validated
 `singlePartitionIndexedTerms` helper requires every summand to be scalar or a
 coefficient times one normalized, skew-free, partition-indexed basis element,
 while allowing different terms to use different bases.

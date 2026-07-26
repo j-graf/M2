@@ -83,6 +83,18 @@ TEST ///
     assert(expandProductsInBasis(S_1*S_1, S) == S_2 + S_{1,1})
     assert(normalizeExpression(S_1*S_1, "ProductTarget" => S) ==
         S_2 + S_{1,1})
+    impliedProductPrerequisites = normalizeExpression(
+        S_{{2},{1}}*S_1 + S_{1,3},
+        "StraightenIndices" => false,
+        "ExpandSkew" => false,
+        "ProductTarget" => S)
+    assert(impliedProductPrerequisites ==
+        S_2 + S_{1,1} - S_{2,2})
+    impliedProductShape = expressionShape impliedProductPrerequisites
+    assert(impliedProductShape#"Normalized")
+    assert(impliedProductShape#"SkewFree")
+    assert(impliedProductShape#"ProductTermCount" == 0)
+    assert(impliedProductShape#"MetadataFactsComplete")
 
     mixedProductInput = h_2 + p_3 + S_1*S_1
     mixedProductResolved =
@@ -1070,7 +1082,17 @@ TEST ///
     assertMultiplicationAgreement(b_2, b_1, b)
     assertMultiplicationAgreement(m_2, S_1, S)
     assertMultiplicationAgreement(S_2 + S_1, S_1, S)
+    assertMultiplicationAgreement(S_{1,3}, S_1, S)
     assertMultiplicationAgreement(S_{{3,2},{1}}, S_1, S)
+    normalizedMultiplication =
+        multiplyToBasis(S_{1,3}, S_1, S)
+    assert(normalizedMultiplication ==
+        multiplyToBasis(-S_{2,2}, S_1, S))
+    normalizedMultiplicationShape =
+        expressionShape normalizedMultiplication
+    assert(normalizedMultiplicationShape#"MetadataFactsComplete")
+    assert(normalizedMultiplicationShape#"Normalized")
+    assert(normalizedMultiplicationShape#"SkewFree")
     assertMultiplicationAgreement(0_R4, S_1, S)
     assertMultiplicationAgreement(3_R4, S_1, S)
     cachedPowerSums = toBasis(p_3 + 2*p_2 + 3*p_1, p)

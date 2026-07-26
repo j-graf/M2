@@ -738,7 +738,16 @@ SymmetricEngineRing::normalizeExpressionWithOptionsDetailed(
     ExpressionNormalizationResult result;
     const CombinatorialTags inputTags =
         polyValue(expression)->combinatorialTags;
-    if (options.productTargetBasisId >= 0)
+    const bool resolveProducts =
+        options.productTargetBasisId >= 0;
+    // Product resolution is defined only for canonical factors. Requesting a
+    // product target therefore implies both prerequisite normalization steps,
+    // regardless of the independently configurable public flags.
+    const bool requireStraightenedIndices =
+        options.straightenIndices || resolveProducts;
+    const bool requireSkewFreeFactors =
+        options.expandSkewFactors || resolveProducts;
+    if (resolveProducts)
       {
         (void) requireBasis(options.productTargetBasisId);
         if (error())
@@ -746,26 +755,6 @@ SymmetricEngineRing::normalizeExpressionWithOptionsDetailed(
             result.expression = zero();
             return result;
           }
-        result.expression = expandProductsInBasis(
-            expression, options.productTargetBasisId);
-        if (error())
-          {
-            result.expression = zero();
-            return result;
-          }
-        result.resolvedProducts = true;
-        auto exactFacts =
-            canonicalExpressionFactsFromCache(
-                result.expression);
-        if (exactFacts)
-          result.facts = std::move(*exactFacts);
-        else
-          result.facts = inferExpressionFacts(
-              result.expression,
-              &result.factorsPerTerm);
-        attachInspectedExpressionFacts(
-            result.expression, result.facts);
-        return result;
       }
 
     auto exactFacts =
@@ -776,15 +765,40 @@ SymmetricEngineRing::normalizeExpressionWithOptionsDetailed(
         result.facts = std::move(*exactFacts);
         result.usedCompleteCanonicalFactsBypass = true;
         result.bypassedStraighteningFromCache =
-            options.straightenIndices;
+            requireStraightenedIndices;
         result.bypassedSkewExpansionFromCache =
-            options.expandSkewFactors;
+            requireSkewFreeFactors;
         attachInspectedExpressionFacts(
             result.expression, result.facts);
         return result;
       }
 
     const auto *inputPoly = polyValue(expression);
+    if (inputPoly->terms.size() == 1 &&
+        !inputPoly->terms.front().monomial.data.empty() &&
+        atomLengthAt(inputPoly->terms.front().monomial, 0) ==
+            inputPoly->terms.front().monomial.data.size())
+      {
+        ExpressionFacts strictFacts =
+            basisElementFactsFromAtom(
+                inputPoly->terms.front().monomial,
+                0,
+                inputPoly->terms.front().coeff);
+        strictFacts.combinatorialTags = inputTags;
+        if ((!requireStraightenedIndices ||
+             strictFacts.normalized) &&
+            (!requireSkewFreeFactors ||
+             strictFacts.skewFree))
+          {
+            result.expression = copy(expression);
+            result.facts = std::move(strictFacts);
+            result.usedAlreadyPreparedBypass = true;
+            attachInspectedExpressionFacts(
+                result.expression, result.facts);
+            return result;
+          }
+      }
+
     const bool cacheProvesNormalized =
         inputPoly->expressionFactsCache &&
         inputPoly->expressionFactsCache->knows(
@@ -806,15 +820,25 @@ SymmetricEngineRing::normalizeExpressionWithOptionsDetailed(
         cacheProvesSkewFree ||
         inputFacts.skewFree;
     result.bypassedStraighteningFromCache =
-        options.straightenIndices &&
+        requireStraightenedIndices &&
         cacheProvesNormalized;
     result.bypassedSkewExpansionFromCache =
-        options.expandSkewFactors &&
+        requireSkewFreeFactors &&
         cacheProvesSkewFree;
-    if ((!options.straightenIndices ||
+    const bool needsStraightening =
+        requireStraightenedIndices &&
+        !indicesAlreadyStraightened;
+    const bool needsSkewExpansion =
+        requireSkewFreeFactors &&
+        !alreadySkewFree;
+    const bool needsProductResolution =
+        resolveProducts &&
+        !inputFacts.noProducts();
+    if ((!requireStraightenedIndices ||
          indicesAlreadyStraightened) &&
-        (!options.expandSkewFactors ||
-         alreadySkewFree))
+        (!requireSkewFreeFactors ||
+         alreadySkewFree) &&
+        !needsProductResolution)
       {
         result.expression = copy(expression);
         result.facts = std::move(inputFacts);
@@ -827,49 +851,50 @@ SymmetricEngineRing::normalizeExpressionWithOptionsDetailed(
       }
 
     result.expression = copy(expression);
-    if (options.straightenIndices)
+    if (needsStraightening)
       {
-        if (!indicesAlreadyStraightened)
+        result.expression =
+            straighten(result.expression);
+        result.performedStraightening = true;
+        if (error())
           {
-            result.expression =
-                straighten(result.expression);
-            result.performedStraightening = true;
-            if (error())
-              {
-                result.expression = zero();
-                return result;
-              }
+            result.expression = zero();
+            return result;
           }
       }
-    if (options.expandSkewFactors)
+    if (needsSkewExpansion)
       {
-        if (!alreadySkewFree)
+        result.expression =
+            expandSkewFactors(result.expression);
+        result.performedSkewExpansion = true;
+        if (error())
           {
-            result.expression =
-                expandSkewFactors(result.expression);
-            result.performedSkewExpansion = true;
-            if (error())
-              {
-                result.expression = zero();
-                return result;
-              }
+            result.expression = zero();
+            return result;
           }
       }
-    result.facts = inferExpressionFacts(
-        result.expression,
-        &result.factorsPerTerm);
+    if (needsStraightening || needsSkewExpansion)
+      result.facts = inferExpressionFacts(
+          result.expression,
+          &result.factorsPerTerm);
+    else
+      {
+        result.facts = std::move(inputFacts);
+        result.factorsPerTerm =
+            std::move(inputFactorsPerTerm);
+      }
     result.facts.combinatorialTags = inputTags;
     mutablePolyValue(
         result.expression)->combinatorialTags =
             inputTags;
-    if (options.straightenIndices &&
+    if (requireStraightenedIndices &&
         !result.facts.normalized)
       {
         ERROR("normalization did not establish its straightened-index contract");
         result.expression = zero();
         return result;
       }
-    if (options.expandSkewFactors &&
+    if (requireSkewFreeFactors &&
         !result.facts.skewFree)
       {
         ERROR("normalization did not establish its skew-free contract");
@@ -881,6 +906,13 @@ SymmetricEngineRing::normalizeExpressionWithOptionsDetailed(
         ERROR("normalization did not establish its collected-term contract");
         result.expression = zero();
         return result;
+      }
+    if (resolveProducts && !result.facts.noProducts())
+      {
+        result = resolveProductsInPreparedExpression(
+            std::move(result),
+            options.productTargetBasisId);
+        if (error()) return result;
       }
     attachInspectedExpressionFacts(
         result.expression, result.facts);
@@ -933,24 +965,60 @@ ring_elem SymmetricEngineRing::expandProductsInBasis(
     ring_elem expression,
     int targetBasisId) const
 {
-    (void) requireBasis(targetBasisId);
-    if (error()) return zero();
-    const ExpressionNormalizationOptions options =
+    ExpressionNormalizationOptions options =
         pipelinePreparationNormalizationOptions();
-    ExpressionNormalizationResult prepared =
-        normalizeExpressionWithOptionsDetailed(
-            expression, options);
-    if (error()) return zero();
-    if (prepared.facts.noProducts())
-      return prepared.expression;
+    options.productTargetBasisId = targetBasisId;
+    return normalizeExpressionWithOptionsDetailed(
+        expression, options).expression;
+  }
 
+SymmetricEngineRing::ExpressionNormalizationResult
+SymmetricEngineRing::resolveProductsInPreparedExpression(
+    ExpressionNormalizationResult prepared,
+    int targetBasisId) const
+{
+    if (!prepared.facts.normalized ||
+        !prepared.facts.skewFree ||
+        !prepared.facts.collected)
+      {
+        ERROR("product resolution requires a straightened, skew-free, "
+              "collected expression");
+        prepared.expression = zero();
+        return prepared;
+      }
+    if (prepared.facts.noProducts())
+      return prepared;
     const auto& terms =
         polyValue(prepared.expression)->terms;
     if (prepared.factorsPerTerm.size() !=
         terms.size())
       {
         ERROR("product resolution received an inconsistent factor-count profile");
-        return zero();
+        prepared.expression = zero();
+        return prepared;
+      }
+    if (terms.size() == 1 &&
+        prepared.factorsPerTerm.front() > 1)
+      {
+        ResolvedProductTerm resolved =
+            multiplyTermToBasis(
+                terms.front(), targetBasisId);
+        if (error())
+          {
+            prepared.expression = zero();
+            return prepared;
+          }
+        resolved.facts.combinatorialTags =
+            prepared.facts.combinatorialTags;
+        mutablePolyValue(
+            resolved.expression)->combinatorialTags =
+                prepared.facts.combinatorialTags;
+        prepared.expression = resolved.expression;
+        prepared.facts = std::move(resolved.facts);
+        prepared.factorsPerTerm.clear();
+        prepared.resolvedProducts = true;
+        prepared.resolvedProductTermCount = 1;
+        return prepared;
       }
 
     VECTOR(SymmetricTerm) productFreeTerms;
@@ -967,13 +1035,18 @@ ring_elem SymmetricEngineRing::expandProductsInBasis(
         ResolvedProductTerm resolved =
             multiplyTermToBasis(
                 term, targetBasisId);
-        if (error()) return zero();
+        if (error())
+          {
+            prepared.expression = zero();
+            return prepared;
+          }
         for (const auto& resolvedTerm :
              polyValue(resolved.expression)->terms)
           appendTermIfNonZero(
               productFreeTerms,
               resolvedTerm.coeff,
               resolvedTerm.monomial);
+        ++prepared.resolvedProductTermCount;
       }
 
     ring_elem result =
@@ -991,10 +1064,14 @@ ring_elem SymmetricEngineRing::expandProductsInBasis(
         !facts.noProducts())
       {
         ERROR("product resolution did not establish its canonical-term contract");
-        return zero();
+        prepared.expression = zero();
+        return prepared;
       }
-    attachInspectedExpressionFacts(result, facts);
-    return result;
+    prepared.expression = result;
+    prepared.facts = std::move(facts);
+    prepared.factorsPerTerm.clear();
+    prepared.resolvedProducts = true;
+    return prepared;
   }
 
 // ============================================================================

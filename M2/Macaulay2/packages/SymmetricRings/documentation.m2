@@ -1503,9 +1503,11 @@ doc ///
     may be bypassed when possible.  The result caches the
     postconditions actually established: normalized indices, skew-freeness,
     collected storage, support, weight, and exact canonical facts when the
-    result is product-free.  Request both "StraightenIndices" and "ExpandSkew"
-    to obtain the preparation contract used by conversion and multiplication
-    pipelines before their product-specific stages.
+    result is product-free.  Conversion and multiplication use this same
+    normalization service rather than separate hard-coded preparation.
+    Conversion also requests product resolution in its target basis, while
+    multiplication requests straightened, skew-free operands and retains its
+    product-free input contract.
    Example
     ready = normalizeExpression(
         S_{{3,1},{1}} + S_{1,3},
@@ -1519,9 +1521,11 @@ doc ///
     target basis for unrelated factors, including when another factor uses a
     custom basis.  @TO expandProductsInBasis@ chooses the basis used to
     multiply multifactor terms.  Before multiplication it straightens indices
-    and expands skew factors.  It passes scalar and canonical single-factor
-    terms through unchanged, and therefore returns a product-free, skew-free,
-    straightened expression whose terms may belong to different bases.
+    and expands skew factors; these prerequisites are implied by
+    "ProductTarget" even when their individual Boolean options are false.  It
+    passes scalar and canonical single-factor terms through unchanged, and
+    therefore returns a product-free, skew-free, straightened expression whose
+    terms may belong to different bases.
    Example
     expandSkewFactors S_{{3,1},{1}}
     expandProductsInBasis(S_1*S_1,S)

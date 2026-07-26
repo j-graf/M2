@@ -129,8 +129,8 @@ raw dispatch entry points.
 - `basis-coefficient.*`: targeted coefficient routes and their default
   full-conversion fallback.
 - `basis-conversion-kernels.*`: conversion formulas and recurrence helpers.
-- `basis-normalization.*`: declarative straightening and skew-expansion rules,
-  and the generic normalization workflow.
+- `basis-normalization.*`: declarative straightening and skew-expansion rules
+  and execution of those individual normalization steps.
 - `multiplication-kernels.*`: strict binary formulas and their LR, Pieri,
   border-strip, and monomial/forgotten combinatorics.
 - `multiplication-picker.*`: commutative binary-kernel declarations,
@@ -146,7 +146,8 @@ raw dispatch entry points.
 - `storage.*`: canonical storage and the shared `ExpressionFacts` record/cache.
 - `expression-helpers.*`: shared fact inference and cache lifecycle,
   basis-expansion probes, decomposition, reconstruction, structural
-  inspection, and configurable normalization helpers.
+  inspection, and the authoritative configurable normalization and
+  term-local product-resolution workflow.
 - `plethysm.*` and `omega.*`: their respective major operations.
 - `inner-product-dispatch.*`: inner-product requests over shared
   `ExpressionFacts`, selectors, tracing, pipeline orchestration, and public
