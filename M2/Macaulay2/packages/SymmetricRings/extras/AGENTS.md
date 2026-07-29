@@ -8,7 +8,7 @@ package code. README is the detailed runbook; this file is operational policy.
 Run commands from:
 
 ```sh
-cd /Users/johngraf/M2Dev/Project-SymFcns/M2/M2
+cd "$(git rev-parse --show-toplevel)/M2"
 ```
 
 Install the package before measuring:
@@ -22,7 +22,7 @@ After implementation changes, also run:
 
 ```sh
 CCACHE_DISABLE=1 cmake --build BUILD/build \
-  --target install-SymmetricRings check-SymmetricRings -j2
+  --target all-SymmetricRings -j2
 ```
 
 Use `BUILD/build/M2` unless `M2_BIN` deliberately selects another executable.
@@ -83,7 +83,7 @@ Optional breadth cases belong in descriptive `Family-extra` families.
 Every timed repetition uses a fresh M2 process, a temporary `HOME`, and
 sequential execution. Never parallelize cold timing processes.
 
-Every result directory is under `results/PROFILE/` and begins with
+Every new result directory is under `results/PROFILE/` and begins with
 `YYYYMMDD-HHMMSS`. `--output LABEL` appends a single-component descriptive
 label to that timestamp; never reuse an existing run directory. A run contains:
 

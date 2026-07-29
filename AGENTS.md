@@ -26,16 +26,12 @@ required naming, dispatcher structure, and file-organization conventions.
 
 ## Repository layout
 
-Git root:
+Git root: the directory containing this `AGENTS.md`.
+
+Nested source/build tree and normal command directory, relative to the Git root:
 
 ```sh
-/Users/johngraf/M2Dev/Project-SymFcns/M2
-```
-
-Nested source/build tree and normal command directory:
-
-```sh
-/Users/johngraf/M2Dev/Project-SymFcns/M2/M2
+M2/
 ```
 
 Primary sources:
@@ -57,14 +53,16 @@ copies under `M2/BUILD/`; rebuild/install them from the source files.
 Use the existing CMake build directory. Standard package verification:
 
 ```sh
-cd /Users/johngraf/M2Dev/Project-SymFcns/M2/M2
+cd "$(git rev-parse --show-toplevel)/M2"
 CCACHE_DISABLE=1 cmake --build BUILD/build \
-  --target install-SymmetricRings check-SymmetricRings -j2
+  --target all-SymmetricRings -j2
 ```
 
-This compiles required engine code, installs the package, runs package tests,
-and checks executable documentation examples. Run it before considering any
-package, C++, documentation, or test change complete.
+This compiles required engine code, installs the package, processes
+documentation examples, and then runs package tests. Installation executes
+examples when needed and may reuse valid cached output for unchanged examples.
+Run this command before considering any package, C++, documentation, or test
+change complete.
 
 Built executable:
 
@@ -103,7 +101,8 @@ Loaded implementation files:
   specialization, plethysm/`@`, omega, multiplication dispatch, and inner products.
 
 Documentation: `M2/Macaulay2/packages/SymmetricRings/documentation.m2`.
-Its examples execute during the package check.
+Its examples are processed during package installation, not by the package
+check; unchanged examples may reuse valid cached output.
 
 Tests: `M2/Macaulay2/packages/SymmetricRings/tests.m2`. Add focused regression
 tests for public behavior and bugs.
